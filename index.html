@@ -33,7 +33,7 @@
                 <h3 class="card-title">로그인</h3>
                 <form id="login">
                     <div class="mb-3">
-                        <label for="email" class="form-label">이메일(차량번호)</label>
+                        <label for="email" class="form-label">이메일</label>
                         <input type="email" class="form-control" id="email" required>
                     </div>
                     <div class="mb-3">
@@ -53,12 +53,16 @@
                 <h3 class="card-title">회원가입</h3>
                 <form id="register">
                     <div class="mb-3">
-                        <label for="regEmail" class="form-label">이메일(차량번호)</label>
+                        <label for="regEmail" class="form-label">이메일</label>
                         <input type="email" class="form-control" id="regEmail" required>
                     </div>
                     <div class="mb-3">
                         <label for="regPassword" class="form-label">비밀번호</label>
                         <input type="password" class="form-control" id="regPassword" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="regCarNumber" class="form-label">차량번호</label>
+                        <input type="text" class="form-control" id="regCarNumber" required>
                     </div>
                     <button type="submit" class="btn btn-success w-100">회원가입</button>
                 </form>
@@ -76,6 +80,10 @@
             <div class="card-body">
                 <h3 class="card-title">정비 이력 입력</h3>
                 <form id="newMaintenance">
+                    <div class="mb-3">
+                        <label for="maintenanceCarNumber" class="form-label">차량번호</label>
+                        <input type="text" class="form-control" id="maintenanceCarNumber" required>
+                    </div>
                     <div class="mb-3">
                         <label for="maintenanceDate" class="form-label">정비 날짜</label>
                         <input type="date" class="form-control" id="maintenanceDate" required>

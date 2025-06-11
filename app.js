@@ -32,11 +32,20 @@ showLogin.addEventListener('click', e => {
 });
 
 // 회원가입
-registerForm.addEventListener('submit', e => {
+registerForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const email = document.getElementById('regEmail').value.trim().toLowerCase();
   const password = document.getElementById('regPassword').value;
+  const carNumber = document.getElementById('regCarNumber').value.trim();
+  if (!email || !password || !carNumber) {
+    alert('모든 정보를 입력하세요.');
+    return;
+  }
   auth.createUserWithEmailAndPassword(email, password)
+    .then((userCredential) => {
+      const uid = userCredential.user.uid;
+      return db.collection('users').doc(uid).set({ email, carNumber });
+    })
     .then(() => {
       alert('회원가입 완료! 로그인 해주세요.');
       registerForm.style.display = 'none';
@@ -46,16 +55,31 @@ registerForm.addEventListener('submit', e => {
 });
 
 // 로그인
-loginForm.addEventListener('submit', e => {
+loginForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
+  if (!email || !password) {
+    alert('이메일과 비밀번호를 입력하세요.');
+    return;
+  }
   auth.signInWithEmailAndPassword(email, password)
-    .then(userCredential => {
-      currentUser = userCredential.user;
-      isAdmin = (currentUser.email === ADMIN_EMAIL);
-      userName.textContent = isAdmin ? '관리자' : `차량번호: ${currentUser.email}`;
-      afterLogin();
+    .then((userCredential) => {
+      const uid = userCredential.user.uid;
+      db.collection('users').doc(uid).get().then(doc => {
+        if (!doc.exists) {
+          alert('사용자 정보가 없습니다.');
+          return;
+        }
+        currentUser = {
+          uid,
+          email,
+          carNumber: doc.data().carNumber
+        };
+        isAdmin = (email === ADMIN_EMAIL);
+        userName.textContent = isAdmin ? '관리자' : `차량번호: ${currentUser.carNumber}`;
+        afterLogin();
+      });
     })
     .catch(err => alert('로그인 실패: ' + err.message));
 });
@@ -80,18 +104,23 @@ function afterLogin() {
   loadMaintenanceHistory();
 }
 
-// 정비 이력 추가
+// 정비 이력 추가 (관리자만)
 addMaintenanceBtn.addEventListener('click', () => {
+  if (!isAdmin) {
+    alert('관리자만 정비 이력을 추가할 수 있습니다.');
+    return;
+  }
   maintenanceForm.style.display = 'block';
 });
 document.getElementById('cancelBtn').addEventListener('click', () => {
   maintenanceForm.style.display = 'none';
 });
-document.getElementById('newMaintenance').addEventListener('submit', e => {
+document.getElementById('newMaintenance').addEventListener('submit', (e) => {
   e.preventDefault();
-  if (!currentUser) return;
+  if (!isAdmin) return;
+  const carNumber = document.getElementById('maintenanceCarNumber').value.trim();
   const maintenanceData = {
-    userEmail: currentUser.email.toLowerCase(),
+    carNumber,
     date: document.getElementById('maintenanceDate').value,
     type: document.getElementById('maintenanceType').value,
     description: document.getElementById('description').value,
@@ -117,7 +146,7 @@ searchInput.addEventListener('input', () => {
 function loadMaintenanceHistory(search = '') {
   let query = db.collection('maintenance');
   if (!isAdmin && currentUser) {
-    query = query.where('userEmail', '==', currentUser.email.toLowerCase());
+    query = query.where('carNumber', '==', currentUser.carNumber);
   }
   query.orderBy('createdAt', 'desc').get()
     .then(snapshot => {
@@ -143,7 +172,7 @@ function loadMaintenanceHistory(search = '') {
               <div>
                 <h5 class="card-title mb-0">${maintenance.type}</h5>
                 <h6 class="card-subtitle text-muted">${maintenance.date}</h6>
-                ${isAdmin ? `<div class='text-muted' style='font-size:0.95em;'>차량번호: ${maintenance.userEmail}</div>` : ''}
+                <div class='text-muted' style='font-size:0.95em;'>차량번호: ${maintenance.carNumber}</div>
               </div>
               <span class="badge ${getStatusBadgeClass(maintenance.status)}" style="font-size:1em;">${getStatusText(maintenance.status)}</span>
             </div>
@@ -175,7 +204,7 @@ function getStatusText(status) {
 
 // 관리자 승인/거절 버튼
 function renderActionButtons(maintenance) {
-  if (isAdmin && maintenance.status === 'pending') {
+  if (!isAdmin && currentUser && maintenance.carNumber === currentUser.carNumber && maintenance.status === 'pending') {
     return `
       <button class="btn btn-success btn-sm me-2" onclick="approveMaintenance('${maintenance.id}')">승인</button>
       <button class="btn btn-danger btn-sm" onclick="rejectMaintenance('${maintenance.id}')">거절</button>
@@ -201,10 +230,23 @@ window.rejectMaintenance = function(id) {
 // 인증 상태 감지
 auth.onAuthStateChanged(user => {
   if (user) {
-    currentUser = user;
-    isAdmin = (user.email === ADMIN_EMAIL);
-    userName.textContent = isAdmin ? '관리자' : `차량번호: ${user.email}`;
-    afterLogin();
+    const uid = user.uid;
+    db.collection('users').doc(uid).get().then(doc => {
+      if (!doc.exists) {
+        currentUser = null;
+        isAdmin = false;
+        showLoginForm();
+        return;
+      }
+      currentUser = {
+        uid,
+        email: user.email,
+        carNumber: doc.data().carNumber
+      };
+      isAdmin = (user.email === ADMIN_EMAIL);
+      userName.textContent = isAdmin ? '관리자' : `차량번호: ${currentUser.carNumber}`;
+      afterLogin();
+    });
   } else {
     currentUser = null;
     isAdmin = false;
