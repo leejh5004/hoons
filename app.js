@@ -1,25 +1,3 @@
-// Google Apps Script API URL (여기에 실제 발급받은 URL을 입력하세요)
-const API_URL = 'https://script.google.com/macros/s/AKfycbyaWBTSDKoOBz2DV0VtojfPyYnXXxZmySoiUnaTOEO-58kjGWQh0MLGDzzP-ZRWHw23ww/exec';
-
-/*
-[중요] Google Apps Script 코드에 아래와 같이 CORS 허용 헤더를 추가해야 합니다.
-
-function doGet(e) {
-  // ... 기존 코드 ...
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader('Access-Control-Allow-Origin', '*');
-}
-
-function doPost(e) {
-  // ... 기존 코드 ...
-  return ContentService.createTextOutput("OK")
-    .setHeader('Access-Control-Allow-Origin', '*');
-}
-
-그리고, 웹앱 배포 시 반드시 "Anyone(익명 포함)"으로 배포해야 하며,
-배포 후 새로 발급된 URL을 API_URL에 입력해야 합니다.
-*/
 
 // 관리자 계정 (이메일/비밀번호)
 const ADMIN_EMAIL = 'admin@admin.com';
