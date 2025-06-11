@@ -206,9 +206,6 @@ function renderActionButtons(maintenance) {
       <button class="btn btn-danger btn-sm" onclick="rejectMaintenance('${maintenance.id}')">거절</button>
     `;
   }
-  if (!isAdmin && maintenance.status === 'pending') {
-    return `<button class="btn btn-danger btn-sm" onclick="deleteMaintenance('${maintenance.id}')">삭제</button>`;
-  }
   return '';
 }
 
