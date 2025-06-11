@@ -56,16 +56,17 @@ document.getElementById('login').addEventListener('submit', (e) => {
 });
 
 function addUser(vehicleNumber, password) {
-    // 1. 먼저 차량번호 중복 체크
+    // 1. 차량번호 중복 체크 (정비이력 유무와 상관없이)
     fetch(API_URL)
         .then(res => res.json())
         .then(data => {
+            // 차량번호가 하나라도 있으면 중복으로 간주
             const exists = data.some(u => u.차량번호 === vehicleNumber);
             if (exists) {
                 alert('이미 등록된 차량번호입니다.');
                 return;
             }
-            // 2. 중복이 아니면 회원가입 진행
+            // 중복이 아니면 회원가입 진행
             fetch(API_URL, {
                 method: 'POST',
                 body: JSON.stringify({
