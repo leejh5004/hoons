@@ -1,5 +1,5 @@
 // Google Apps Script API URL (여기에 실제 발급받은 URL을 입력하세요)
-const API_URL = 'https://script.google.com/macros/s/AKfycbz2N8MZP1lA2VuZtlWcjnQ5FenQB2OcuPKn6X31nSpOT5XEPFQEZ83mWwogr2lzR2qjnQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyaWBTSDKoOBz2DV0VtojfPyYnXXxZmySoiUnaTOEO-58kjGWQh0MLGDzzP-ZRWHw23ww/exec';
 
 /*
 [중요] Google Apps Script 코드에 아래와 같이 CORS 허용 헤더를 추가해야 합니다.
