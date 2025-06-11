@@ -1,6 +1,5 @@
-// 관리자 계정 (이메일/비밀번호)
+// 관리자 이메일
 const ADMIN_EMAIL = 'admin@admin.com';
-const ADMIN_PASSWORD = 'admin1234';
 
 // DOM 요소
 const loginForm = document.getElementById('loginForm');
@@ -20,22 +19,22 @@ const showLogin = document.getElementById('showLogin');
 let currentUser = null;
 let isAdmin = false;
 
-// 로그인/회원가입 폼 전환
-showRegister.addEventListener('click', (e) => {
+// 폼 전환
+showRegister.addEventListener('click', e => {
   e.preventDefault();
   loginForm.style.display = 'none';
   registerForm.style.display = 'block';
 });
-showLogin.addEventListener('click', (e) => {
+showLogin.addEventListener('click', e => {
   e.preventDefault();
   registerForm.style.display = 'none';
   loginForm.style.display = 'block';
 });
 
 // 회원가입
-registerForm.addEventListener('submit', (e) => {
+registerForm.addEventListener('submit', e => {
   e.preventDefault();
-  const email = document.getElementById('regEmail').value.trim();
+  const email = document.getElementById('regEmail').value.trim().toLowerCase();
   const password = document.getElementById('regPassword').value;
   auth.createUserWithEmailAndPassword(email, password)
     .then(() => {
@@ -43,26 +42,22 @@ registerForm.addEventListener('submit', (e) => {
       registerForm.style.display = 'none';
       loginForm.style.display = 'block';
     })
-    .catch(err => {
-      alert('회원가입 실패: ' + err.message);
-    });
+    .catch(err => alert('회원가입 실패: ' + err.message));
 });
 
 // 로그인
-loginForm.addEventListener('submit', (e) => {
+loginForm.addEventListener('submit', e => {
   e.preventDefault();
-  const email = document.getElementById('email').value.trim();
+  const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
   auth.signInWithEmailAndPassword(email, password)
-    .then((userCredential) => {
+    .then(userCredential => {
       currentUser = userCredential.user;
-      isAdmin = (email === ADMIN_EMAIL);
-      userName.textContent = isAdmin ? '관리자' : `차량번호: ${email}`;
+      isAdmin = (currentUser.email === ADMIN_EMAIL);
+      userName.textContent = isAdmin ? '관리자' : `차량번호: ${currentUser.email}`;
       afterLogin();
     })
-    .catch(err => {
-      alert('로그인 실패: ' + err.message);
-    });
+    .catch(err => alert('로그인 실패: ' + err.message));
 });
 
 // 로그아웃
@@ -70,14 +65,7 @@ logoutBtn.addEventListener('click', () => {
   auth.signOut().then(() => {
     currentUser = null;
     isAdmin = false;
-    loginForm.style.display = 'block';
-    registerForm.style.display = 'none';
-    maintenanceList.style.display = 'none';
-    maintenanceForm.style.display = 'none';
-    logoutBtn.style.display = 'none';
-    userName.textContent = '';
-    addBtnBox.style.display = 'none';
-    searchBox.style.display = 'none';
+    showLoginForm();
   });
 });
 
@@ -88,24 +76,22 @@ function afterLogin() {
   maintenanceList.style.display = 'block';
   logoutBtn.style.display = 'block';
   addBtnBox.style.display = 'block';
-  showSearchBox();
+  searchBox.style.display = 'block';
   loadMaintenanceHistory();
 }
 
-// 새 정비 이력 추가 버튼
+// 정비 이력 추가
 addMaintenanceBtn.addEventListener('click', () => {
   maintenanceForm.style.display = 'block';
 });
-
 document.getElementById('cancelBtn').addEventListener('click', () => {
   maintenanceForm.style.display = 'none';
 });
-
-document.getElementById('newMaintenance').addEventListener('submit', (e) => {
+document.getElementById('newMaintenance').addEventListener('submit', e => {
   e.preventDefault();
   if (!currentUser) return;
   const maintenanceData = {
-    userEmail: currentUser.email,
+    userEmail: currentUser.email.toLowerCase(),
     date: document.getElementById('maintenanceDate').value,
     type: document.getElementById('maintenanceType').value,
     description: document.getElementById('description').value,
@@ -119,23 +105,19 @@ document.getElementById('newMaintenance').addEventListener('submit', (e) => {
       document.getElementById('newMaintenance').reset();
       loadMaintenanceHistory();
     })
-    .catch(err => {
-      alert('정비 이력 저장 실패: ' + err.message);
-    });
+    .catch(err => alert('정비 이력 저장 실패: ' + err.message));
 });
 
-function showSearchBox() {
-  searchBox.style.display = 'block';
-}
-
+// 검색
 searchInput.addEventListener('input', () => {
   loadMaintenanceHistory(searchInput.value);
 });
 
+// 정비 이력 불러오기
 function loadMaintenanceHistory(search = '') {
   let query = db.collection('maintenance');
   if (!isAdmin && currentUser) {
-    query = query.where('userEmail', '==', currentUser.email);
+    query = query.where('userEmail', '==', currentUser.email.toLowerCase());
   }
   query.orderBy('createdAt', 'desc').get()
     .then(snapshot => {
@@ -181,15 +163,7 @@ function loadMaintenanceHistory(search = '') {
     });
 }
 
-function getStatusBadgeClass(status) {
-  switch (status) {
-    case 'pending': return 'bg-warning';
-    case 'approved': return 'bg-success';
-    case 'rejected': return 'bg-danger';
-    default: return 'bg-secondary';
-  }
-}
-
+// 상태 텍스트
 function getStatusText(status) {
   switch (status) {
     case 'pending': return '검토중';
@@ -199,6 +173,7 @@ function getStatusText(status) {
   }
 }
 
+// 관리자 승인/거절 버튼
 function renderActionButtons(maintenance) {
   if (isAdmin && maintenance.status === 'pending') {
     return `
@@ -206,13 +181,10 @@ function renderActionButtons(maintenance) {
       <button class="btn btn-danger btn-sm" onclick="rejectMaintenance('${maintenance.id}')">거절</button>
     `;
   }
-  if (!isAdmin && maintenance.status === 'pending') {
-    return `<button class="btn btn-danger btn-sm" onclick="deleteMaintenance('${maintenance.id}')">삭제</button>`;
-  }
   return '';
 }
 
-// 승인/거절/삭제 함수
+// 승인/거절
 window.approveMaintenance = function(id) {
   db.collection('maintenance').doc(id).update({
     status: 'approved',
@@ -225,11 +197,8 @@ window.rejectMaintenance = function(id) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(loadMaintenanceHistory);
 }
-window.deleteMaintenance = function(id) {
-  db.collection('maintenance').doc(id).delete().then(loadMaintenanceHistory);
-}
 
-// 인증 상태 변경 감지
+// 인증 상태 감지
 auth.onAuthStateChanged(user => {
   if (user) {
     currentUser = user;
@@ -239,40 +208,31 @@ auth.onAuthStateChanged(user => {
   } else {
     currentUser = null;
     isAdmin = false;
-    loginForm.style.display = 'block';
-    registerForm.style.display = 'none';
-    maintenanceList.style.display = 'none';
-    maintenanceForm.style.display = 'none';
-    logoutBtn.style.display = 'none';
-    userName.textContent = '';
-    addBtnBox.style.display = 'none';
-    searchBox.style.display = 'none';
+    showLoginForm();
   }
 });
 
-window.onload = function() {
+// 로그인 폼만 보이기
+function showLoginForm() {
   loginForm.style.display = 'block';
+  registerForm.style.display = 'none';
   maintenanceList.style.display = 'none';
   maintenanceForm.style.display = 'none';
   logoutBtn.style.display = 'none';
   userName.textContent = '';
   addBtnBox.style.display = 'none';
   searchBox.style.display = 'none';
-};
+}
 
-// Firebase 설정
-const firebaseConfig = {
-  apiKey: "AIzaSyDu_DVHYKm8kBLNT04V1NdXyqP2K-ZU8qC1E",
-  authDomain: "hoons-a02bc.firebaseapp.com",
-  projectId: "hoons-a02bc",
-  storageBucket: "hoons-a02bc.appspot.com",
-  messagingSenderId: "129637551362",
-  appId: "1:129637551362:web:3bb6f715fdb3a2cd9661b"
-};
+// Firebase 초기화 (firebase-config.js 참고)
+// const auth = firebase.auth();
+// const db = firebase.firestore(); 
 
-// Firebase 초기화
-firebase.initializeApp(firebaseConfig);
-
-// Firebase 서비스 초기화
-const auth = firebase.auth();
-const db = firebase.firestore(); 
+function getStatusBadgeClass(status) {
+  switch (status) {
+    case 'pending': return 'bg-secondary';
+    case 'approved': return 'bg-success';
+    case 'rejected': return 'bg-danger';
+    default: return 'bg-light text-dark';
+  }
+} 
