@@ -1,5 +1,5 @@
-// 관리자 이메일
-const ADMIN_EMAIL = 'admin@admin.com';
+// 관리자 이메일 목록
+const ADMIN_EMAILS = ['admin1@admin.com', 'admin2@admin.com', 'admin3@admin.com'];
 
 // DOM 요소
 const loginForm = document.getElementById('loginForm');
@@ -36,7 +36,7 @@ registerForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const email = document.getElementById('regEmail').value.trim().toLowerCase();
   const password = document.getElementById('regPassword').value;
-  const carNumber = document.getElementById('regCarNumber').value.trim();
+  const carNumber = document.getElementById('regCarNumber').value.trim().toLowerCase().replace(/\\s+/g, '');
   if (!email || !password || !carNumber) {
     alert('모든 정보를 입력하세요.');
     return;
@@ -76,8 +76,8 @@ loginForm.addEventListener('submit', (e) => {
           email,
           carNumber: doc.data().carNumber
         };
-        isAdmin = (email === ADMIN_EMAIL);
-        userName.textContent = isAdmin ? '관리자' : `차량번호: ${currentUser.carNumber}`;
+        isAdmin = ADMIN_EMAILS.includes(email);
+        userName.textContent = isAdmin ? `관리자 (${email})` : `차량번호: ${currentUser.carNumber}`;
         afterLogin();
       });
     })
@@ -118,13 +118,14 @@ document.getElementById('cancelBtn').addEventListener('click', () => {
 document.getElementById('newMaintenance').addEventListener('submit', (e) => {
   e.preventDefault();
   if (!isAdmin) return;
-  const carNumber = document.getElementById('maintenanceCarNumber').value.trim();
+  const carNumber = document.getElementById('maintenanceCarNumber').value.trim().toLowerCase().replace(/\\s+/g, '');
   const maintenanceData = {
     carNumber,
     date: document.getElementById('maintenanceDate').value,
     type: document.getElementById('maintenanceType').value,
     description: document.getElementById('description').value,
     status: 'pending',
+    adminEmail: currentUser.email,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
@@ -145,7 +146,9 @@ searchInput.addEventListener('input', () => {
 // 정비 이력 불러오기
 function loadMaintenanceHistory(search = '') {
   let query = db.collection('maintenance');
-  if (!isAdmin && currentUser) {
+  if (isAdmin) {
+    query = query.where('adminEmail', '==', currentUser.email);
+  } else if (currentUser) {
     query = query.where('carNumber', '==', currentUser.carNumber);
   }
   query.orderBy('createdAt', 'desc').get()
@@ -173,6 +176,7 @@ function loadMaintenanceHistory(search = '') {
                 <h5 class="card-title mb-0">${maintenance.type}</h5>
                 <h6 class="card-subtitle text-muted">${maintenance.date}</h6>
                 <div class='text-muted' style='font-size:0.95em;'>차량번호: ${maintenance.carNumber}</div>
+                ${isAdmin ? `<div class='text-muted' style='font-size:0.95em;'>등록 관리자: ${maintenance.adminEmail}</div>` : ''}
               </div>
               <span class="badge ${getStatusBadgeClass(maintenance.status)}" style="font-size:1em;">${getStatusText(maintenance.status)}</span>
             </div>
@@ -243,8 +247,8 @@ auth.onAuthStateChanged(user => {
         email: user.email,
         carNumber: doc.data().carNumber
       };
-      isAdmin = (user.email === ADMIN_EMAIL);
-      userName.textContent = isAdmin ? '관리자' : `차량번호: ${currentUser.carNumber}`;
+      isAdmin = ADMIN_EMAILS.includes(user.email);
+      userName.textContent = isAdmin ? `관리자 (${user.email})` : `차량번호: ${currentUser.carNumber}`;
       afterLogin();
     });
   } else {
