@@ -51,30 +51,44 @@ html, body {
     text-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 
-.logo-bg {
-    max-width: 90vw;
-    padding: 2vw 4vw;
+.logo-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
     margin: 0 auto;
-    display: inline-block;
+    padding: 0;
+}
+
+.logo-bg {
+    max-width: 100vw;
+    width: 100%;
+    padding: 2vw 0;
+    margin: 0 auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     box-sizing: border-box;
     background: #fff;
     border: 2px solid var(--main-blue);
     box-shadow: 0 8px 32px rgba(0,113,197,0.08), 0 2px 8px rgba(0,0,0,0.08);
     transition: box-shadow 0.3s, border 0.3s;
+    border-radius: 18px;
 }
-.logo-bg:hover {
-    box-shadow: 0 0 32px 8px #0071c5aa, 0 2px 8px rgba(0,0,0,0.08);
-    border: 2.5px solid #0071c5;
-}
+
 #mainLogo {
-    max-width: 60vw !important;
+    max-width: 80vw !important;
     width: 100%;
     height: auto;
     display: block;
     margin: 0 auto;
-    filter: drop-shadow(0 0 12px #0071c5aa);
-    transition: filter 0.3s;
 }
+
+.logo-bg:hover {
+    box-shadow: 0 0 32px 8px #0071c5aa, 0 2px 8px rgba(0,0,0,0.08);
+    border: 2.5px solid #0071c5;
+}
+
 .logo-bg:hover #mainLogo {
     filter: drop-shadow(0 0 24px #0071c5cc);
 }
@@ -87,6 +101,7 @@ html, body {
     backdrop-filter: blur(2px);
     transition: box-shadow 0.3s, transform 0.2s;
 }
+
 .glass-card:hover {
     box-shadow: 0 8px 32px rgba(0,113,197,0.12);
     transform: translateY(-2px) scale(1.01);
@@ -132,6 +147,7 @@ html, body {
     box-shadow: 0 2px 8px rgba(0,113,197,0.08);
     transition: all 0.2s;
 }
+
 .btn-primary:hover, .btn-primary:focus {
     background: linear-gradient(90deg, #005fa3 60%, #b80022 100%);
     transform: translateY(-2px) scale(1.04);
@@ -146,6 +162,7 @@ html, body {
     letter-spacing: 1px;
     transition: background 0.2s, transform 0.2s;
 }
+
 .btn-secondary:hover, .btn-secondary:focus {
     background: #444;
     color: #fff;
@@ -156,6 +173,7 @@ html, body {
     border-radius: 10px;
     transition: border 0.2s, box-shadow 0.2s;
 }
+
 .form-control:focus {
     border-color: var(--main-blue);
     box-shadow: 0 0 0 0.2rem rgba(0,113,197,0.15);
@@ -179,6 +197,7 @@ html, body {
     margin-bottom: 1.5rem;
     transition: transform 0.2s, box-shadow 0.2s;
 }
+
 #maintenanceItems .card:hover {
     transform: translateY(-4px) scale(1.01);
     box-shadow: 0 8px 32px rgba(0,113,197,0.12);
@@ -308,6 +327,7 @@ html, body {
     margin: 0.2em 0;
     line-height: 1.5;
 }
+
 .maintenance-status-badge.approved { background: #43a047; color: #fff; border: 2px solid #2e7031; }
 .maintenance-status-badge.rejected { background: #e53935; color: #fff; border: 2px solid #b71c1c; }
 .maintenance-status-badge.pending { background: #ffb300; color: #222; border: 2px solid #ff9800; }
@@ -564,10 +584,11 @@ html, body {
     }
     .logo-bg {
         max-width: 98vw;
-        padding: 2vw 2vw;
+        width: 100%;
+        padding: 2vw 0;
     }
     #mainLogo {
-        max-width: 80vw !important;
+        max-width: 90vw !important;
     }
     .container {
         padding-left: 5px;
