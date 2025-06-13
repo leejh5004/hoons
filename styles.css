@@ -1,4 +1,6 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Satisfy&display=swap');
 :root {
     --main-black: #181c20;
     --main-white: #fff;
@@ -233,6 +235,121 @@ body {
     box-shadow: 0 8px 32px rgba(0,113,197,0.15);
 }
 
+.maintenance-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.7em;
+    position: relative;
+    min-height: 2.5em;
+    border-bottom: 1px solid #e9ecf3;
+    padding-bottom: 0.3em;
+}
+
+.maintenance-card-title {
+    font-size: 1.08em;
+    font-weight: 600;
+    color: #23272b;
+    margin-right: 0.7em;
+}
+
+.maintenance-date {
+    font-size: 0.98em;
+    color: #666;
+    margin-left: auto;
+    font-weight: 400;
+}
+
+.maintenance-status-row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin: 0.2em 0 0.5em 0;
+    margin-right: -1.2em;
+}
+
+.maintenance-car-number {
+    margin-bottom: 0.5em;
+    margin-top: 0.5em;
+    flex: 1 1 auto;
+}
+
+.maintenance-status-badge {
+    border-radius: 14px;
+    padding: 0.28em 1.4em;
+    font-size: 1.08em;
+    font-weight: 700;
+    white-space: nowrap;
+    min-width: 90px;
+    max-width: 180px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0.02em;
+    margin: 0.2em 0;
+    line-height: 1.5;
+}
+.maintenance-status-badge.approved { background: #43a047; color: #fff; border: 2px solid #2e7031; }
+.maintenance-status-badge.rejected { background: #e53935; color: #fff; border: 2px solid #b71c1c; }
+.maintenance-status-badge.pending { background: #ffb300; color: #222; border: 2px solid #ff9800; }
+
+.maintenance-description {
+    font-size: 0.97em;
+    color: #222;
+    margin-bottom: 0.2em;
+    white-space: pre-line;
+    margin-top: 0.5em;
+}
+
+.maintenance-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-end;
+    gap: 0.7em;
+    margin-top: 1.1em;
+    padding-top: 0.7em;
+    border-top: 1px solid rgba(0,113,197,0.1);
+    min-height: 2.5em;
+}
+
+.maintenance-admin {
+    background: #e53935;
+    color: #fff !important;
+    font-family: 'Pretendard', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 700;
+    font-size: 0.95em;
+    border-radius: 12px !important;
+    padding: 0.18em 1.1em 0.18em 1.1em;
+    letter-spacing: 0.02em;
+    box-shadow: 0 2px 8px rgba(229,57,53,0.10);
+    border: 2px solid #b71c1c;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    margin-left: auto;
+    margin-bottom: 0.2em;
+    align-self: flex-end;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.maintenance-card-footer .btn-success,
+.maintenance-card-footer .btn-danger {
+    border-radius: 12px !important;
+    font-size: 0.95em;
+    padding: 0.18em 1.1em 0.18em 1.1em;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-left: 0.1em;
+    margin-right: 0.1em;
+    min-width: 70px;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+}
+
 .card-content {
     display: flex;
     flex-direction: column;
@@ -352,10 +469,6 @@ body {
     display: inline-block;
 }
 
-.maintenance-admin {
-    color: #e6c200;
-}
-
 .maintenance-card-footer {
     display: flex;
     justify-content: flex-end;
@@ -363,6 +476,25 @@ body {
     margin-top: auto;
     padding-top: 1em;
     border-top: 1px solid rgba(0,113,197,0.1);
+    clear: both;
+}
+
+.maintenance-card-footer .btn-success,
+.maintenance-card-footer .btn-danger {
+    border-radius: 12px !important;
+    font-size: 0.92em;
+    padding: 0.13em 1em 0.13em 1em;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-left: 0.1em;
+    margin-right: 0.1em;
+    min-width: 60px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 70px;
+    max-width: 140px;
+    box-sizing: border-box;
 }
 
 @media (max-width: 768px) {
@@ -650,14 +782,20 @@ body {
 }
 
 .maintenance-status-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.4em 0.8em;
-    border-radius: 8px;
-    font-size: 0.9em;
+    min-width: 60px;
+    max-width: 100px;
+    text-align: center;
+    font-size: 0.95em;
     font-weight: 600;
+    line-height: 1.2;
+    padding: 0.18em 1.1em 0.18em 1.1em;
+    box-sizing: border-box;
+    display: inline-block;
+    border-radius: 12px;
     color: #fff;
     margin: 0.2em;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
 }
 
 .maintenance-status-badge.approved {
@@ -797,4 +935,34 @@ body {
         padding: 2rem 1rem;
         margin: 1rem 0;
     }
+}
+
+.maintenance-header-badges {
+    display: flex;
+    gap: 0.3em;
+    margin-left: 1em;
+}
+
+.badge-inactive {
+    opacity: 0.4;
+    filter: grayscale(0.2);
+}
+
+.maintenance-status-row {
+    margin: 0.5em 0 0.5em 0;
+}
+
+.maintenance-car-number {
+    margin-bottom: 0.5em;
+    margin-top: 0.5em;
+}
+
+.maintenance-description {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+.maintenance-card-body {
+    padding-left: 1.2em;
+    padding-right: 1.2em;
 } 

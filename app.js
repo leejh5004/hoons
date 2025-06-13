@@ -1,6 +1,9 @@
 // 관리자 이메일 목록
 const ADMIN_EMAILS = ['admin1@admin.com', 'admin2@admin.com', 'admin3@admin.com'];
 
+// 관리자 이메일 → 이름 변환 캐시
+const adminNameCache = {};
+
 // 전역 변수
 let currentUser = null;
 let isAdmin = false;
@@ -219,116 +222,133 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// 정비 이력 불러오기
-function loadMaintenanceHistory(search = '') {
-    const maintenanceItems = document.getElementById('maintenanceItems');
-    if (!maintenanceItems) return;
-
-    // 로딩 표시
-    maintenanceItems.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 로딩중...</div>';
-
-    let query = db.collection('maintenance');
-    
-    if (isAdmin) {
-        query = query.where('adminEmail', '==', currentUser.email);
-    } else if (currentUser) {
-        query = query.where('carNumber', '==', currentUser.carNumber);
+// 관리자 이메일로 이름 가져오기 (비동기)
+async function getAdminNameByEmail(email) {
+    if (adminNameCache[email]) return adminNameCache[email];
+    const snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+    if (!snapshot.empty) {
+        const name = snapshot.docs[0].data().name || email;
+        adminNameCache[email] = name;
+        return name;
     }
-
-    query.orderBy('createdAt', 'desc').get()
-        .then(snapshot => {
-            maintenanceItems.innerHTML = '';
-            let maintenances = [];
-            
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                maintenances.push({ ...data, id: doc.id });
-            });
-
-            if (search && search.trim() !== '') {
-                const searchTerms = search.trim().toLowerCase().split(/\s+/);
-                maintenances = maintenances.filter(m => {
-                    const type = (m.type || '').toLowerCase();
-                    const description = (m.description || '').toLowerCase();
-                    const carNumber = (m.carNumber || '').toLowerCase();
-                    const date = (m.date || '').toLowerCase();
-                    
-                    return searchTerms.every(term => 
-                        type.includes(term) ||
-                        description.includes(term) ||
-                        carNumber.includes(term) ||
-                        date.includes(term)
-                    );
-                });
-            }
-
-            if (maintenances.length === 0) {
-                maintenanceItems.innerHTML = `
-                    <div class="no-data">
-                        <i class="fas fa-search fa-2x mb-3"></i>
-                        <p>검색 결과가 없습니다.</p>
-                        ${search ? '<p class="text-muted">다른 검색어를 입력해보세요.</p>' : '<p class="text-muted">정비 이력이 없습니다.</p>'}
-                    </div>`;
-                return;
-            }
-
-            // 타임라인 생성
-            const timeline = document.createElement('div');
-            timeline.className = 'maintenance-timeline';
-            
-            maintenances.forEach(maintenance => {
-                const card = createMaintenanceCard(maintenance);
-                timeline.appendChild(card);
-            });
-
-            maintenanceItems.appendChild(timeline);
-        })
-        .catch(error => {
-            console.error('Error loading maintenance list:', error);
-            showNotification('정비 이력을 불러오는데 실패했습니다.', 'error');
-            maintenanceItems.innerHTML = `
-                <div class="error-message">
-                    <i class="fas fa-exclamation-circle fa-2x mb-3"></i>
-                    <p>정비 이력을 불러오는데 실패했습니다.</p>
-                    <p class="text-muted">잠시 후 다시 시도해주세요.</p>
-                </div>`;
-        });
+    return email;
 }
 
-// 정비 카드 생성
-function createMaintenanceCard(maintenance) {
+// 정비카드 생성 함수 비동기로 변경
+async function createMaintenanceCard(maintenance) {
     const card = document.createElement('div');
     card.className = 'maintenance-card glass-card';
-    
-    const typeIcon = getTypeIcon(maintenance.type);
-    const statusClass = maintenance.status || 'pending';
-    const statusIcon = getStatusIcon(maintenance.status);
-    
+
+    // 관리자 이름 가져오기
+    let adminName = maintenance.adminName;
+    if (!adminName && maintenance.adminEmail) {
+        adminName = await getAdminNameByEmail(maintenance.adminEmail);
+    }
+
+    // 상태별 활성화/비활성화 클래스
+    const approvedClass = maintenance.status === 'approved' ? '' : ' badge-inactive';
+    const rejectedClass = maintenance.status === 'rejected' ? '' : ' badge-inactive';
+    const pendingClass = maintenance.status === 'pending' ? '' : ' badge-inactive';
+
+    // 도장(관리자 이름) 노출 조건: 승인/거절 상태일 때만
+    const showAdminSeal = maintenance.status === 'approved' || maintenance.status === 'rejected';
+
     card.innerHTML = `
         <div class="maintenance-card-header">
-            <span class="maintenance-type-icon">${typeIcon}</span>
+            <span class="maintenance-type-icon">${getTypeIcon(maintenance.type)}</span>
             <span class="maintenance-card-title">${maintenance.type || ''}</span>
-            <span class="maintenance-status-badge ${statusClass}">${statusIcon} ${getStatusText(maintenance.status)}</span>
             <span class="maintenance-date">${maintenance.date || ''}</span>
+            <span class="maintenance-status-badge ${maintenance.status}">${getStatusText(maintenance.status)}</span>
         </div>
         <div class="maintenance-card-body">
-            <span class="maintenance-car-number">차량번호: ${maintenance.carNumber}</span>
-            ${isAdmin ? `<span class="maintenance-admin">관리자: ${maintenance.adminEmail}</span>` : ''}
-            <div class="mt-2">${maintenance.description || ''}</div>
+            <div class="maintenance-car-number">차량번호: ${maintenance.carNumber}</div>
+            <div class="maintenance-description">${maintenance.description || ''}</div>
         </div>
-        ${!isAdmin && maintenance.status === 'pending' ? `
-            <div class="maintenance-card-footer">
+        <div class="maintenance-card-footer">
+            ${showAdminSeal ? `<span class="maintenance-admin">관리자 ${adminName}</span>` : ''}
+            ${!isAdmin && maintenance.status === 'pending' ? `
                 <button class="btn btn-success btn-sm" onclick="updateMaintenanceStatus('${maintenance.id}', 'approved')">
                     <i class="fas fa-check"></i> 승인
                 </button>
                 <button class="btn btn-danger btn-sm" onclick="updateMaintenanceStatus('${maintenance.id}', 'rejected')">
                     <i class="fas fa-times"></i> 거절
                 </button>
-            </div>
-        ` : ''}
+            ` : ''}
+        </div>
     `;
-    
     return card;
+}
+
+// 정비 이력 목록을 비동기로 렌더링
+async function loadMaintenanceHistory(search = '') {
+    const maintenanceItems = document.getElementById('maintenanceItems');
+    if (!maintenanceItems) return;
+
+    maintenanceItems.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 로딩중...</div>';
+
+    let query = db.collection('maintenance');
+    if (isAdmin) {
+        query = query.where('adminEmail', '==', currentUser.email);
+    } else if (currentUser) {
+        query = query.where('carNumber', '==', currentUser.carNumber);
+    }
+
+    try {
+        const snapshot = await query.orderBy('createdAt', 'desc').get();
+        maintenanceItems.innerHTML = '';
+        let maintenances = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            maintenances.push({ ...data, id: doc.id });
+        });
+
+        if (search && search.trim() !== '') {
+            const searchTerms = search.trim().toLowerCase().split(/\s+/);
+            maintenances = maintenances.filter(m => {
+                const type = (m.type || '').toLowerCase();
+                const description = (m.description || '').toLowerCase();
+                const carNumber = (m.carNumber || '').toLowerCase();
+                const date = (m.date || '').toLowerCase();
+                return searchTerms.every(term =>
+                    type.includes(term) ||
+                    description.includes(term) ||
+                    carNumber.includes(term) ||
+                    date.includes(term)
+                );
+            });
+        }
+
+        if (maintenances.length === 0) {
+            maintenanceItems.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-search fa-2x mb-3"></i>
+                    <p>검색 결과가 없습니다.</p>
+                    ${search ? '<p class="text-muted">다른 검색어를 입력해보세요.</p>' : '<p class="text-muted">정비 이력이 없습니다.</p>'}
+                </div>`;
+            return;
+        }
+
+        // 타임라인 생성
+        const timeline = document.createElement('div');
+        timeline.className = 'maintenance-timeline';
+
+        // 카드 비동기 생성
+        for (const maintenance of maintenances) {
+            const card = await createMaintenanceCard(maintenance);
+            timeline.appendChild(card);
+        }
+
+        maintenanceItems.appendChild(timeline);
+    } catch (error) {
+        console.error('Error loading maintenance list:', error);
+        showNotification('정비 이력을 불러오는데 실패했습니다.', 'error');
+        maintenanceItems.innerHTML = `
+            <div class="error-message">
+                <i class="fas fa-exclamation-circle fa-2x mb-3"></i>
+                <p>정비 이력을 불러오는데 실패했습니다.</p>
+                <p class="text-muted">잠시 후 다시 시도해주세요.</p>
+            </div>`;
+    }
 }
 
 // 정비 상태 업데이트 함수 추가
