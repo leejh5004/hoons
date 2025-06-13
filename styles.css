@@ -52,6 +52,11 @@ html, body {
 }
 
 .logo-bg {
+    max-width: 90vw;
+    padding: 2vw 4vw;
+    margin: 0 auto;
+    display: inline-block;
+    box-sizing: border-box;
     background: #fff;
     border: 2px solid var(--main-blue);
     box-shadow: 0 8px 32px rgba(0,113,197,0.08), 0 2px 8px rgba(0,0,0,0.08);
@@ -62,6 +67,11 @@ html, body {
     border: 2.5px solid #0071c5;
 }
 #mainLogo {
+    max-width: 60vw !important;
+    width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
     filter: drop-shadow(0 0 12px #0071c5aa);
     transition: filter 0.3s;
 }
@@ -552,8 +562,12 @@ html, body {
     .maintenance-description {
         font-size: 0.95em;
     }
+    .logo-bg {
+        max-width: 98vw;
+        padding: 2vw 2vw;
+    }
     #mainLogo {
-        max-width: 90vw !important;
+        max-width: 80vw !important;
     }
     .container {
         padding-left: 5px;
