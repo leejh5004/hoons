@@ -1,55 +1,335 @@
-body {
-    background-color: #f8f9fa;
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+:root {
+    --main-black: #181c20;
+    --main-white: #fff;
+    --main-blue: #0071c5;
+    --main-red: #e4002b;
+    --main-gray: #f5f6fa;
+    --main-dark-gray: #23272b;
+    --main-gold: #e6c200;
+    --main-shadow: 0 4px 24px rgba(0,0,0,0.12);
 }
 
-.card {
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+body {
+    background: linear-gradient(135deg, #f5f6fa 0%, #e9ecf3 100%);
+    color: var(--main-dark-gray);
+    font-family: 'Pretendard', 'Helvetica Neue', Arial, sans-serif;
+    min-height: 100vh;
 }
 
 .navbar {
+    background-color: var(--main-black);
     margin-bottom: 2rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.navbar-brand {
+    color: var(--main-white) !important;
+    font-weight: 600;
+}
+
+.nav-gradient {
+    background: linear-gradient(90deg, #181c20 60%, #0071c5 100%);
+    border-bottom: 3px solid var(--main-gold);
+}
+
+.site-title {
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.logo-bg {
+    background: #fff;
+    border: 2px solid var(--main-blue);
+    box-shadow: 0 8px 32px rgba(0,113,197,0.08), 0 2px 8px rgba(0,0,0,0.08);
+    transition: box-shadow 0.3s, border 0.3s;
+}
+.logo-bg:hover {
+    box-shadow: 0 0 32px 8px #0071c5aa, 0 2px 8px rgba(0,0,0,0.08);
+    border: 2.5px solid #0071c5;
+}
+#mainLogo {
+    filter: drop-shadow(0 0 12px #0071c5aa);
+    transition: filter 0.3s;
+}
+.logo-bg:hover #mainLogo {
+    filter: drop-shadow(0 0 24px #0071c5cc);
+}
+
+.glass-card {
+    background: rgba(255,255,255,0.90) !important;
+    box-shadow: var(--main-shadow);
+    border-radius: 18px !important;
+    border: none;
+    backdrop-filter: blur(2px);
+    transition: box-shadow 0.3s, transform 0.2s;
+}
+.glass-card:hover {
+    box-shadow: 0 8px 32px rgba(0,113,197,0.12);
+    transform: translateY(-2px) scale(1.01);
+}
+
+.card {
+    border: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    background-color: var(--main-white);
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.card-header {
+    background: linear-gradient(90deg, #0071c5 0%, #181c20 100%);
+    color: #fff;
+    font-weight: 700;
+    border-radius: 18px 18px 0 0 !important;
+    border: none;
+    letter-spacing: 1px;
 }
 
 .badge {
-    font-size: 0.9em;
-    padding: 0.5em 1em;
-}
-
-#maintenanceItems .card {
-    transition: transform 0.2s;
-}
-
-#maintenanceItems .card:hover {
-    transform: translateY(-2px);
-}
-
-.form-control:focus {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    font-size: 1em;
+    padding: 0.5em 1.2em;
+    background: linear-gradient(90deg, #0071c5 60%, #e4002b 100%);
+    color: #fff;
+    font-weight: 600;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,113,197,0.08);
+    transition: background 0.2s, box-shadow 0.2s;
 }
 
 .btn-primary {
-    background-color: #007bff;
-    border-color: #007bff;
+    background: linear-gradient(90deg, #0071c5 60%, #e4002b 100%);
+    border: none;
+    font-weight: 700;
+    letter-spacing: 1px;
+    box-shadow: 0 2px 8px rgba(0,113,197,0.08);
+    transition: all 0.2s;
 }
-
-.btn-primary:hover {
-    background-color: #0056b3;
-    border-color: #0056b3;
+.btn-primary:hover, .btn-primary:focus {
+    background: linear-gradient(90deg, #005fa3 60%, #b80022 100%);
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 0 4px 16px #0071c555;
 }
 
 .btn-secondary {
-    background-color: #6c757d;
-    border-color: #6c757d;
+    background: var(--main-dark-gray);
+    color: #fff;
+    border: none;
+    font-weight: 600;
+    letter-spacing: 1px;
+    transition: background 0.2s, transform 0.2s;
+}
+.btn-secondary:hover, .btn-secondary:focus {
+    background: #444;
+    color: #fff;
+    transform: translateY(-1px) scale(1.03);
 }
 
-.btn-secondary:hover {
-    background-color: #545b62;
-    border-color: #545b62;
+.form-control {
+    border-radius: 10px;
+    transition: border 0.2s, box-shadow 0.2s;
+}
+.form-control:focus {
+    border-color: var(--main-blue);
+    box-shadow: 0 0 0 0.2rem rgba(0,113,197,0.15);
+}
+
+.admin-badge {
+    background: linear-gradient(90deg, #e6c200 60%, #0071c5 100%);
+    color: #181c20;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 0.3em 1em;
+    margin-left: 0.5em;
+    font-size: 0.95em;
+    box-shadow: 0 2px 8px #e6c20044;
+}
+
+#maintenanceItems .card {
+    border-radius: 18px;
+    box-shadow: var(--main-shadow);
+    background: rgba(255,255,255,0.95);
+    margin-bottom: 1.5rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+#maintenanceItems .card:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 8px 32px rgba(0,113,197,0.12);
+}
+
+.input-group-text {
+    background: var(--main-blue);
+    color: #fff;
+    border: none;
+    font-weight: 700;
+}
+
+/* 토스트 알림 */
+.notification {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    z-index: 9999;
+    min-width: 280px;
+    max-width: 400px;
+    padding: 0.8em 1.2em;
+    border-radius: 12px;
+    font-size: 0.95em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    opacity: 0.95;
+    animation: toast-in 0.3s cubic-bezier(.4,0,.2,1) both;
+    border-left: 4px solid;
+}
+
+.notification.alert-success {
+    background: linear-gradient(90deg, #f8fff9 0%, #fff 100%);
+    border-left-color: #28a745;
+}
+
+.notification.alert-error {
+    background: linear-gradient(90deg, #fff5f5 0%, #fff 100%);
+    border-left-color: #dc3545;
+}
+
+.notification.alert-info {
+    background: linear-gradient(90deg, #f8f9fa 0%, #fff 100%);
+    border-left-color: #0071c5;
+}
+
+@keyframes toast-in {
+    0% { opacity: 0; transform: translateY(-20px) scale(0.9); }
+    100% { opacity: 0.95; transform: translateY(0) scale(1); }
+}
+
+/* 타임라인 스타일 */
+.maintenance-timeline {
+    position: relative;
+    padding-left: 32px;
+    margin-top: 2rem;
+}
+.maintenance-timeline::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 12px; bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, #0071c5 0%, #e4002b 100%);
+    border-radius: 2px;
+    opacity: 0.15;
+}
+.maintenance-card {
+    position: relative;
+    margin-bottom: 2.5rem;
+    margin-left: 0;
+    background: rgba(255,255,255,0.97);
+    border-radius: 18px;
+    box-shadow: 0 4px 24px rgba(0,113,197,0.10);
+    transition: box-shadow 0.2s, transform 0.2s;
+    border-left: 6px solid #0071c5;
+    padding: 1.5rem 2rem 1.2rem 2.5rem;
+    min-height: 160px;
+    overflow: visible;
+}
+.maintenance-card:hover {
+    box-shadow: 0 8px 32px #0071c555;
+    transform: translateY(-4px) scale(1.02);
+    border-left: 6px solid #e4002b;
+}
+.maintenance-timeline-dot {
+    position: absolute;
+    left: -26px;
+    top: 32px;
+    width: 24px; height: 24px;
+    background: #fff;
+    border: 4px solid #0071c5;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px #0071c533;
+    z-index: 2;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1em;
+    color: #0071c5;
+    transition: border 0.2s, color 0.2s;
+}
+.maintenance-card:hover .maintenance-timeline-dot {
+    border-color: #e4002b;
+    color: #e4002b;
+}
+.maintenance-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+    margin-bottom: 0.5em;
+}
+.maintenance-type-icon {
+    font-size: 1.5em;
+    color: #0071c5;
+    margin-right: 0.2em;
+}
+.maintenance-card-title {
+    font-size: 1.2em;
+    font-weight: 700;
+    margin-bottom: 0;
+    color: #181c20;
+}
+.maintenance-date {
+    font-size: 0.98em;
+    color: #888;
+    margin-left: auto;
+    font-weight: 500;
+}
+.maintenance-status-badge {
+    margin-left: 1em;
+    font-size: 1em;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 0.3em 1.1em;
+    box-shadow: 0 2px 8px #0071c522;
+    background: #eee;
+    color: #23272b;
+    display: flex; align-items: center; gap: 0.4em;
+}
+.maintenance-status-badge.pending {
+    background: linear-gradient(90deg, #ffe066 60%, #fffbe6 100%);
+    color: #bfa100;
+}
+.maintenance-status-badge.approved {
+    background: linear-gradient(90deg, #b6f7c1 60%, #e6fff0 100%);
+    color: #1e8c3a;
+}
+.maintenance-status-badge.rejected {
+    background: linear-gradient(90deg, #ffd6d6 60%, #fff0f0 100%);
+    color: #e4002b;
+}
+.maintenance-card-body {
+    margin-top: 0.5em;
+    margin-bottom: 0.7em;
+    font-size: 1.08em;
+    color: #23272b;
+}
+.maintenance-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.7em;
+    margin-top: 1em;
+}
+.maintenance-car-number, .maintenance-admin {
+    font-size: 0.98em;
+    color: #0071c5;
+    font-weight: 600;
+    margin-right: 1.2em;
+    display: inline-block;
+}
+.maintenance-admin {
+    color: #e6c200;
 }
 
 @media (max-width: 576px) {
-    .card {
+    .card, .glass-card {
         max-width: 100% !important;
         margin: 0 5px !important;
     }
@@ -59,5 +339,40 @@ body {
     .container {
         padding-left: 5px;
         padding-right: 5px;
+    }
+    .site-title {
+        font-size: 1.1rem;
+    }
+    .notification {
+        top: 70px;
+        right: 16px;
+        left: 16px;
+        min-width: auto;
+        max-width: calc(100% - 32px);
+        font-size: 0.9em;
+        padding: 0.7em 1em;
+    }
+    .btn, .btn-primary, .btn-secondary {
+        font-size: 1em;
+        padding: 0.7em 1.1em;
+    }
+    .maintenance-timeline {
+        padding-left: 12px;
+    }
+    .maintenance-card {
+        padding: 1.1rem 0.7rem 1rem 1.5rem;
+        min-height: 120px;
+    }
+    .maintenance-timeline-dot {
+        left: -18px;
+        width: 16px; height: 16px;
+        font-size: 0.9em;
+    }
+    .maintenance-card-title {
+        font-size: 1em;
+    }
+    .maintenance-status-badge {
+        font-size: 0.95em;
+        padding: 0.2em 0.7em;
     }
 } 
