@@ -576,11 +576,18 @@ html, body {
         font-size: 0.85em;
         padding: 0.11em 0.5em 0.11em 0.5em;
         min-width: 40px;
-        max-width: 80vw;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        max-width: none;
+        width: auto;
+        white-space: nowrap !important;
+        overflow: visible;
+        text-overflow: unset;
         box-sizing: border-box;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+    .maintenance-card-footer {
+        overflow-x: auto;
+        flex-wrap: nowrap;
     }
     .maintenance-car-number,
     .maintenance-description {
