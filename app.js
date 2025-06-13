@@ -186,12 +186,11 @@ function loadMaintenanceHistory(search = '') {
         const card = document.createElement('div');
         card.className = 'maintenance-card glass-card';
         card.innerHTML = `
-          <div class="maintenance-timeline-dot">${typeIcon}</div>
           <div class="maintenance-card-header">
             <span class="maintenance-type-icon">${typeIcon}</span>
             <span class="maintenance-card-title">${maintenance.type || ''}</span>
-            <span class="maintenance-date">${maintenance.date || ''}</span>
             <span class="maintenance-status-badge ${statusClass}">${statusIcon} ${getStatusText(maintenance.status)}</span>
+            <span class="maintenance-date">${maintenance.date || ''}</span>
           </div>
           <div class="maintenance-card-body">
             <span class="maintenance-car-number">차량번호: ${maintenance.carNumber}</span>
@@ -330,3 +329,133 @@ function showLoginForm() {
 // Firebase 초기화 (firebase-config.js 참고)
 // const auth = firebase.auth();
 // const db = firebase.firestore(); 
+
+// DOM이 로드된 후 실행
+document.addEventListener('DOMContentLoaded', () => {
+    // 모달 외부 클릭시 닫기
+    document.getElementById('modalBackdrop').addEventListener('click', closeMaintenanceModal);
+    
+    // ESC 키로 모달 닫기
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeMaintenanceModal();
+        }
+    });
+});
+
+// 정비이력 카드 생성 함수
+function createMaintenanceCard(maintenance) {
+    const card = document.createElement('div');
+    card.className = 'maintenance-card';
+    
+    // 카드 내용 컨테이너
+    const content = document.createElement('div');
+    content.className = 'card-content';
+    
+    // 헤더 (차량 정보 + 상태)
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    
+    // 차량 정보
+    const carInfo = document.createElement('div');
+    carInfo.className = 'car-info';
+    
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-car';
+    carInfo.appendChild(icon);
+    
+    const carNumber = document.createElement('span');
+    carNumber.textContent = maintenance.carNumber;
+    carInfo.appendChild(carNumber);
+    
+    header.appendChild(carInfo);
+    
+    // 상태 뱃지
+    const statusBadge = document.createElement('div');
+    const statusText = {
+        'completed': '완료',
+        'in-progress': '진행중',
+        'pending': '대기중',
+        'rejected': '거절됨',
+        'approved': '승인'
+    }[maintenance.status] || maintenance.status;
+    
+    statusBadge.className = `status-badge ${maintenance.status}`;
+    statusBadge.textContent = statusText;
+    header.appendChild(statusBadge);
+    
+    content.appendChild(header);
+    
+    // 날짜
+    const date = document.createElement('div');
+    date.className = 'card-date';
+    date.textContent = new Date(maintenance.date).toLocaleDateString();
+    content.appendChild(date);
+    
+    // 정비 내용
+    const description = document.createElement('p');
+    description.className = 'card-description';
+    description.textContent = maintenance.description || '정비 내용이 없습니다.';
+    content.appendChild(description);
+    
+    // 담당자 정보
+    const mechanic = document.createElement('div');
+    mechanic.className = 'card-mechanic';
+    
+    const mechanicIcon = document.createElement('i');
+    mechanicIcon.className = 'fas fa-user-cog';
+    mechanic.appendChild(mechanicIcon);
+    
+    const mechanicText = document.createElement('span');
+    mechanicText.textContent = ` ${maintenance.mechanic}`;
+    mechanic.appendChild(mechanicText);
+    
+    content.appendChild(mechanic);
+    card.appendChild(content);
+    
+    // 클릭 이벤트
+    card.addEventListener('click', () => {
+        showMaintenanceModal(maintenance);
+    });
+    
+    return card;
+}
+
+// 모달 관련 함수
+function showMaintenanceModal(maintenance) {
+    const modal = document.getElementById('maintenanceModal');
+    const backdrop = document.getElementById('modalBackdrop');
+    
+    // 모달 내용 업데이트
+    document.getElementById('modalCarNumber').textContent = maintenance.carNumber;
+    document.getElementById('modalDate').textContent = new Date(maintenance.date).toLocaleDateString();
+    
+    const statusMap = {
+        'completed': '완료',
+        'in-progress': '진행중',
+        'pending': '대기중',
+        'rejected': '거절됨',
+        'approved': '승인'
+    };
+    
+    const statusElement = document.getElementById('modalStatus');
+    statusElement.textContent = statusMap[maintenance.status] || maintenance.status;
+    statusElement.className = `status-badge ${maintenance.status}`;
+    
+    document.getElementById('modalDescription').textContent = maintenance.description || '정비 내용이 없습니다.';
+    document.getElementById('modalMechanic').textContent = maintenance.mechanic;
+    
+    // 모달 표시
+    modal.classList.add('show');
+    backdrop.classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMaintenanceModal() {
+    const modal = document.getElementById('maintenanceModal');
+    const backdrop = document.getElementById('modalBackdrop');
+    
+    modal.classList.remove('show');
+    backdrop.classList.remove('show');
+    document.body.style.overflow = '';
+} 
