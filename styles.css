@@ -447,14 +447,16 @@ body {
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     z-index: 9998;
-    display: none;
+    visibility: hidden;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: all 0.3s ease;
+    pointer-events: none;
 }
 
 .modal-backdrop.show {
-    display: block;
+    visibility: visible;
     opacity: 1;
+    pointer-events: auto;
 }
 
 .maintenance-modal {
@@ -470,16 +472,18 @@ body {
     max-height: 90vh;
     overflow-y: auto;
     z-index: 9999;
-    display: none;
+    visibility: hidden;
     opacity: 0;
     transition: all 0.3s ease;
     box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    pointer-events: none;
 }
 
 .maintenance-modal.show {
-    display: block;
+    visibility: visible;
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
+    pointer-events: auto;
 }
 
 .modal-header {

@@ -332,8 +332,15 @@ function showLoginForm() {
 
 // DOM이 로드된 후 실행
 document.addEventListener('DOMContentLoaded', () => {
+    const backdrop = document.getElementById('modalBackdrop');
+    const modal = document.getElementById('maintenanceModal');
+    
     // 모달 외부 클릭시 닫기
-    document.getElementById('modalBackdrop').addEventListener('click', closeMaintenanceModal);
+    backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) {
+            closeMaintenanceModal();
+        }
+    });
     
     // ESC 키로 모달 닫기
     document.addEventListener('keydown', (e) => {
@@ -341,6 +348,12 @@ document.addEventListener('DOMContentLoaded', () => {
             closeMaintenanceModal();
         }
     });
+    
+    // 닫기 버튼 클릭시 닫기
+    const closeButton = modal.querySelector('.modal-close');
+    if (closeButton) {
+        closeButton.addEventListener('click', closeMaintenanceModal);
+    }
 });
 
 // 정비이력 카드 생성 함수
@@ -445,17 +458,36 @@ function showMaintenanceModal(maintenance) {
     document.getElementById('modalDescription').textContent = maintenance.description || '정비 내용이 없습니다.';
     document.getElementById('modalMechanic').textContent = maintenance.mechanic;
     
+    // 모달 표시 전에 스타일 초기화
+    modal.style.display = 'block';
+    backdrop.style.display = 'block';
+    
+    // 강제 리플로우
+    modal.offsetHeight;
+    
     // 모달 표시
-    modal.classList.add('show');
-    backdrop.classList.add('show');
-    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => {
+        backdrop.classList.add('show');
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    });
 }
 
 function closeMaintenanceModal() {
     const modal = document.getElementById('maintenanceModal');
     const backdrop = document.getElementById('modalBackdrop');
     
+    // 모달 숨기기
     modal.classList.remove('show');
     backdrop.classList.remove('show');
-    document.body.style.overflow = '';
+    
+    // 트랜지션 완료 후 완전히 숨기기
+    const handleTransitionEnd = () => {
+        modal.style.display = 'none';
+        backdrop.style.display = 'none';
+        document.body.style.overflow = '';
+        modal.removeEventListener('transitionend', handleTransitionEnd);
+    };
+    
+    modal.addEventListener('transitionend', handleTransitionEnd);
 } 
