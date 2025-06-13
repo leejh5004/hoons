@@ -156,7 +156,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // 인증 상태 감지
     auth.onAuthStateChanged(user => {
         if (user) {
+            // users 컬렉션이 삭제된 상황을 처리
             db.collection('users').doc(user.uid).get()
+                .then(doc => {
+                    if (!doc.exists) {
+                        // users 컬렉션이 없거나 문서가 없는 경우
+                        console.log('Users collection or document not found, attempting to recover...');
+                        
+                        // 현재 로그인된 사용자의 이메일로 users 컬렉션 재생성
+                        return db.collection('users').doc(user.uid).set({
+                            email: user.email,
+                            carNumber: user.email.split('@')[0], // 임시 차량번호 (이메일 아이디 사용)
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            isRecovered: true // 복구된 계정 표시
+                        }).then(() => {
+                            showNotification('계정 정보가 복구되었습니다. 차량번호를 수정해주세요.', 'info');
+                            return db.collection('users').doc(user.uid).get();
+                        });
+                    }
+                    return doc;
+                })
                 .then(doc => {
                     if (doc.exists) {
                         currentUser = {
@@ -167,30 +186,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         isAdmin = ADMIN_EMAILS.includes(user.email);
                         
                         // UI 업데이트
-                        if (userName) {
-                            userName.textContent = isAdmin ? 
-                                `관리자 (${user.email})` : 
-                                `차량번호: ${currentUser.carNumber}`;
-                        }
-                        
-                        // 화면 표시 설정
-                        if (loginForm) loginForm.style.display = 'none';
-                        if (registerForm) registerForm.style.display = 'none';
-                        if (maintenanceList) maintenanceList.style.display = 'block';
-                        if (logoutBtn) logoutBtn.style.display = 'block';
-                        if (addBtnBox) addBtnBox.style.display = 'block';
-                        if (searchBox) searchBox.style.display = 'block';
+                        updateUI();
                         
                         // 정비 이력 로드
                         loadMaintenanceHistory();
-                    } else {
-                        auth.signOut();
-                        showNotification('사용자 정보를 찾을 수 없습니다.', 'error');
                     }
                 })
                 .catch(error => {
-                    console.error('Error fetching user data:', error);
-                    showNotification('사용자 정보를 불러오는데 실패했습니다.', 'error');
+                    console.error('Error handling user data:', error);
+                    showNotification('사용자 정보를 처리하는데 실패했습니다.', 'error');
+                    auth.signOut();
                 });
         } else {
             // 로그아웃 상태
@@ -205,6 +210,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (addBtnBox) addBtnBox.style.display = 'none';
             if (searchBox) searchBox.style.display = 'none';
             if (maintenanceItems) maintenanceItems.innerHTML = '';
+            
+            const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
+            if (updateCarNumberBtn) {
+                updateCarNumberBtn.style.display = 'none';
+            }
         }
     });
 });
@@ -394,4 +404,82 @@ function getStatusText(status) {
         'approved': '승인'
     };
     return statusMap[status] || status;
+}
+
+// 차량번호 수정 함수 추가
+function updateCarNumber(newCarNumber) {
+    if (!currentUser) return;
+    
+    db.collection('users').doc(currentUser.uid)
+        .update({
+            carNumber: newCarNumber.trim().toLowerCase().replace(/\s+/g, ''),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        })
+        .then(() => {
+            currentUser.carNumber = newCarNumber;
+            if (userName) {
+                userName.textContent = `차량번호: ${currentUser.carNumber}`;
+            }
+            showNotification('차량번호가 수정되었습니다.', 'success');
+        })
+        .catch(error => {
+            console.error('Error updating car number:', error);
+            showNotification('차량번호 수정 실패: ' + error.message, 'error');
+        });
+}
+
+// 차량번호 수정 모달 관련 함수들
+function showCarNumberUpdateModal() {
+    const modal = document.getElementById('carNumberModal');
+    const backdrop = document.getElementById('modalBackdrop');
+    const newCarNumberInput = document.getElementById('newCarNumber');
+    
+    if (modal && backdrop && newCarNumberInput) {
+        newCarNumberInput.value = currentUser.carNumber;
+        modal.classList.add('show');
+        backdrop.classList.add('show');
+        newCarNumberInput.focus();
+    }
+}
+
+function closeCarNumberModal() {
+    const modal = document.getElementById('carNumberModal');
+    const backdrop = document.getElementById('modalBackdrop');
+    
+    if (modal && backdrop) {
+        modal.classList.remove('show');
+        backdrop.classList.remove('show');
+    }
+}
+
+function submitCarNumberUpdate() {
+    const newCarNumberInput = document.getElementById('newCarNumber');
+    if (!newCarNumberInput || !newCarNumberInput.value.trim()) {
+        showNotification('차량번호를 입력해주세요.', 'error');
+        return;
+    }
+    
+    updateCarNumber(newCarNumberInput.value);
+    closeCarNumberModal();
+}
+
+// UI 업데이트 함수 수정
+function updateUI() {
+    if (userName) {
+        userName.textContent = isAdmin ? 
+            `관리자 (${currentUser.email})` : 
+            `차량번호: ${currentUser.carNumber}`;
+    }
+    
+    const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
+    if (updateCarNumberBtn) {
+        updateCarNumberBtn.style.display = isAdmin ? 'none' : 'inline-block';
+    }
+    
+    if (loginForm) loginForm.style.display = 'none';
+    if (registerForm) registerForm.style.display = 'none';
+    if (maintenanceList) maintenanceList.style.display = 'block';
+    if (logoutBtn) logoutBtn.style.display = 'block';
+    if (addBtnBox) addBtnBox.style.display = 'block';
+    if (searchBox) searchBox.style.display = 'block';
 } 

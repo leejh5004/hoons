@@ -25,6 +25,9 @@
             </a>
             <div id="userInfo" class="ms-auto">
                 <span id="userName" class="text-light me-3"></span>
+                <button id="updateCarNumberBtn" class="btn btn-outline-light me-2" style="display: none;" onclick="showCarNumberUpdateModal()">
+                    <i class="fas fa-car me-1"></i>차량번호 수정
+                </button>
                 <button id="logoutBtn" class="btn btn-outline-light" style="display: none;">
                     <i class="fas fa-sign-out-alt me-1"></i>로그아웃
                 </button>
@@ -198,5 +201,36 @@
         </div>
     </div>
     <div id="modalBackdrop" class="modal-backdrop"></div>
+
+    <!-- 차량번호 수정 모달 -->
+    <div id="carNumberModal" class="maintenance-modal">
+        <div class="modal-header">
+            <h2 class="modal-title">
+                <i class="fas fa-car"></i>
+                <span>차량번호 수정</span>
+            </h2>
+            <button class="modal-close" onclick="closeCarNumberModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label for="newCarNumber" class="form-label">새 차량번호</label>
+                <input type="text" class="form-control" id="newCarNumber" 
+                    placeholder="띄어쓰기 없이 입력 (예: 12가3456)" required>
+                <div class="form-text text-muted">
+                    <i class="fas fa-info-circle me-1"></i>띄어쓰기 없이 입력해주세요
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="submitCarNumberUpdate()">
+                <i class="fas fa-save me-1"></i>저장
+            </button>
+            <button class="btn btn-secondary" onclick="closeCarNumberModal()">
+                <i class="fas fa-times me-1"></i>취소
+            </button>
+        </div>
+    </div>
 </body>
 </html> 
