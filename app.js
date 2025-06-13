@@ -92,8 +92,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 검색
     if (searchInput) {
+        let searchTimeout;
         searchInput.addEventListener('input', () => {
-            loadMaintenanceHistory(searchInput.value);
+            // 디바운스 처리
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                loadMaintenanceHistory(searchInput.value);
+            }, 300);
         });
     }
 
@@ -209,6 +214,9 @@ function loadMaintenanceHistory(search = '') {
     const maintenanceItems = document.getElementById('maintenanceItems');
     if (!maintenanceItems) return;
 
+    // 로딩 표시
+    maintenanceItems.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 로딩중...</div>';
+
     let query = db.collection('maintenance');
     
     if (isAdmin) {
@@ -228,15 +236,29 @@ function loadMaintenanceHistory(search = '') {
             });
 
             if (search && search.trim() !== '') {
-                const s = search.trim().toLowerCase();
-                maintenances = maintenances.filter(m =>
-                    (m.type && m.type.toLowerCase().includes(s)) ||
-                    (m.description && m.description.toLowerCase().includes(s))
-                );
+                const searchTerms = search.trim().toLowerCase().split(/\s+/);
+                maintenances = maintenances.filter(m => {
+                    const type = (m.type || '').toLowerCase();
+                    const description = (m.description || '').toLowerCase();
+                    const carNumber = (m.carNumber || '').toLowerCase();
+                    const date = (m.date || '').toLowerCase();
+                    
+                    return searchTerms.every(term => 
+                        type.includes(term) ||
+                        description.includes(term) ||
+                        carNumber.includes(term) ||
+                        date.includes(term)
+                    );
+                });
             }
 
             if (maintenances.length === 0) {
-                maintenanceItems.innerHTML = '<div class="no-data">정비 이력이 없습니다.</div>';
+                maintenanceItems.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-search fa-2x mb-3"></i>
+                        <p>검색 결과가 없습니다.</p>
+                        ${search ? '<p class="text-muted">다른 검색어를 입력해보세요.</p>' : '<p class="text-muted">정비 이력이 없습니다.</p>'}
+                    </div>`;
                 return;
             }
 
@@ -254,7 +276,12 @@ function loadMaintenanceHistory(search = '') {
         .catch(error => {
             console.error('Error loading maintenance list:', error);
             showNotification('정비 이력을 불러오는데 실패했습니다.', 'error');
-            maintenanceItems.innerHTML = '<div class="error-message">정비 이력을 불러오는데 실패했습니다.</div>';
+            maintenanceItems.innerHTML = `
+                <div class="error-message">
+                    <i class="fas fa-exclamation-circle fa-2x mb-3"></i>
+                    <p>정비 이력을 불러오는데 실패했습니다.</p>
+                    <p class="text-muted">잠시 후 다시 시도해주세요.</p>
+                </div>`;
         });
 }
 
