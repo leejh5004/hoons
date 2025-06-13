@@ -441,11 +441,12 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     background: rgba(0,0,0,0.5);
     backdrop-filter: blur(4px);
-    z-index: 1050;
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 9998;
     display: none;
     opacity: 0;
     transition: opacity 0.3s ease;
@@ -468,7 +469,7 @@ body {
     max-width: 600px;
     max-height: 90vh;
     overflow-y: auto;
-    z-index: 1051;
+    z-index: 9999;
     display: none;
     opacity: 0;
     transition: all 0.3s ease;
@@ -482,6 +483,8 @@ body {
 }
 
 .modal-header {
+    position: sticky;
+    top: 0;
     background: linear-gradient(90deg, #0071c5 0%, #181c20 100%);
     color: white;
     padding: 1.5rem;
@@ -489,6 +492,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    z-index: 1;
 }
 
 .modal-title {
@@ -509,6 +513,7 @@ body {
     padding: 0.5em;
     margin: -0.5em;
     transition: transform 0.2s;
+    z-index: 2;
 }
 
 .modal-close:hover {
@@ -517,6 +522,8 @@ body {
 
 .modal-body {
     padding: 1.5rem;
+    background: white;
+    position: relative;
 }
 
 .modal-info-group {
@@ -543,20 +550,28 @@ body {
 }
 
 .modal-footer {
+    position: sticky;
+    bottom: 0;
     padding: 1rem 1.5rem;
     border-top: 1px solid #eee;
     display: flex;
     justify-content: flex-end;
     gap: 0.7em;
+    background: white;
 }
 
+/* 모바일 최적화 */
 @media (max-width: 576px) {
     .maintenance-modal {
-        width: 95%;
-        max-height: 95vh;
+        width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+        margin: 0;
     }
     
     .modal-header {
+        border-radius: 0;
         padding: 1rem;
     }
     
@@ -570,5 +585,23 @@ body {
     
     .modal-footer {
         padding: 1rem;
+    }
+    
+    .modal-backdrop {
+        background: rgba(0,0,0,0.7);
+    }
+}
+
+/* iOS Safari 대응 */
+@supports (-webkit-touch-callout: none) {
+    .modal-backdrop {
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+    
+    .maintenance-modal {
+        transform: translate(-50%, -50%) translateZ(0);
+        -webkit-transform: translate(-50%, -50%) translateZ(0);
     }
 } 
