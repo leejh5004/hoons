@@ -4,9 +4,6 @@ const ADMIN_EMAILS = ['admin1@admin.com', 'admin2@admin.com', 'admin3@admin.com'
 // 전역 변수
 let currentUser = null;
 let isAdmin = false;
-let lastDoc = null;
-let isLoading = false;
-const ITEMS_PER_PAGE = 10;
 
 // DOM이 로드된 후 실행
 document.addEventListener('DOMContentLoaded', () => {
@@ -95,12 +92,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 검색
     if (searchInput) {
-        let debounceTimer;
         searchInput.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                loadMaintenanceHistory(searchInput.value);
-            }, 300);
+            loadMaintenanceHistory(searchInput.value);
         });
     }
 
@@ -209,62 +202,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (maintenanceItems) maintenanceItems.innerHTML = '';
         }
     });
-
-    // 무한 스크롤 구현
-    const maintenanceContainer = document.querySelector('.maintenance-container');
-    if (maintenanceContainer) {
-        maintenanceContainer.addEventListener('scroll', () => {
-            const { scrollTop, scrollHeight, clientHeight } = maintenanceContainer;
-            
-            // 스크롤이 90% 이상 내려갔을 때 추가 로드
-            if (scrollTop + clientHeight >= scrollHeight * 0.9) {
-                loadMaintenanceHistory('', false);
-            }
-
-            // 맨 위로 가기 버튼 표시/숨김
-            const scrollToTop = document.getElementById('scrollToTop');
-            if (scrollToTop) {
-                if (scrollTop > clientHeight) {
-                    scrollToTop.classList.add('visible');
-                } else {
-                    scrollToTop.classList.remove('visible');
-                }
-            }
-        });
-    }
-
-    // 맨 위로 가기 버튼 클릭 이벤트
-    const scrollToTop = document.getElementById('scrollToTop');
-    if (scrollToTop) {
-        scrollToTop.addEventListener('click', () => {
-            const maintenanceContainer = document.querySelector('.maintenance-container');
-            if (maintenanceContainer) {
-                maintenanceContainer.scrollTo({
-                    top: 0,
-                    behavior: 'smooth'
-                });
-            }
-        });
-    }
 });
 
 // 정비 이력 불러오기
-function loadMaintenanceHistory(search = '', isInitialLoad = true) {
+function loadMaintenanceHistory(search = '') {
     const maintenanceItems = document.getElementById('maintenanceItems');
-    const loadingSpinner = document.getElementById('loadingSpinner');
     if (!maintenanceItems) return;
-
-    if (isInitialLoad) {
-        maintenanceItems.innerHTML = '';
-        lastDoc = null;
-    }
-
-    if (isLoading) return;
-    isLoading = true;
-
-    if (loadingSpinner) {
-        loadingSpinner.classList.add('visible');
-    }
 
     let query = db.collection('maintenance');
     
@@ -274,22 +217,12 @@ function loadMaintenanceHistory(search = '', isInitialLoad = true) {
         query = query.where('carNumber', '==', currentUser.carNumber);
     }
 
-    query = query.orderBy('createdAt', 'desc');
-
-    if (lastDoc) {
-        query = query.startAfter(lastDoc);
-    }
-
-    query.limit(ITEMS_PER_PAGE).get()
+    query.orderBy('createdAt', 'desc').get()
         .then(snapshot => {
-            if (snapshot.empty && isInitialLoad) {
-                maintenanceItems.innerHTML = '<div class="no-data">정비 이력이 없습니다.</div>';
-                return;
-            }
-
+            maintenanceItems.innerHTML = '';
             let maintenances = [];
+            
             snapshot.forEach(doc => {
-                lastDoc = doc;
                 const data = doc.data();
                 maintenances.push({ ...data, id: doc.id });
             });
@@ -302,23 +235,26 @@ function loadMaintenanceHistory(search = '', isInitialLoad = true) {
                 );
             }
 
+            if (maintenances.length === 0) {
+                maintenanceItems.innerHTML = '<div class="no-data">정비 이력이 없습니다.</div>';
+                return;
+            }
+
+            // 타임라인 생성
+            const timeline = document.createElement('div');
+            timeline.className = 'maintenance-timeline';
+            
             maintenances.forEach(maintenance => {
                 const card = createMaintenanceCard(maintenance);
-                maintenanceItems.appendChild(card);
+                timeline.appendChild(card);
             });
 
-            isLoading = false;
-            if (loadingSpinner) {
-                loadingSpinner.classList.remove('visible');
-            }
+            maintenanceItems.appendChild(timeline);
         })
         .catch(error => {
             console.error('Error loading maintenance list:', error);
             showNotification('정비 이력을 불러오는데 실패했습니다.', 'error');
-            if (loadingSpinner) {
-                loadingSpinner.classList.remove('visible');
-            }
-            isLoading = false;
+            maintenanceItems.innerHTML = '<div class="error-message">정비 이력을 불러오는데 실패했습니다.</div>';
         });
 }
 
@@ -331,20 +267,6 @@ function createMaintenanceCard(maintenance) {
     const statusClass = maintenance.status || 'pending';
     const statusIcon = getStatusIcon(maintenance.status);
     
-    // 승인/거절 버튼 HTML (일반 사용자이고 본인의 차량이며 대기중 상태일 때만 표시)
-    const actionButtons = (!isAdmin && currentUser && 
-        maintenance.carNumber === currentUser.carNumber && 
-        maintenance.status === 'pending') ? `
-        <div class="maintenance-card-actions">
-            <button class="btn btn-success btn-sm" onclick="approveMaintenance('${maintenance.id}')">
-                <i class="fas fa-check"></i> 승인
-            </button>
-            <button class="btn btn-danger btn-sm" onclick="rejectMaintenance('${maintenance.id}')">
-                <i class="fas fa-times"></i> 거절
-            </button>
-        </div>
-    ` : '';
-    
     card.innerHTML = `
         <div class="maintenance-card-header">
             <span class="maintenance-type-icon">${typeIcon}</span>
@@ -356,42 +278,39 @@ function createMaintenanceCard(maintenance) {
             <span class="maintenance-car-number">차량번호: ${maintenance.carNumber}</span>
             ${isAdmin ? `<span class="maintenance-admin">관리자: ${maintenance.adminEmail}</span>` : ''}
             <div class="mt-2">${maintenance.description || ''}</div>
-            ${actionButtons}
         </div>
+        ${!isAdmin && maintenance.status === 'pending' ? `
+            <div class="maintenance-card-footer">
+                <button class="btn btn-success btn-sm" onclick="updateMaintenanceStatus('${maintenance.id}', 'approved')">
+                    <i class="fas fa-check"></i> 승인
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="updateMaintenanceStatus('${maintenance.id}', 'rejected')">
+                    <i class="fas fa-times"></i> 거절
+                </button>
+            </div>
+        ` : ''}
     `;
     
     return card;
 }
 
-// 승인/거절 함수 추가
-window.approveMaintenance = function(id) {
+// 정비 상태 업데이트 함수 추가
+function updateMaintenanceStatus(maintenanceId, newStatus) {
     if (!currentUser) return;
     
-    db.collection('maintenance').doc(id).update({
-        status: 'approved',
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(() => {
-        showNotification('정비 이력이 승인되었습니다.', 'success');
-        loadMaintenanceHistory('', true); // 목록 새로고침
-    }).catch(error => {
-        console.error('Error approving maintenance:', error);
-        showNotification('승인 처리 중 오류가 발생했습니다.', 'error');
-    });
-}
-
-window.rejectMaintenance = function(id) {
-    if (!currentUser) return;
-    
-    db.collection('maintenance').doc(id).update({
-        status: 'rejected',
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(() => {
-        showNotification('정비 이력이 거절되었습니다.', 'error');
-        loadMaintenanceHistory('', true); // 목록 새로고침
-    }).catch(error => {
-        console.error('Error rejecting maintenance:', error);
-        showNotification('거절 처리 중 오류가 발생했습니다.', 'error');
-    });
+    db.collection('maintenance').doc(maintenanceId)
+        .update({
+            status: newStatus,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        })
+        .then(() => {
+            showNotification(`정비 이력이 ${newStatus === 'approved' ? '승인' : '거절'}되었습니다.`, 'success');
+            loadMaintenanceHistory();
+        })
+        .catch(error => {
+            console.error('Error updating maintenance status:', error);
+            showNotification('상태 업데이트 실패: ' + error.message, 'error');
+        });
 }
 
 // 알림 표시
