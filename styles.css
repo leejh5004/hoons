@@ -667,12 +667,18 @@ html, body {
         min-width: 0 !important;
         border-radius: 18px !important;
         z-index: 10001 !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
         background: #fff !important;
         box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important;
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+    .maintenance-modal.show {
         display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
     }
     .modal-backdrop {
         position: fixed !important;
@@ -682,10 +688,16 @@ html, body {
         height: 100vh !important;
         background: rgba(0,0,0,0.5) !important;
         z-index: 10000 !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+    .modal-backdrop.show {
         display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
     }
 }
 
