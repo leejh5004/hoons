@@ -460,7 +460,11 @@ function showCarNumberUpdateModal() {
         newCarNumberInput.value = currentUser.carNumber;
         modal.classList.add('show');
         backdrop.classList.add('show');
-        newCarNumberInput.focus();
+        try {
+            newCarNumberInput.focus();
+        } catch (e) {
+            // 모바일 환경 등에서 focus 에러 무시
+        }
     }
 }
 

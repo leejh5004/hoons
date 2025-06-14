@@ -625,12 +625,12 @@ html, body {
     .notification {
         left: 50% !important;
         right: auto !important;
-        top: 60px !important;
+        top: 110px !important;
         transform: translateX(-50%) !important;
-        min-width: 90vw !important;
+        min-width: 92vw !important;
         max-width: 98vw !important;
-        font-size: 1em !important;
-        padding: 1em 0.5em !important;
+        font-size: 1.05em !important;
+        padding: 1.1em 0.7em !important;
         border-radius: 14px !important;
         z-index: 9999 !important;
     }
