@@ -107,29 +107,38 @@
                 <i class="fas fa-plus me-1"></i>새 정비 이력 추가
             </button>
         </div>
-        <!-- 정비 이력 입력 폼 -->
+        <!-- 정비 이력 입력 폼 (기존 폼은 숨김 처리) -->
         <div id="maintenanceForm" class="card mt-4 glass-card" style="display: none; max-width: 500px; margin: 0 auto;">
-            <div class="card-header">
-                <h3 class="card-title mb-0">정비 이력 입력</h3>
+            <!-- 기존 폼 내용 유지, 더 이상 사용하지 않음 -->
+        </div>
+        <!-- 정비 이력 입력 모달 -->
+        <div id="maintenanceInputModal" class="maintenance-modal">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-tools"></i>
+                    <span>새 정비 이력 입력</span>
+                </h2>
+                <button class="modal-close" onclick="closeMaintenanceInputModal()">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="card-body">
-                <form id="newMaintenance">
+            <div class="modal-body">
+                <form id="newMaintenanceModalForm">
                     <div class="mb-3">
-                        <label for="maintenanceCarNumber" class="form-label">차량번호</label>
-                        <input type="text" class="form-control" id="maintenanceCarNumber" required>
+                        <label for="maintenanceCarNumberModal" class="form-label">차량번호</label>
+                        <input type="text" class="form-control" id="maintenanceCarNumberModal" required>
                     </div>
                     <div class="mb-3">
-                        <label for="maintenanceDate" class="form-label">정비 날짜</label>
-                        <input type="date" class="form-control" id="maintenanceDate" required>
+                        <label for="maintenanceDateModal" class="form-label">정비 날짜</label>
+                        <input type="date" class="form-control" id="maintenanceDateModal" required>
                     </div>
                     <div class="mb-3">
-                        <label for="maintenanceMileage" class="form-label">키로수</label>
-                        <input type="number" class="form-control" id="maintenanceMileage" 
-                            placeholder="현재 주행거리 (km)" min="0" step="1" required>
+                        <label for="maintenanceMileageModal" class="form-label">키로수</label>
+                        <input type="number" class="form-control" id="maintenanceMileageModal" placeholder="현재 주행거리 (km)" min="0" step="1" required>
                     </div>
                     <div class="mb-3">
-                        <label for="maintenanceType" class="form-label">정비 종류</label>
-                        <select class="form-control" id="maintenanceType" required>
+                        <label for="maintenanceTypeModal" class="form-label">정비 종류</label>
+                        <select class="form-control" id="maintenanceTypeModal" required>
                             <option value="">선택하세요</option>
                             <option value="일반점검">일반점검</option>
                             <option value="엔진오일교체">엔진오일교체</option>
@@ -139,15 +148,17 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label for="description" class="form-label">상세 설명</label>
-                        <textarea class="form-control" id="description" rows="3" required></textarea>
+                        <label for="descriptionModal" class="form-label">상세 설명</label>
+                        <textarea class="form-control" id="descriptionModal" rows="3" required></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save me-1"></i>저장
-                    </button>
-                    <button type="button" class="btn btn-secondary" id="cancelBtn">
-                        <i class="fas fa-times me-1"></i>취소
-                    </button>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>저장
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="closeMaintenanceInputModal()">
+                            <i class="fas fa-times me-1"></i>취소
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

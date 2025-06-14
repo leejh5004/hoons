@@ -662,9 +662,9 @@ html, body {
         top: 50% !important;
         left: 50% !important;
         transform: translate(-50%, -50%) !important;
-        width: 98vw !important;
-        max-width: 99vw !important;
-        min-width: 0 !important;
+        width: 90vw !important;
+        max-width: 400px !important;
+        min-width: 280px !important;
         border-radius: 18px !important;
         z-index: 10001 !important;
         background: #fff !important;

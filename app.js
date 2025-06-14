@@ -112,9 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showNotification('관리자만 정비 이력을 추가할 수 있습니다.', 'error');
                 return;
             }
-            if (maintenanceForm) {
-                maintenanceForm.style.display = 'block';
-            }
+            openMaintenanceInputModal();
         });
     }
 
@@ -221,6 +219,55 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // 정비 이력 입력 모달 열기/닫기 함수
+    window.openMaintenanceInputModal = function() {
+        const modal = document.getElementById('maintenanceInputModal');
+        const backdrop = document.getElementById('modalBackdrop');
+        if (modal && backdrop) {
+            modal.classList.add('show');
+            backdrop.classList.add('show');
+        }
+    }
+    window.closeMaintenanceInputModal = function() {
+        const modal = document.getElementById('maintenanceInputModal');
+        const backdrop = document.getElementById('modalBackdrop');
+        if (modal && backdrop) {
+            modal.classList.remove('show');
+            backdrop.classList.remove('show');
+        }
+    }
+
+    // 모달 폼 제출 시 정비이력 저장
+    const newMaintenanceModalForm = document.getElementById('newMaintenanceModalForm');
+    if (newMaintenanceModalForm) {
+        newMaintenanceModalForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (!isAdmin) return;
+
+            const carNumber = document.getElementById('maintenanceCarNumberModal').value.trim().toLowerCase().replace(/\s+/g, '');
+            const maintenanceData = {
+                carNumber,
+                date: document.getElementById('maintenanceDateModal').value,
+                mileage: document.getElementById('maintenanceMileageModal').value,
+                type: document.getElementById('maintenanceTypeModal').value,
+                description: document.getElementById('descriptionModal').value,
+                status: 'pending',
+                adminEmail: currentUser.email,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            db.collection('maintenance').add(maintenanceData)
+                .then(() => {
+                    closeMaintenanceInputModal();
+                    newMaintenanceModalForm.reset();
+                    loadMaintenanceHistory();
+                    showNotification('정비 이력이 저장되었습니다.', 'success');
+                })
+                .catch(err => showNotification('정비 이력 저장 실패: ' + err.message, 'error'));
+        });
+    }
 });
 
 // 관리자 이메일로 이름 가져오기 (비동기)
