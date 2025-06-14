@@ -1192,4 +1192,34 @@ html, body {
     background: #fff;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     object-fit: contain;
+}
+
+.maintenance-footer-fixed {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    padding: 1em 1.2em 1.2em 1.2em !important;
+    background: #fff;
+    border-radius: 0 0 18px 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.7em;
+    z-index: 2;
+    box-sizing: border-box;
+}
+
+.maintenance-modal#maintenanceInputModal {
+    position: relative;
+    padding-bottom: 80px; /* footer 높이만큼 여유 */
+}
+
+@media (max-width: 576px) {
+  .maintenance-modal#maintenanceInputModal {
+    padding-bottom: 90px;
+  }
+  .maintenance-footer-fixed {
+    padding: 1em 0.7em 1em 0.7em !important;
+  }
 } 
