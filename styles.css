@@ -1226,7 +1226,10 @@ html, body {
     padding-bottom: 1em !important;
 }
 .maintenance-modal#maintenanceInputModal .maintenance-footer-fixed {
-    flex-shrink: 0;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
     padding: 1em 1.2em 1.2em 1.2em !important;
     background: #fff;
@@ -1236,7 +1239,6 @@ html, body {
     gap: 0.7em;
     z-index: 2;
     box-sizing: border-box;
-    position: static;
 }
 @media (max-width: 576px) {
   .maintenance-modal#maintenanceInputModal {
