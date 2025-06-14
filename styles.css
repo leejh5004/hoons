@@ -742,6 +742,7 @@ html, body {
     transition: all 0.3s ease;
     box-shadow: 0 10px 40px rgba(0,0,0,0.2);
     pointer-events: none;
+    padding-bottom: 80px; /* footer 높이만큼 여유 */
 }
 
 .maintenance-modal.show {
@@ -781,13 +782,29 @@ html, body {
     overflow-y: auto;
 }
 
+.maintenance-modal .modal-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    padding: 1em 1.2em 1.2em 1.2em !important;
+    background: #fff;
+    border-radius: 0 0 18px 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.7em;
+    z-index: 2;
+    box-sizing: border-box;
+}
+
 @media (max-width: 576px) {
   .maintenance-modal {
     width: 95vw !important;
     max-width: 420px !important;
     min-width: 0 !important;
     border-radius: 18px !important;
-    max-height: 90vh !important;
+    padding-bottom: 90px;
   }
   .maintenance-modal .modal-body {
     max-height: 60vh !important;
@@ -795,6 +812,9 @@ html, body {
   }
   .maintenance-modal .modal-header {
     padding: 1em 0.7em 0.7em 0.7em !important;
+  }
+  .maintenance-modal .modal-footer {
+    padding: 1em 0.7em 1em 0.7em !important;
   }
 }
 
