@@ -1211,15 +1211,41 @@ html, body {
 }
 
 .maintenance-modal#maintenanceInputModal {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 400px;
+    max-height: 90vh;
     position: relative;
-    padding-bottom: 80px; /* footer 높이만큼 여유 */
+    padding-bottom: 0;
 }
-
+.maintenance-modal#maintenanceInputModal .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    max-height: 60vh;
+    padding-bottom: 1em !important;
+}
+.maintenance-modal#maintenanceInputModal .maintenance-footer-fixed {
+    flex-shrink: 0;
+    width: 100%;
+    padding: 1em 1.2em 1.2em 1.2em !important;
+    background: #fff;
+    border-radius: 0 0 18px 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.7em;
+    z-index: 2;
+    box-sizing: border-box;
+    position: static;
+}
 @media (max-width: 576px) {
   .maintenance-modal#maintenanceInputModal {
-    padding-bottom: 90px;
+    max-height: 90vh !important;
   }
-  .maintenance-footer-fixed {
+  .maintenance-modal#maintenanceInputModal .modal-body {
+    max-height: 50vh !important;
+  }
+  .maintenance-modal#maintenanceInputModal .maintenance-footer-fixed {
     padding: 1em 0.7em 1em 0.7em !important;
   }
 } 
