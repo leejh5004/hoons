@@ -1213,17 +1213,18 @@ html, body {
 .maintenance-modal#maintenanceInputModal {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    min-height: 400px;
+    height: 90vh;
     max-height: 90vh;
+    min-height: 400px;
     position: relative;
     padding-bottom: 0;
 }
 .maintenance-modal#maintenanceInputModal .modal-body {
-    flex: 1 1 auto;
+    flex: 1 1 0%;
+    min-height: 0;
     overflow-y: auto;
-    max-height: 60vh;
     padding-bottom: 1em !important;
+    max-height: unset;
 }
 .maintenance-modal#maintenanceInputModal .maintenance-footer-fixed {
     position: absolute;
