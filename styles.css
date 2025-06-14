@@ -657,6 +657,36 @@ html, body {
         font-size: 0.8em;
         padding: 0.3em 0.6em;
     }
+    .maintenance-modal {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: 98vw !important;
+        max-width: 99vw !important;
+        min-width: 0 !important;
+        border-radius: 18px !important;
+        z-index: 10001 !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        background: #fff !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important;
+        display: block !important;
+    }
+    .modal-backdrop {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(0,0,0,0.5) !important;
+        z-index: 10000 !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        display: block !important;
+    }
 }
 
 /* 모달 스타일 */
