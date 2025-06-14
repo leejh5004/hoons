@@ -213,38 +213,42 @@ html, body {
 /* 토스트 알림 */
 .notification {
     position: fixed;
-    top: 80px;
-    right: 24px;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 9999;
-    min-width: 280px;
-    max-width: 400px;
-    padding: 0.8em 1.2em;
-    border-radius: 12px;
-    font-size: 0.95em;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    opacity: 0.95;
-    animation: toast-in 0.3s cubic-bezier(.4,0,.2,1) both;
-    border-left: 4px solid;
+    min-width: 320px;
+    max-width: 480px;
+    padding: 1.2em 2em;
+    border-radius: 16px;
+    font-size: 1.1em;
+    font-weight: 700;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    opacity: 1 !important;
+    border-left: 8px solid #fff;
+    color: #fff !important;
+    text-align: center;
+    background: #222 !important;
 }
 
 .notification.alert-success {
-    background: linear-gradient(90deg, #f8fff9 0%, #fff 100%);
-    border-left-color: #28a745;
+    background: #28a745 !important;
+    border-left-color: #fff;
 }
 
 .notification.alert-error {
-    background: linear-gradient(90deg, #fff5f5 0%, #fff 100%);
-    border-left-color: #dc3545;
+    background: #dc3545 !important;
+    border-left-color: #fff;
 }
 
 .notification.alert-info {
-    background: linear-gradient(90deg, #f8f9fa 0%, #fff 100%);
-    border-left-color: #0071c5;
+    background: #0071c5 !important;
+    border-left-color: #fff;
 }
 
 @keyframes toast-in {
     0% { opacity: 0; transform: translateY(-20px) scale(0.9); }
-    100% { opacity: 0.95; transform: translateY(0) scale(1); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* 타임라인 스타일 */
