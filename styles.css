@@ -623,13 +623,16 @@ html, body {
         font-size: 1.1rem;
     }
     .notification {
-        top: 70px;
-        right: 16px;
-        left: 16px;
-        min-width: auto;
-        max-width: calc(100% - 32px);
-        font-size: 0.9em;
-        padding: 0.7em 1em;
+        left: 50% !important;
+        right: auto !important;
+        top: 60px !important;
+        transform: translateX(-50%) !important;
+        min-width: 90vw !important;
+        max-width: 98vw !important;
+        font-size: 1em !important;
+        padding: 1em 0.5em !important;
+        border-radius: 14px !important;
+        z-index: 9999 !important;
     }
     .btn, .btn-primary, .btn-secondary {
         font-size: 1em;
