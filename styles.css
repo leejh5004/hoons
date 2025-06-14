@@ -751,26 +751,51 @@ html, body {
     pointer-events: auto;
 }
 
-.modal-header {
-    position: sticky;
-    top: 0;
+.maintenance-modal .modal-header {
     background: linear-gradient(90deg, #0071c5 0%, #181c20 100%);
-    color: white;
-    padding: 1.5rem;
-    border-radius: 20px 20px 0 0;
+    color: #fff;
+    border-radius: 18px 18px 0 0;
+    padding: 1.2em 1em 1em 1em;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    z-index: 1;
 }
 
-.modal-title {
-    font-size: 1.4em;
+.maintenance-modal .modal-title {
+    color: #fff;
+    font-size: 1.2em;
     font-weight: 700;
-    margin: 0;
     display: flex;
     align-items: center;
     gap: 0.5em;
+}
+
+.maintenance-modal {
+    overflow: hidden !important;
+}
+
+.maintenance-modal .modal-body {
+    padding: 1.2em 1.2em 1em 1.2em !important;
+    background: #fff;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+@media (max-width: 576px) {
+  .maintenance-modal {
+    width: 95vw !important;
+    max-width: 420px !important;
+    min-width: 0 !important;
+    border-radius: 18px !important;
+    max-height: 90vh !important;
+  }
+  .maintenance-modal .modal-body {
+    max-height: 60vh !important;
+    padding: 1em 0.7em 0.7em 0.7em !important;
+  }
+  .maintenance-modal .modal-header {
+    padding: 1em 0.7em 0.7em 0.7em !important;
+  }
 }
 
 .modal-close {
