@@ -1248,4 +1248,37 @@ html, body {
   .maintenance-modal#maintenanceInputModal .maintenance-footer-fixed {
     padding: 1em 0.7em 1em 0.7em !important;
   }
+}
+
+.maintenance-modal#carNumberModal {
+    display: block !important;
+    height: auto !important;
+    min-height: unset !important;
+    max-height: unset !important;
+    padding-bottom: 0 !important;
+}
+.maintenance-modal#carNumberModal .modal-body {
+    max-height: unset !important;
+    overflow-y: visible !important;
+    padding-bottom: 0 !important;
+}
+.maintenance-modal#carNumberModal .modal-footer {
+    position: static !important;
+    width: 100%;
+    padding: 1em 1.2em 1.2em 1.2em !important;
+    background: #fff;
+    border-radius: 0 0 18px 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.7em;
+    z-index: 2;
+    box-sizing: border-box;
+}
+@media (max-width: 576px) {
+  .maintenance-modal#carNumberModal {
+    max-height: unset !important;
+  }
+  .maintenance-modal#carNumberModal .modal-footer {
+    padding: 1em 0.7em 1em 0.7em !important;
+  }
 } 
