@@ -1098,4 +1098,53 @@ html, body {
 .maintenance-card-body {
     padding-left: 1.2em;
     padding-right: 1.2em;
+}
+
+.brand-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(90deg, #0071c5 0%, #181c20 100%);
+    color: #fff;
+    padding: 1.2em 1em 0.7em 1em;
+    border-radius: 18px 18px 0 0;
+    font-size: 1.2em;
+    font-weight: 700;
+}
+
+.brand-title {
+    font-size: 1.1em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.maintenance-modal .modal-body {
+    padding: 1.5em 1.2em 1.2em 1.2em !important;
+    background: #fff;
+}
+
+.maintenance-modal .modal-footer {
+    padding: 1em 1.2em 1.2em 1.2em !important;
+    background: #fff;
+    border-radius: 0 0 18px 18px;
+}
+
+@media (max-width: 576px) {
+  .maintenance-modal {
+    width: 95vw !important;
+    max-width: 420px !important;
+    min-width: 0 !important;
+    border-radius: 18px !important;
+  }
+}
+
+.brand-logo {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 0.5em;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    object-fit: contain;
 } 
