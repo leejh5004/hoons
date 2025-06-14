@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const maintenanceData = {
                 carNumber,
                 date: document.getElementById('maintenanceDate').value,
+                mileage: document.getElementById('maintenanceMileage').value,
                 type: document.getElementById('maintenanceType').value,
                 description: document.getElementById('description').value,
                 status: 'pending',
@@ -262,6 +263,7 @@ async function createMaintenanceCard(maintenance) {
         </div>
         <div class="maintenance-card-body">
             <div class="maintenance-car-number">차량번호: ${maintenance.carNumber}</div>
+            ${maintenance.mileage ? `<div class="maintenance-mileage">키로수: ${maintenance.mileage}km</div>` : ''}
             <div class="maintenance-description">${maintenance.description || ''}</div>
         </div>
         <div class="maintenance-card-footer">
