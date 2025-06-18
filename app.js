@@ -449,70 +449,89 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 사진 미리보기 및 업로드 처리
     document.querySelectorAll('.photo-input').forEach(input => {
+        const type = input.dataset.type;
+        const previewId = `${type}PhotoPreview`;
+        const previewDiv = document.getElementById(previewId);
+
+        // 미리보기 영역 클릭 시 파일 선택 창 열기
+        if (previewDiv) {
+            previewDiv.addEventListener('click', () => {
+                input.click();
+            });
+        }
+
         input.addEventListener('change', async function(e) {
             const file = e.target.files[0];
-            const type = this.dataset.type;
-            const previewId = `${type}PhotoPreview`;
-            const previewDiv = document.getElementById(previewId);
+            if (!file) return;
 
-            if (file) {
-                try {
-                    // 파일 크기 체크 (5MB 제한)
-                    if (file.size > 5 * 1024 * 1024) {
-                        showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
-                        return;
-                    }
-
-                    // 로딩 표시
-                    previewDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 처리중...</div>';
-
-                    // 이미지 리사이징
-                    const resizedImage = await resizeImage(file);
-                    
-                    // 기존 미리보기 제거
-                    previewDiv.innerHTML = '';
-                    
-                    // 새 미리보기 컨테이너 생성
-                    const previewContainer = document.createElement('div');
-                    previewContainer.className = 'preview-container';
-                    
-                    // 이미지 미리보기 생성
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(resizedImage);
-                    img.onload = () => URL.revokeObjectURL(img.src); // 메모리 해제
-                    previewContainer.appendChild(img);
-                    
-                    // 삭제 버튼 추가
-                    const removeBtn = document.createElement('button');
-                    removeBtn.className = 'remove-photo';
-                    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                    removeBtn.onclick = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        previewContainer.remove();
-                        uploadedPhotos[type] = null;
-                        this.value = '';
-                    };
-                    previewContainer.appendChild(removeBtn);
-                    
-                    // 미리보기 추가
-                    previewDiv.appendChild(previewContainer);
-                    
-                    // 업로드된 파일 저장
-                    uploadedPhotos[type] = resizedImage;
-                    
-                } catch (err) {
-                    console.error('사진 처리 중 오류:', err);
-                    showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
-                    previewDiv.innerHTML = ''; // 에러 시 미리보기 초기화
+            try {
+                // 파일 타입 체크
+                if (!file.type.startsWith('image/')) {
+                    showNotification('이미지 파일만 업로드 가능합니다.', 'error');
+                    return;
                 }
+
+                // 파일 크기 체크 (5MB 제한)
+                if (file.size > 5 * 1024 * 1024) {
+                    showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
+                    return;
+                }
+
+                // 로딩 표시
+                previewDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 처리중...</div>';
+
+                // 이미지 리사이징
+                const resizedImage = await resizeImage(file);
+                
+                // 기존 미리보기 제거
+                previewDiv.innerHTML = '';
+                
+                // 새 미리보기 컨테이너 생성
+                const previewContainer = document.createElement('div');
+                previewContainer.className = 'preview-container';
+                
+                // 이미지 미리보기 생성
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(resizedImage);
+                img.onload = () => URL.revokeObjectURL(img.src); // 메모리 해제
+                previewContainer.appendChild(img);
+                
+                // 삭제 버튼 추가
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-photo';
+                removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                removeBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    previewContainer.remove();
+                    uploadedPhotos[type] = null;
+                    input.value = '';
+                    // 미리보기 영역 초기화 (카메라 아이콘 표시)
+                    previewDiv.innerHTML = '';
+                };
+                previewContainer.appendChild(removeBtn);
+                
+                // 미리보기 추가
+                previewDiv.appendChild(previewContainer);
+                
+                // 업로드된 파일 저장
+                uploadedPhotos[type] = resizedImage;
+                
+            } catch (err) {
+                console.error('사진 처리 중 오류:', err);
+                showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
+                previewDiv.innerHTML = ''; // 에러 시 미리보기 초기화
             }
         });
     });
 
-    // CSS 스타일 동적 추가
+    // CSS 스타일 수정
     const style = document.createElement('style');
     style.textContent = `
+        .photo-input {
+            display: none;
+        }
+        
         .preview-container {
             position: relative;
             width: 100%;
@@ -543,6 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
             align-items: center;
             justify-content: center;
             transition: background-color 0.2s;
+            z-index: 1;
         }
         
         .remove-photo:hover {
@@ -565,6 +585,32 @@ document.addEventListener('DOMContentLoaded', () => {
             border: 2px dashed #ddd;
             border-radius: 8px;
             overflow: hidden;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .photo-preview:hover {
+            border-color: #999;
+            background: #eee;
+        }
+        
+        .photo-preview:empty::before {
+            content: "\\f030";  /* 카메라 아이콘 */
+            font-family: "Font Awesome 5 Free";
+            font-weight: 900;
+            font-size: 2em;
+            color: #999;
+            margin-bottom: 8px;
+        }
+        
+        .photo-preview:empty::after {
+            content: "사진 추가";
+            color: #666;
+            font-size: 14px;
         }
     `;
     document.head.appendChild(style);
@@ -886,17 +932,15 @@ function updateUI() {
     if (searchBox) searchBox.style.display = 'block';
 }
 
-// 이미지 리사이징 함수
+// 이미지 리사이징 함수 수정
 async function resizeImage(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = function(e) {
-            // 메모리 해제를 위해 URL.revokeObjectURL 사용
             const url = URL.createObjectURL(file);
             const img = new Image();
             
             img.onload = function() {
-                // 메모리 해제
                 URL.revokeObjectURL(url);
                 
                 const canvas = document.createElement('canvas');
@@ -915,9 +959,9 @@ async function resizeImage(file) {
                     }
                 }
                 
-                // 모바일 사진 방향 보정을 위한 크기 조정
+                // EXIF 방향 정보에 따라 캔버스 크기 조정
                 const orientation = getImageOrientation(e.target.result);
-                if (orientation > 4) {
+                if (orientation > 4 && orientation < 9) {
                     [width, height] = [height, width];
                 }
                 
@@ -926,7 +970,8 @@ async function resizeImage(file) {
                 
                 const ctx = canvas.getContext('2d');
                 
-                // 이미지 방향 보정
+                // EXIF 방향에 따른 변환 적용
+                ctx.save();
                 switch (orientation) {
                     case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
                     case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
@@ -938,29 +983,13 @@ async function resizeImage(file) {
                 }
                 
                 ctx.drawImage(img, 0, 0, width, height);
+                ctx.restore();
                 
-                // 메모리 관리를 위해 캔버스 크기 제한
-                const maxCanvasSize = 4096;
-                if (canvas.width > maxCanvasSize || canvas.height > maxCanvasSize) {
-                    const scaleFactor = maxCanvasSize / Math.max(canvas.width, canvas.height);
-                    const scaledCanvas = document.createElement('canvas');
-                    scaledCanvas.width = canvas.width * scaleFactor;
-                    scaledCanvas.height = canvas.height * scaleFactor;
-                    const scaledCtx = scaledCanvas.getContext('2d');
-                    scaledCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-                    canvas.width = scaledCanvas.width;
-                    canvas.height = scaledCanvas.height;
-                    ctx.drawImage(scaledCanvas, 0, 0);
-                }
-                
-                // 품질 0.8로 압축
                 canvas.toBlob(blob => {
                     resolve(new File([blob], file.name, {
                         type: 'image/jpeg',
                         lastModified: Date.now()
                     }));
-                    
-                    // 메모리 해제
                     canvas.width = 1;
                     canvas.height = 1;
                 }, 'image/jpeg', 0.8);
