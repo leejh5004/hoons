@@ -1184,12 +1184,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
         modal.addEventListener('click', (e) => {
-            // 모달 내부 클릭 시 이벤트 전파 중단
-            if (e.target.closest('.modal-content')) {
-                e.stopPropagation();
-            }
-            // 모달 외부 클릭 시 모달 닫기
-            else if (e.target === modal) {
+            // 모달 바깥(백드롭) 클릭 시에만 닫기
+            if (e.target === modal) {
                 if (modal.id === 'maintenanceDetailModal') {
                     closeMaintenanceDetailModal();
                 } else if (modal.id === 'maintenanceInputModal') {
@@ -1198,6 +1194,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     closeCarNumberModal();
                 }
             }
+            // 모달 내부 클릭은 아무 처리도 하지 않음
         });
 
         // 터치 이벤트 처리
@@ -1847,14 +1844,7 @@ window.showMaintenanceDetail = function(maintenance) {
     // 모달 표시
     modal.classList.add('show');
     backdrop.classList.add('show');
-    
-    // 모달 내부 클릭 이벤트 처리
-    const modalContent = modal.querySelector('.modal-content');
-    if (modalContent) {
-        modalContent.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
-    }
+    history.pushState({ page: 'detail', modalId: 'maintenanceDetail' }, '');
 }
 
 // 정비 이력 상세 보기 모달 닫기

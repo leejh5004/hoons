@@ -9,13 +9,8 @@ const firebaseConfig = {
 };
 
 // Firebase 초기화
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
+firebase.initializeApp(firebaseConfig);
 
 // Firebase 서비스 초기화
 const auth = firebase.auth();
-const db = firebase.firestore();
-
-// ImgBB API 설정
-const IMGBB_API_KEY = 'f894050dd0ffa9923ef7049a58f02292'; 
+const db = firebase.firestore(); 
