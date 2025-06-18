@@ -500,13 +500,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="detail-motorcycle-number">
                                 <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
                             </div>
-                            <div class="spacer"></div>
-                            ${maintenance.mileage ? `
-                                <div class="detail-mileage" style="color: ${typeInfo.color}; display: block; margin-top: 8px;">
-                                    <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
-                                </div>
-                            ` : ''}
                         </div>
+                        ${maintenance.mileage ? `
+                            <div class="detail-mileage" style="color: ${typeInfo.color}; margin-top: 4px;">
+                                <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
+                            </div>
+                        ` : ''}
                         <div class="detail-description">${maintenance.description || ''}</div>
                         ${maintenance.adminName ? `
                             <div class="detail-admin">
@@ -1340,13 +1339,12 @@ window.showMaintenanceDetail = function(maintenance) {
                         <div class="detail-motorcycle-number">
                             <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
                         </div>
-                        <div class="spacer"></div>
-                        ${maintenance.mileage ? `
-                            <div class="detail-mileage" style="color: ${typeInfo.color}; display: block; margin-top: 8px;">
-                                <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
-                            </div>
-                        ` : ''}
                     </div>
+                    ${maintenance.mileage ? `
+                        <div class="detail-mileage" style="color: ${typeInfo.color}; margin-top: 4px;">
+                            <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
+                        </div>
+                    ` : ''}
                     <div class="detail-description">${maintenance.description || ''}</div>
                     ${maintenance.adminName ? `
                         <div class="detail-admin">
@@ -1616,7 +1614,7 @@ function updateUI() {
     if (registerForm) registerForm.style.display = 'none';
     if (maintenanceList) maintenanceList.style.display = 'block';
     if (logoutBtn) logoutBtn.style.display = 'block';
-    if (addBtnBox) addBtnBox.style.display = 'block';
+    if (addBtnBox) addBtnBox.style.display = isAdmin ? 'block' : 'none';
     if (searchBox) searchBox.style.display = 'block';
 }
 

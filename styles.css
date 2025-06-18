@@ -1109,27 +1109,182 @@ html, body {
     .modal-content {
         max-width: 98vw !important;
         width: 98vw !important;
+        min-width: 0 !important;
         margin: 1vw auto !important;
-        border-radius: 10px !important;
+        border-radius: 14px !important;
         padding: 0 !important;
-        box-sizing: border-box !important;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.18) !important;
+        background: #fff !important;
     }
     .modal-header, .modal-body, .modal-footer {
-        padding-left: 12px !important;
-        padding-right: 12px !important;
+        padding-left: 14px !important;
+        padding-right: 14px !important;
+        padding-top: 12px !important;
+        padding-bottom: 12px !important;
     }
-    input, textarea, select {
-        max-width: 96vw !important;
+    .modal-header {
+        border-radius: 14px 14px 0 0 !important;
+        font-size: 1.1em !important;
+    }
+    .modal-body {
+        font-size: 1.05em !important;
+        line-height: 1.6 !important;
+        background: #f8f9fa !important;
+        border-radius: 0 0 14px 14px !important;
+        overflow-x: hidden !important;
+    }
+    .detail-info, .photos-section, .input-group, .modal-footer {
+        background: #fff !important;
+        border-radius: 10px !important;
+        margin-bottom: 14px !important;
+        padding: 12px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+    }
+    .detail-title-row, .detail-info-row, .input-group {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 6px !important;
+    }
+    .detail-type, .detail-date, .detail-status, .detail-motorcycle-number, .detail-mileage, .input-label {
+        font-size: 1em !important;
+        margin: 0 !important;
+    }
+    .detail-mileage {
+        margin-top: 6px !important;
+    }
+    .detail-description, textarea, input[type="text"], input[type="number"], input[type="date"], select {
+        margin-top: 10px !important;
+        padding: 10px !important;
+        font-size: 0.98em !important;
+        background: #f5f6fa !important;
+        border-radius: 8px !important;
         width: 100% !important;
         box-sizing: border-box !important;
-        font-size: 1.05em !important;
     }
     .photos-grid {
-        grid-template-columns: 1fr !important;
-        gap: 12px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
     }
-    .photo-preview, .photo-item {
+    .photo-item {
+        width: 100% !important;
         min-width: 0 !important;
-        max-width: 100% !important;
+        background: #f8f9fa !important;
+        border-radius: 10px !important;
+        padding: 8px !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
+    }
+    .photo-preview img, .detail-photo {
+        width: 100% !important;
+        height: auto !important;
+        border-radius: 8px !important;
+        object-fit: cover !important;
+    }
+    .photo-label, .photo-actions {
+        font-size: 0.95em !important;
+    }
+    .modal-footer, .photo-actions {
+        flex-direction: row !important;
+        gap: 10px !important;
+        justify-content: flex-end !important;
+        background: none !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+    .download-btn, .btn, button {
+        width: auto !important;
+        font-size: 0.98em !important;
+        padding: 6px 12px !important;
+        border-radius: 8px !important;
+    }
+}
+@media (min-width: 601px) {
+    .modal-content {
+        max-width: 540px !important;
+        min-width: 320px !important;
+        border-radius: 16px !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important;
+        background: #fff !important;
+    }
+    .modal-header, .modal-body, .modal-footer {
+        padding-left: 32px !important;
+        padding-right: 32px !important;
+        padding-top: 20px !important;
+        padding-bottom: 20px !important;
+    }
+    .modal-header {
+        border-radius: 16px 16px 0 0 !important;
+        font-size: 1.2em !important;
+    }
+    .modal-body {
+        font-size: 1.08em !important;
+        line-height: 1.7 !important;
+        background: #f8f9fa !important;
+        border-radius: 0 0 16px 16px !important;
+        overflow-x: hidden !important;
+    }
+    .detail-info, .photos-section, .input-group, .modal-footer {
+        background: #fff !important;
+        border-radius: 12px !important;
+        margin-bottom: 18px !important;
+        padding: 18px !important;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+    }
+    .detail-title-row, .detail-info-row, .input-group {
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 16px !important;
+    }
+    .detail-type, .detail-date, .detail-status, .detail-motorcycle-number, .detail-mileage, .input-label {
+        font-size: 1.08em !important;
+        margin: 0 !important;
+    }
+    .detail-mileage {
+        margin-top: 0 !important;
+    }
+    .detail-description, textarea, input[type="text"], input[type="number"], input[type="date"], select {
+        margin-top: 12px !important;
+        padding: 14px !important;
+        font-size: 1.05em !important;
+        background: #f5f6fa !important;
+        border-radius: 10px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .photos-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 16px !important;
+    }
+    .photo-item {
+        width: 100% !important;
+        min-width: 0 !important;
+        background: #f8f9fa !important;
+        border-radius: 12px !important;
+        padding: 12px !important;
+        box-shadow: 0 1px 8px rgba(0,0,0,0.06) !important;
+    }
+    .photo-preview img, .detail-photo {
+        width: 100% !important;
+        height: auto !important;
+        border-radius: 10px !important;
+        object-fit: cover !important;
+    }
+    .photo-label, .photo-actions {
+        font-size: 1em !important;
+    }
+    .modal-footer, .photo-actions {
+        flex-direction: row !important;
+        gap: 14px !important;
+        justify-content: flex-end !important;
+        background: none !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+    .download-btn, .btn, button {
+        width: auto !important;
+        font-size: 1.05em !important;
+        padding: 8px 18px !important;
+        border-radius: 10px !important;
     }
 } 
