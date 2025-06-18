@@ -524,9 +524,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="photos-title">
                                 <i class="fas fa-camera"></i> 정비 사진
                             </div>
-                            <div class="photos-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; width: 100%; box-sizing: border-box;">
+                            <div class="photos-grid">
                                 ${maintenance.photos.map(photo => `
-                                    <div class="photo-item" data-type="${photo.type}" style="width: 100%; max-width: 100%; box-sizing: border-box;">
+                                    <div class="photo-item" data-type="${photo.type}">
                                         <div class="photo-label">
                                             ${photo.type === 'before' ? 
                                               '<i class="fas fa-exclamation-triangle"></i> 정비 전' : 
@@ -534,17 +534,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                               '<i class="fas fa-cog"></i> 정비 중' : 
                                               '<i class="fas fa-check-circle"></i> 정비 후'}
                                         </div>
-                                        <div class="photo-preview" style="width: 100%; box-sizing: border-box;">
+                                        <div class="photo-preview">
                                             <img src="${photo.thumbnailUrl}" 
                                                  onclick="window.open('${photo.url}', '_blank')" 
-                                                 alt="${photo.type} 사진"
-                                                 class="detail-photo"
-                                                 style="width: 100%; height: auto; object-fit: cover; box-sizing: border-box;">
+                                                 alt="${photo.type} 사진">
                                         </div>
                                         <div class="photo-actions">
                                             ${getPhotoTimeLeftHtml(photo)}
                                             <button class="download-btn" 
-                                                    onclick="event.stopPropagation(); downloadImage('${photo.url}', 'maintenance_${maintenance.id}_${photo.type}.jpg')">
+                                                    onclick="event.stopPropagation(); downloadPhoto('${photo.url}', '${photo.type}')">
                                                 <i class="fas fa-download"></i> 다운로드
                                             </button>
                                         </div>
@@ -1364,9 +1362,9 @@ window.showMaintenanceDetail = function(maintenance) {
                         <div class="photos-title">
                             <i class="fas fa-camera"></i> 정비 사진
                         </div>
-                        <div class="photos-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; width: 100%; box-sizing: border-box;">
+                        <div class="photos-grid">
                             ${maintenance.photos.map(photo => `
-                                <div class="photo-item" data-type="${photo.type}" style="width: 100%; max-width: 100%; box-sizing: border-box;">
+                                <div class="photo-item" data-type="${photo.type}">
                                     <div class="photo-label">
                                         ${photo.type === 'before' ? 
                                           '<i class="fas fa-exclamation-triangle"></i> 정비 전' : 
@@ -1374,17 +1372,15 @@ window.showMaintenanceDetail = function(maintenance) {
                                           '<i class="fas fa-cog"></i> 정비 중' : 
                                           '<i class="fas fa-check-circle"></i> 정비 후'}
                                     </div>
-                                    <div class="photo-preview" style="width: 100%; box-sizing: border-box;">
+                                    <div class="photo-preview">
                                         <img src="${photo.thumbnailUrl}" 
                                              onclick="window.open('${photo.url}', '_blank')" 
-                                             alt="${photo.type} 사진"
-                                             class="detail-photo"
-                                             style="width: 100%; height: auto; object-fit: cover; box-sizing: border-box;">
+                                             alt="${photo.type} 사진">
                                     </div>
                                     <div class="photo-actions">
                                         ${getPhotoTimeLeftHtml(photo)}
                                         <button class="download-btn" 
-                                                onclick="event.stopPropagation(); downloadImage('${photo.url}', 'maintenance_${maintenance.id}_${photo.type}.jpg')">
+                                                onclick="event.stopPropagation(); downloadPhoto('${photo.url}', '${photo.type}')">
                                             <i class="fas fa-download"></i> 다운로드
                                         </button>
                                     </div>
