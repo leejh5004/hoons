@@ -339,27 +339,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const state = event.state;
         const maintenanceDetailModal = document.getElementById('maintenanceDetailModal');
         
-        // 메인 페이지에서 뒤로가기 시
+        // 상세 페이지에서 뒤로가기 시
+        if (state && state.page === 'detail') {
+            closeMaintenanceDetailModal();
+            history.pushState({ page: 'main' }, '');
+            return;
+        }
+        
+        // 메인 페이지에서 뒤로가기 시 (한 번만 물어보기)
         if (!state || state.page === 'main') {
-            if (confirm('이전 화면으로 돌아가시겠습니까?')) {
-                // 메인 화면의 상단으로 부드럽게 스크롤
-                window.scrollTo({
-                    top: 0,
-                    behavior: 'smooth'
-                });
-                
-                // 혹시 모달이 열려있다면 닫기
-                if (maintenanceDetailModal && maintenanceDetailModal.classList.contains('show')) {
-                    closeMaintenanceDetailModal();
-                }
+            // 모달이 열려있으면 닫기만 하고 종료하지 않음
+            if (maintenanceDetailModal && maintenanceDetailModal.classList.contains('show')) {
+                closeMaintenanceDetailModal();
+                history.pushState({ page: 'main' }, '');
+                return;
+            }
+            
+            // 모달이 닫혀있는 상태에서 뒤로가기 시 종료 여부 확인
+            if (confirm('앱을 종료하시겠습니까?')) {
+                window.close();
             } else {
                 history.pushState({ page: 'main' }, '');
             }
-        }
-        // 상세 페이지에서 뒤로가기 시
-        else if (state.page === 'detail') {
-            closeMaintenanceDetailModal();
-            history.pushState({ page: 'main' }, '');
         }
     }
 
