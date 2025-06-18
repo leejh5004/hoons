@@ -1103,6 +1103,9 @@ html, body {
 }
 
 @media (max-width: 600px) {
+    .modal-content, .modal-body {
+        overflow-x: hidden !important;
+    }
     .modal-content {
         max-width: 98vw !important;
         width: 98vw !important;

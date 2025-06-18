@@ -502,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <div class="spacer"></div>
                             ${maintenance.mileage ? `
-                                <div class="detail-mileage" style="color: ${typeInfo.color}">
+                                <div class="detail-mileage" style="color: ${typeInfo.color}; display: block; margin-top: 8px;">
                                     <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
                                 </div>
                             ` : ''}
@@ -1342,7 +1342,7 @@ window.showMaintenanceDetail = function(maintenance) {
                         </div>
                         <div class="spacer"></div>
                         ${maintenance.mileage ? `
-                            <div class="detail-mileage" style="color: ${typeInfo.color}">
+                            <div class="detail-mileage" style="color: ${typeInfo.color}; display: block; margin-top: 8px;">
                                 <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
                             </div>
                         ` : ''}
