@@ -1295,4 +1295,39 @@ html, body {
         padding: 8px 18px !important;
         border-radius: 10px !important;
     }
+}
+
+/* 오토바이 번호 변경 모달만 좁게! */
+#carNumberModal .modal-content {
+    max-width: 400px !important;
+    width: 90% !important;
+    margin: 40px auto !important;
+    padding: 24px 18px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+}
+
+#carNumberModal .modal-header,
+#carNumberModal .modal-body,
+#carNumberModal .modal-footer {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+#carNumberModal input[type="text"] {
+    font-size: 1.1em;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    width: 100%;
+    margin-bottom: 18px;
+}
+
+#carNumberModal .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 10px;
 } 

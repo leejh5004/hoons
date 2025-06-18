@@ -293,29 +293,34 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <textarea id="descriptionModal" rows="4" required></textarea>
                             </div>
                             
+                            ${isAdmin ? `
                             <div class="photos-section">
                                 <div class="photos-title">
                                     <i class="fas fa-camera"></i>
-                                    정비 사진
+                                    정비 사진 (관리자만 추가 가능)
                                 </div>
                                 <div class="photos-grid">
-                                    <div class="photo-item" data-type="before">
-                                        <div class="photo-label">정비 전</div>
+                                    <div class="photo-item">
                                         <input type="file" class="photo-input" data-type="before" accept="image/*">
-                                        <div id="beforePhotoPreview" class="photo-preview"></div>
+                                        <div id="beforePhotoPreview" class="photo-preview" title="정비 전 사진">
+                                            <i class="fas fa-camera"></i>
+                                        </div>
                                     </div>
-                                    <div class="photo-item" data-type="during">
-                                        <div class="photo-label">정비 중</div>
+                                    <div class="photo-item">
                                         <input type="file" class="photo-input" data-type="during" accept="image/*">
-                                        <div id="duringPhotoPreview" class="photo-preview"></div>
+                                        <div id="duringPhotoPreview" class="photo-preview" title="정비 중 사진">
+                                            <i class="fas fa-camera"></i>
+                                        </div>
                                     </div>
-                                    <div class="photo-item" data-type="after">
-                                        <div class="photo-label">정비 후</div>
+                                    <div class="photo-item">
                                         <input type="file" class="photo-input" data-type="after" accept="image/*">
-                                        <div id="afterPhotoPreview" class="photo-preview"></div>
+                                        <div id="afterPhotoPreview" class="photo-preview" title="정비 후 사진">
+                                            <i class="fas fa-camera"></i>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                            ` : ''}
                             
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" onclick="closeMaintenanceInputModal()">
