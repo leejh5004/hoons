@@ -460,25 +460,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         showNotification('이미지 파일만 업로드 가능합니다.', 'error');
                         return;
                     }
-
                     if (file.size > 5 * 1024 * 1024) {
                         showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
                         return;
                     }
-
                     previewDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 처리중...</div>';
 
-                    const resizedImage = await resizeImage(file);
+                    // const resizedImage = await resizeImage(file);
+                    const resizedImage = file; // 원본 파일 그대로 사용
                     previewDiv.innerHTML = '';
-                    
                     const previewContainer = document.createElement('div');
                     previewContainer.className = 'preview-container';
-                    
                     const img = document.createElement('img');
                     img.src = URL.createObjectURL(resizedImage);
                     img.onload = () => URL.revokeObjectURL(img.src);
                     previewContainer.appendChild(img);
-                    
                     const removeBtn = document.createElement('button');
                     removeBtn.className = 'remove-photo';
                     removeBtn.innerHTML = '<i class="fas fa-times"></i>';
@@ -491,10 +487,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         previewDiv.innerHTML = '';
                     };
                     previewContainer.appendChild(removeBtn);
-                    
                     previewDiv.appendChild(previewContainer);
                     uploadedPhotos[type] = resizedImage;
-                    
                 } catch (err) {
                     console.error('사진 처리 중 오류:', err);
                     showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
@@ -1045,38 +1039,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!file) return;
 
             try {
-                // 파일 타입 체크
                 if (!file.type.startsWith('image/')) {
                     showNotification('이미지 파일만 업로드 가능합니다.', 'error');
                     return;
                 }
-
-                // 파일 크기 체크 (5MB 제한)
                 if (file.size > 5 * 1024 * 1024) {
                     showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
                     return;
                 }
-
-                // 로딩 표시
                 previewDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 처리중...</div>';
 
-                // 이미지 리사이징
-                const resizedImage = await resizeImage(file);
-                
-                // 기존 미리보기 제거
+                // const resizedImage = await resizeImage(file);
+                const resizedImage = file; // 원본 파일 그대로 사용
                 previewDiv.innerHTML = '';
-                
-                // 새 미리보기 컨테이너 생성
                 const previewContainer = document.createElement('div');
                 previewContainer.className = 'preview-container';
-                
-                // 이미지 미리보기 생성
                 const img = document.createElement('img');
                 img.src = URL.createObjectURL(resizedImage);
-                img.onload = () => URL.revokeObjectURL(img.src); // 메모리 해제
+                img.onload = () => URL.revokeObjectURL(img.src);
                 previewContainer.appendChild(img);
-                
-                // 삭제 버튼 추가
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'remove-photo';
                 removeBtn.innerHTML = '<i class="fas fa-times"></i>';
@@ -1086,21 +1067,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     previewContainer.remove();
                     uploadedPhotos[type] = null;
                     input.value = '';
-                    // 미리보기 영역 초기화 (카메라 아이콘 표시)
                     previewDiv.innerHTML = '';
                 };
                 previewContainer.appendChild(removeBtn);
-                
-                // 미리보기 추가
                 previewDiv.appendChild(previewContainer);
-                
-                // 업로드된 파일 저장
                 uploadedPhotos[type] = resizedImage;
-                
             } catch (err) {
                 console.error('사진 처리 중 오류:', err);
                 showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
-                previewDiv.innerHTML = ''; // 에러 시 미리보기 초기화
+                previewDiv.innerHTML = '';
             }
         });
     });
