@@ -263,5 +263,40 @@
             </button>
         </div>
     </div>
+
+    <!-- 정비 이력 상세 보기 모달 -->
+    <div id="maintenanceDetailModal" class="maintenance-modal">
+        <div class="modal-header">
+            <h2 class="modal-title">
+                <i class="fas fa-tools"></i>
+                <span>정비 이력 상세</span>
+            </h2>
+            <button class="modal-close" onclick="closeMaintenanceDetailModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="maintenance-detail-content">
+                <div class="detail-header">
+                    <div class="detail-type"></div>
+                    <div class="detail-date"></div>
+                    <div class="detail-status"></div>
+                </div>
+                <div class="detail-info">
+                    <div class="detail-car-number"></div>
+                    <div class="detail-mileage"></div>
+                    <div class="detail-description"></div>
+                </div>
+                <div class="detail-footer">
+                    <div class="detail-admin"></div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeMaintenanceDetailModal()">
+                <i class="fas fa-times me-1"></i>닫기
+            </button>
+        </div>
+    </div>
 </body>
 </html> 

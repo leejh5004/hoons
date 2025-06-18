@@ -286,6 +286,7 @@ async function getAdminNameByEmail(email) {
 async function createMaintenanceCard(maintenance) {
     const card = document.createElement('div');
     card.className = 'maintenance-card glass-card';
+    card.onclick = () => showMaintenanceDetail(maintenance);
 
     // 관리자 이름 가져오기
     let adminName = maintenance.adminName;
@@ -326,6 +327,62 @@ async function createMaintenanceCard(maintenance) {
         </div>
     `;
     return card;
+}
+
+// 정비 이력 상세 보기 모달 열기
+function showMaintenanceDetail(maintenance) {
+    const modal = document.getElementById('maintenanceDetailModal');
+    const backdrop = document.getElementById('modalBackdrop');
+    
+    if (!modal || !backdrop) return;
+
+    // 모달 내용 업데이트
+    const detailType = modal.querySelector('.detail-type');
+    const detailDate = modal.querySelector('.detail-date');
+    const detailStatus = modal.querySelector('.detail-status');
+    const detailCarNumber = modal.querySelector('.detail-car-number');
+    const detailMileage = modal.querySelector('.detail-mileage');
+    const detailDescription = modal.querySelector('.detail-description');
+    const detailAdmin = modal.querySelector('.detail-admin');
+
+    if (detailType) {
+        detailType.innerHTML = `${getTypeIcon(maintenance.type)} ${maintenance.type || ''}`;
+    }
+    if (detailDate) {
+        detailDate.textContent = maintenance.date || '';
+    }
+    if (detailStatus) {
+        detailStatus.textContent = getStatusText(maintenance.status);
+        detailStatus.className = `detail-status ${maintenance.status}`;
+    }
+    if (detailCarNumber) {
+        detailCarNumber.textContent = `차량번호: ${maintenance.carNumber}`;
+    }
+    if (detailMileage) {
+        detailMileage.textContent = maintenance.mileage ? `키로수: ${maintenance.mileage}km` : '';
+    }
+    if (detailDescription) {
+        detailDescription.textContent = maintenance.description || '';
+    }
+    if (detailAdmin) {
+        detailAdmin.innerHTML = maintenance.adminName ? 
+            `<i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}` : '';
+    }
+
+    // 모달 표시
+    modal.classList.add('show');
+    backdrop.classList.add('show');
+}
+
+// 정비 이력 상세 보기 모달 닫기
+function closeMaintenanceDetailModal() {
+    const modal = document.getElementById('maintenanceDetailModal');
+    const backdrop = document.getElementById('modalBackdrop');
+    
+    if (modal && backdrop) {
+        modal.classList.remove('show');
+        backdrop.classList.remove('show');
+    }
 }
 
 // 정비 이력 목록을 비동기로 렌더링
@@ -465,14 +522,12 @@ function getStatusIcon(status) {
 }
 
 function getStatusText(status) {
-    const statusMap = {
-        'pending': '대기중',
-        'in-progress': '진행중',
-        'completed': '완료',
+    const statusTexts = {
+        'approved': '승인됨',
         'rejected': '거절됨',
-        'approved': '승인'
+        'pending': '대기중'
     };
-    return statusMap[status] || status;
+    return statusTexts[status] || status;
 }
 
 // 차량번호 수정 함수 추가

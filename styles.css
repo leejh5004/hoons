@@ -1284,4 +1284,128 @@ html, body {
   .maintenance-modal#carNumberModal .modal-footer {
     padding: 1em 0.7em 1em 0.7em !important;
   }
+}
+
+/* 정비 이력 상세 보기 모달 스타일 */
+.maintenance-detail-content {
+    padding: 1.5rem;
+}
+
+.detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(0,113,197,0.1);
+}
+
+.detail-type {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #23272b;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.detail-date {
+    font-size: 0.95em;
+    color: #666;
+}
+
+.detail-status {
+    font-size: 0.9em;
+    font-weight: 600;
+    padding: 0.3em 1em;
+    border-radius: 12px;
+}
+
+.detail-info {
+    margin-bottom: 1.5rem;
+}
+
+.detail-car-number {
+    font-size: 1.1em;
+    color: #0071c5;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+}
+
+.detail-mileage {
+    font-size: 0.95em;
+    color: #28a745;
+    background: rgba(40, 167, 69, 0.1);
+    padding: 0.4em 1em;
+    border-radius: 8px;
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+
+.detail-description {
+    font-size: 1em;
+    color: #333;
+    line-height: 1.6;
+    white-space: pre-line;
+    background: rgba(0,113,197,0.05);
+    padding: 1rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+}
+
+.detail-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(0,113,197,0.1);
+}
+
+.detail-admin {
+    font-size: 0.9em;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.detail-admin i {
+    color: #0071c5;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 576px) {
+    .maintenance-detail-content {
+        padding: 1rem;
+    }
+
+    .detail-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .detail-type {
+        font-size: 1.1em;
+    }
+
+    .detail-date {
+        font-size: 0.9em;
+    }
+
+    .detail-status {
+        font-size: 0.85em;
+    }
+
+    .detail-car-number {
+        font-size: 1em;
+    }
+
+    .detail-mileage {
+        font-size: 0.9em;
+    }
+
+    .detail-description {
+        font-size: 0.95em;
+    }
 } 
