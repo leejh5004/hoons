@@ -826,8 +826,14 @@ async function resizeImage(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = function(e) {
+            // 메모리 해제를 위해 URL.revokeObjectURL 사용
+            const url = URL.createObjectURL(file);
             const img = new Image();
+            
             img.onload = function() {
+                // 메모리 해제
+                URL.revokeObjectURL(url);
+                
                 const canvas = document.createElement('canvas');
                 let width = img.width;
                 let height = img.height;
@@ -844,11 +850,43 @@ async function resizeImage(file) {
                     }
                 }
                 
+                // 모바일 사진 방향 보정을 위한 크기 조정
+                const orientation = getImageOrientation(e.target.result);
+                if (orientation > 4) {
+                    [width, height] = [height, width];
+                }
+                
                 canvas.width = width;
                 canvas.height = height;
                 
                 const ctx = canvas.getContext('2d');
+                
+                // 이미지 방향 보정
+                switch (orientation) {
+                    case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
+                    case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
+                    case 4: ctx.transform(1, 0, 0, -1, 0, height); break;
+                    case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+                    case 6: ctx.transform(0, 1, -1, 0, height, 0); break;
+                    case 7: ctx.transform(0, -1, -1, 0, height, width); break;
+                    case 8: ctx.transform(0, -1, 1, 0, 0, width); break;
+                }
+                
                 ctx.drawImage(img, 0, 0, width, height);
+                
+                // 메모리 관리를 위해 캔버스 크기 제한
+                const maxCanvasSize = 4096;
+                if (canvas.width > maxCanvasSize || canvas.height > maxCanvasSize) {
+                    const scaleFactor = maxCanvasSize / Math.max(canvas.width, canvas.height);
+                    const scaledCanvas = document.createElement('canvas');
+                    scaledCanvas.width = canvas.width * scaleFactor;
+                    scaledCanvas.height = canvas.height * scaleFactor;
+                    const scaledCtx = scaledCanvas.getContext('2d');
+                    scaledCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+                    canvas.width = scaledCanvas.width;
+                    canvas.height = scaledCanvas.height;
+                    ctx.drawImage(scaledCanvas, 0, 0);
+                }
                 
                 // 품질 0.8로 압축
                 canvas.toBlob(blob => {
@@ -856,14 +894,52 @@ async function resizeImage(file) {
                         type: 'image/jpeg',
                         lastModified: Date.now()
                     }));
+                    
+                    // 메모리 해제
+                    canvas.width = 1;
+                    canvas.height = 1;
                 }, 'image/jpeg', 0.8);
             };
+            
             img.onerror = reject;
-            img.src = e.target.result;
+            img.src = url;
         };
         reader.onerror = reject;
-        reader.readAsDataURL(file);
+        reader.readAsArrayBuffer(file);
     });
+}
+
+// EXIF 방향 정보 추출 함수
+function getImageOrientation(arrayBuffer) {
+    const view = new DataView(arrayBuffer);
+    if (view.getUint16(0, false) !== 0xFFD8) return 1; // Not a JPEG
+    
+    const length = view.byteLength;
+    let offset = 2;
+    
+    while (offset < length) {
+        const marker = view.getUint16(offset, false);
+        offset += 2;
+        
+        if (marker === 0xFFE1) {
+            if (view.getUint32(offset += 2, false) !== 0x45786966) return 1;
+            
+            const little = view.getUint16(offset += 6, false) === 0x4949;
+            offset += view.getUint32(offset + 4, little);
+            
+            const tags = view.getUint16(offset, little);
+            offset += 2;
+            
+            for (let i = 0; i < tags; i++) {
+                if (view.getUint16(offset + (i * 12), little) === 0x0112) {
+                    return view.getUint16(offset + (i * 12) + 8, little);
+                }
+            }
+        } else if ((marker & 0xFF00) !== 0xFF00) break;
+        else offset += view.getUint16(offset, false);
+    }
+    
+    return 1; // Default orientation
 }
 
 // Firebase Storage 대신 ImgBB로 사진 업로드
