@@ -397,9 +397,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // history state 추가
         history.pushState({ page: 'detail', modalId: 'maintenanceDetail' }, '');
-
-        // popstate 이벤트 리스너 추가
-        window.addEventListener('popstate', handlePopState);
     }
 
     // 정비 이력 상세 보기 모달 닫기
@@ -407,40 +404,46 @@ document.addEventListener('DOMContentLoaded', () => {
         const modal = document.getElementById('maintenanceDetailModal');
         const backdrop = document.getElementById('modalBackdrop');
         
-        if (modal && backdrop) {
-            modal.classList.remove('show');
-            backdrop.classList.remove('show');
-        }
+        if (!modal || !backdrop) return;
+
+        modal.classList.remove('show');
+        backdrop.classList.remove('show');
     }
 
-    // popstate 이벤트 핸들러
-    function handlePopState(event) {
-        const state = event.state;
-        const maintenanceDetailModal = document.getElementById('maintenanceDetailModal');
+    // 사진 아이템 생성 함수
+    function createPhotoItem(label, photoData) {
+        if (!photoData || !photoData.url) return '';
+
+        const uploadTime = new Date(photoData.uploadTime);
+        const expirationTime = new Date(uploadTime.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30일 후
+        const now = new Date();
+        const remainingDays = Math.ceil((expirationTime - now) / (1000 * 60 * 60 * 24));
         
-        // 상세 페이지에서 뒤로가기 시
-        if (state && state.page === 'detail') {
-            closeMaintenanceDetailModal();
-            history.pushState({ page: 'main' }, '');
-            return;
-        }
-        
-        // 메인 페이지에서 뒤로가기 시 (한 번만 물어보기)
-        if (!state || state.page === 'main') {
-            // 모달이 열려있으면 닫기만 하고 종료하지 않음
-            if (maintenanceDetailModal && maintenanceDetailModal.classList.contains('show')) {
-                closeMaintenanceDetailModal();
-                history.pushState({ page: 'main' }, '');
-                return;
-            }
-            
-            // 모달이 닫혀있는 상태에서 뒤로가기 시 종료 여부 확인
-            if (confirm('앱을 종료하시겠습니까?')) {
-                window.close();
-            } else {
-                history.pushState({ page: 'main' }, '');
-            }
-        }
+        const countdownClass = remainingDays <= 5 ? 'urgent' : '';
+        const countdownText = remainingDays > 0 
+            ? `${remainingDays}일 후 삭제됩니다.`
+            : '만료되었습니다.';
+
+        return `
+            <div class="photo-item">
+                <div class="photo-label">${label}</div>
+                <img src="${photoData.url}" alt="${label}" class="detail-photo" 
+                    onclick="window.open('${photoData.url}', '_blank')">
+                <div class="photo-actions">
+                    <div class="countdown ${countdownClass}">
+                        <i class="fas fa-clock"></i>
+                        ${countdownText}
+                    </div>
+                    <a href="${photoData.url}" class="download-btn" 
+                        download="${label}_${new Date().toISOString().split('T')[0]}"
+                        target="_blank"
+                        onclick="event.stopPropagation()">
+                        <i class="fas fa-download"></i>
+                        다운로드
+                    </a>
+                </div>
+            </div>
+        `;
     }
 
     // 앱 시작 시 popstate 이벤트 리스너 추가
@@ -551,10 +554,10 @@ async function createMaintenanceCard(maintenance) {
         <div class="maintenance-card-footer">
             ${showAdminSeal ? `<span class="maintenance-admin">관리자 ${adminName}</span>` : ''}
             ${!isAdmin && maintenance.status === 'pending' ? `
-                <button class="btn btn-success btn-sm" onclick="updateMaintenanceStatus('${maintenance.id}', 'approved')">
+                <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'approved')">
                     <i class="fas fa-check"></i> 승인
                 </button>
-                <button class="btn btn-danger btn-sm" onclick="updateMaintenanceStatus('${maintenance.id}', 'rejected')">
+                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'rejected')">
                     <i class="fas fa-times"></i> 거절
                 </button>
             ` : ''}
@@ -909,4 +912,37 @@ function convertToBase64(file) {
         reader.onerror = error => reject(error);
         reader.readAsDataURL(file);
     });
-} 
+}
+
+// popstate 이벤트 핸들러
+function handlePopState(event) {
+    const state = event.state;
+    const maintenanceDetailModal = document.getElementById('maintenanceDetailModal');
+    
+    // 상세 페이지에서 뒤로가기 시
+    if (state && state.page === 'detail') {
+        closeMaintenanceDetailModal();
+        history.pushState({ page: 'main' }, '');
+        return;
+    }
+    
+    // 메인 페이지에서 뒤로가기 시 (한 번만 물어보기)
+    if (!state || state.page === 'main') {
+        // 모달이 열려있으면 닫기만 하고 종료하지 않음
+        if (maintenanceDetailModal && maintenanceDetailModal.classList.contains('show')) {
+            closeMaintenanceDetailModal();
+            history.pushState({ page: 'main' }, '');
+            return;
+        }
+        
+        // 모달이 닫혀있는 상태에서 뒤로가기 시 종료 여부 확인
+        if (confirm('앱을 종료하시겠습니까?')) {
+            window.close();
+        } else {
+            history.pushState({ page: 'main' }, '');
+        }
+    }
+}
+
+// 앱 시작 시 popstate 이벤트 리스너 추가
+window.addEventListener('popstate', handlePopState); 
