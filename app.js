@@ -531,25 +531,45 @@ function getStatusText(status) {
 }
 
 // 차량번호 수정 함수 추가
-function updateCarNumber(newCarNumber) {
+async function updateCarNumber(newCarNumber) {
     if (!currentUser) return;
     
-    db.collection('users').doc(currentUser.uid)
-        .update({
-            carNumber: newCarNumber.trim().toLowerCase().replace(/\s+/g, ''),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        })
-        .then(() => {
-            currentUser.carNumber = newCarNumber;
-            if (userName) {
-                userName.textContent = `차량번호: ${currentUser.carNumber}`;
-            }
-            showNotification('차량번호가 수정되었습니다.', 'success');
-        })
-        .catch(error => {
-            console.error('Error updating car number:', error);
-            showNotification('차량번호 수정 실패: ' + error.message, 'error');
-        });
+    const trimmedCarNumber = newCarNumber.trim().toLowerCase().replace(/\s+/g, '');
+    
+    try {
+        // 현재 사용자의 차량번호와 동일한 경우 업데이트 불필요
+        if (trimmedCarNumber === currentUser.carNumber) {
+            showNotification('현재 등록된 차량번호와 동일합니다.', 'info');
+            return;
+        }
+        
+        // 차량번호 중복 체크
+        const duplicateCheck = await db.collection('users')
+            .where('carNumber', '==', trimmedCarNumber)
+            .get();
+            
+        if (!duplicateCheck.empty) {
+            showNotification('이미 등록된 차량번호입니다.', 'error');
+            return;
+        }
+        
+        // 중복이 없는 경우에만 업데이트 진행
+        await db.collection('users').doc(currentUser.uid)
+            .update({
+                carNumber: trimmedCarNumber,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+        currentUser.carNumber = trimmedCarNumber;
+        if (userName) {
+            userName.textContent = `차량번호: ${currentUser.carNumber}`;
+        }
+        showNotification('차량번호가 수정되었습니다.', 'success');
+        
+    } catch (error) {
+        console.error('Error updating car number:', error);
+        showNotification('차량번호 수정 실패: ' + error.message, 'error');
+    }
 }
 
 // 차량번호 수정 모달 관련 함수들
