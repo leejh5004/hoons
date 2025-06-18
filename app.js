@@ -1878,7 +1878,6 @@ function handlePopState(event) {
     // 상세 페이지에서 뒤로가기 시
     if (state && state.page === 'detail') {
         closeMaintenanceDetailModal();
-        history.pushState({ page: 'main' }, '');
         return;
     }
     
@@ -1887,15 +1886,12 @@ function handlePopState(event) {
         // 모달이 열려있으면 닫기만 하고 종료하지 않음
         if (maintenanceDetailModal && maintenanceDetailModal.classList.contains('show')) {
             closeMaintenanceDetailModal();
-            history.pushState({ page: 'main' }, '');
             return;
         }
         
         // 모달이 닫혀있는 상태에서 뒤로가기 시 종료 여부 확인
         if (confirm('앱을 종료하시겠습니까?')) {
             window.close();
-        } else {
-            history.pushState({ page: 'main' }, '');
         }
     }
 }
