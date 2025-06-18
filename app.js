@@ -10,6 +10,9 @@ let isAdmin = false;
 
 // DOM이 로드된 후 실행
 document.addEventListener('DOMContentLoaded', () => {
+    // 초기 history state 추가
+    history.pushState({ page: 'main' }, '');
+
     // DOM 요소
     const loginForm = document.getElementById('loginForm');
     const registerForm = document.getElementById('registerForm');
@@ -268,6 +271,90 @@ document.addEventListener('DOMContentLoaded', () => {
                 .catch(err => showNotification('정비 이력 저장 실패: ' + err.message, 'error'));
         });
     }
+
+    // 정비 이력 상세 보기 모달 열기
+    function showMaintenanceDetail(maintenance) {
+        const modal = document.getElementById('maintenanceDetailModal');
+        const backdrop = document.getElementById('modalBackdrop');
+        
+        if (!modal || !backdrop) return;
+
+        // 모달 내용 업데이트
+        const detailType = modal.querySelector('.detail-type');
+        const detailDate = modal.querySelector('.detail-date');
+        const detailStatus = modal.querySelector('.detail-status');
+        const detailCarNumber = modal.querySelector('.detail-car-number');
+        const detailMileage = modal.querySelector('.detail-mileage');
+        const detailDescription = modal.querySelector('.detail-description');
+        const detailAdmin = modal.querySelector('.detail-admin');
+
+        if (detailType) {
+            detailType.innerHTML = `${getTypeIcon(maintenance.type)} ${maintenance.type || ''}`;
+        }
+        if (detailDate) {
+            detailDate.textContent = maintenance.date || '';
+        }
+        if (detailStatus) {
+            detailStatus.textContent = getStatusText(maintenance.status);
+            detailStatus.className = `detail-status ${maintenance.status}`;
+        }
+        if (detailCarNumber) {
+            detailCarNumber.textContent = `차량번호: ${maintenance.carNumber}`;
+        }
+        if (detailMileage) {
+            detailMileage.textContent = maintenance.mileage ? `키로수: ${maintenance.mileage}km` : '';
+        }
+        if (detailDescription) {
+            detailDescription.textContent = maintenance.description || '';
+        }
+        if (detailAdmin) {
+            detailAdmin.innerHTML = maintenance.adminName ? 
+                `<i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}` : '';
+        }
+
+        // 모달 표시
+        modal.classList.add('show');
+        backdrop.classList.add('show');
+
+        // history state 추가
+        history.pushState({ page: 'detail', modalId: 'maintenanceDetail' }, '');
+
+        // popstate 이벤트 리스너 추가
+        window.addEventListener('popstate', handlePopState);
+    }
+
+    // 정비 이력 상세 보기 모달 닫기
+    function closeMaintenanceDetailModal() {
+        const modal = document.getElementById('maintenanceDetailModal');
+        const backdrop = document.getElementById('modalBackdrop');
+        
+        if (modal && backdrop) {
+            modal.classList.remove('show');
+            backdrop.classList.remove('show');
+        }
+    }
+
+    // popstate 이벤트 핸들러
+    function handlePopState(event) {
+        const state = event.state;
+        
+        // 메인 페이지에서 뒤로가기 시
+        if (!state || state.page === 'main') {
+            if (confirm('앱을 종료하시겠습니까?')) {
+                window.close();
+            } else {
+                history.pushState({ page: 'main' }, '');
+            }
+        }
+        // 상세 페이지에서 뒤로가기 시
+        else if (state.page === 'detail') {
+            closeMaintenanceDetailModal();
+            history.pushState({ page: 'main' }, '');
+        }
+    }
+
+    // 앱 시작 시 popstate 이벤트 리스너 추가
+    window.addEventListener('popstate', handlePopState);
 });
 
 // 관리자 이메일로 이름 가져오기 (비동기)
@@ -327,80 +414,6 @@ async function createMaintenanceCard(maintenance) {
         </div>
     `;
     return card;
-}
-
-// 정비 이력 상세 보기 모달 열기
-function showMaintenanceDetail(maintenance) {
-    const modal = document.getElementById('maintenanceDetailModal');
-    const backdrop = document.getElementById('modalBackdrop');
-    
-    if (!modal || !backdrop) return;
-
-    // 모달 내용 업데이트
-    const detailType = modal.querySelector('.detail-type');
-    const detailDate = modal.querySelector('.detail-date');
-    const detailStatus = modal.querySelector('.detail-status');
-    const detailCarNumber = modal.querySelector('.detail-car-number');
-    const detailMileage = modal.querySelector('.detail-mileage');
-    const detailDescription = modal.querySelector('.detail-description');
-    const detailAdmin = modal.querySelector('.detail-admin');
-
-    if (detailType) {
-        detailType.innerHTML = `${getTypeIcon(maintenance.type)} ${maintenance.type || ''}`;
-    }
-    if (detailDate) {
-        detailDate.textContent = maintenance.date || '';
-    }
-    if (detailStatus) {
-        detailStatus.textContent = getStatusText(maintenance.status);
-        detailStatus.className = `detail-status ${maintenance.status}`;
-    }
-    if (detailCarNumber) {
-        detailCarNumber.textContent = `차량번호: ${maintenance.carNumber}`;
-    }
-    if (detailMileage) {
-        detailMileage.textContent = maintenance.mileage ? `키로수: ${maintenance.mileage}km` : '';
-    }
-    if (detailDescription) {
-        detailDescription.textContent = maintenance.description || '';
-    }
-    if (detailAdmin) {
-        detailAdmin.innerHTML = maintenance.adminName ? 
-            `<i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}` : '';
-    }
-
-    // 모달 표시
-    modal.classList.add('show');
-    backdrop.classList.add('show');
-
-    // history state 추가
-    history.pushState({ modal: 'maintenanceDetail' }, '');
-
-    // popstate 이벤트 리스너 추가
-    window.addEventListener('popstate', handlePopState);
-}
-
-// 정비 이력 상세 보기 모달 닫기
-function closeMaintenanceDetailModal() {
-    const modal = document.getElementById('maintenanceDetailModal');
-    const backdrop = document.getElementById('modalBackdrop');
-    
-    if (modal && backdrop) {
-        modal.classList.remove('show');
-        backdrop.classList.remove('show');
-        
-        // popstate 이벤트 리스너 제거
-        window.removeEventListener('popstate', handlePopState);
-    }
-}
-
-// popstate 이벤트 핸들러 (모바일 뒤로가기 버튼용)
-function handlePopState(event) {
-    if (confirm('이전 화면으로 돌아가시겠습니까?')) {
-        closeMaintenanceDetailModal();
-    } else {
-        history.pushState({ modal: 'maintenanceDetail' }, '');
-    }
 }
 
 // 정비 이력 목록을 비동기로 렌더링
