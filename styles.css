@@ -26,6 +26,8 @@ html, body {
     max-width: 100vw;
     overflow-x: hidden;
     box-sizing: border-box;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y pinch-zoom;
 }
 
 .navbar {
@@ -589,6 +591,9 @@ html, body {
     width: 100%;
     height: 100%;
     z-index: 1000;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y pinch-zoom;
 }
 
 .modal.show {
@@ -604,6 +609,7 @@ html, body {
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
     z-index: 999;
+    touch-action: none;
 }
 
 .modal-backdrop.show {
@@ -619,6 +625,7 @@ html, body {
     position: relative;
     overflow: hidden;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    touch-action: pan-y pinch-zoom;
 }
 
 .modal-header {
@@ -642,6 +649,7 @@ html, body {
     padding: 15px;
     max-height: calc(100vh - 200px);
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .close-btn {
@@ -1296,4 +1304,32 @@ textarea:focus {
     .photo-preview i.fa-camera {
         font-size: 1.2em;
     }
+}
+
+/* 메인 컨테이너 스크롤 */
+.container {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y pinch-zoom;
+}
+
+/* 정비 이력 목록 스크롤 */
+#maintenanceItems {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y pinch-zoom;
+}
+
+/* 상세 보기 모달 내용 */
+.detail-info {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y pinch-zoom;
+}
+
+/* 사진 그리드 터치 최적화 */
+.photos-grid {
+    touch-action: pan-y pinch-zoom;
+}
+
+/* 입력 필드 터치 최적화 */
+input, select, textarea {
+    touch-action: manipulation;
 } 

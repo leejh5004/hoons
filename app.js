@@ -1205,13 +1205,62 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 오토바이 번호 수정 폼 제출 이벤트 리스너
-    const carNumberForm = document.getElementById('carNumberForm');
-    if (carNumberForm) {
-        carNumberForm.addEventListener('submit', (e) => {
+    // 모달 터치 이벤트 처리
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        // 터치 이벤트 전파 중단
+        modal.addEventListener('touchmove', (e) => {
+            e.stopPropagation();
+        }, { passive: true });
+
+        // 모달 내부 스크롤 허용
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+            modalContent.addEventListener('touchmove', (e) => {
+                e.stopPropagation();
+            }, { passive: true });
+        }
+    });
+
+    // 백드롭 터치 이벤트 처리
+    const backdrop = document.getElementById('modalBackdrop');
+    if (backdrop) {
+        backdrop.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            updateCarNumber();
+        }, { passive: false });
+
+        // 백드롭 터치로 모달 닫기
+        backdrop.addEventListener('click', (e) => {
+            if (e.target === backdrop) {
+                const activeModals = document.querySelectorAll('.modal.show');
+                activeModals.forEach(modal => {
+                    if (modal.id === 'maintenanceDetailModal') {
+                        closeMaintenanceDetailModal();
+                    } else if (modal.id === 'maintenanceInputModal') {
+                        closeMaintenanceInputModal();
+                    } else if (modal.id === 'carNumberModal') {
+                        closeCarNumberModal();
+                    }
+                });
+            }
         });
+    }
+
+    // 정비 이력 상세 보기 모달 스크롤 개선
+    const detailModal = document.getElementById('maintenanceDetailModal');
+    if (detailModal) {
+        detailModal.addEventListener('touchstart', (e) => {
+            const modalBody = detailModal.querySelector('.modal-body');
+            if (modalBody) {
+                const touchY = e.touches[0].clientY;
+                const modalRect = modalBody.getBoundingClientRect();
+                
+                // 모달 내부 영역인 경우에만 스크롤 허용
+                if (touchY >= modalRect.top && touchY <= modalRect.bottom) {
+                    e.stopPropagation();
+                }
+            }
+        }, { passive: true });
     }
 });
 
