@@ -235,71 +235,238 @@ document.addEventListener('DOMContentLoaded', () => {
         const modal = document.getElementById('maintenanceInputModal');
         const backdrop = document.getElementById('modalBackdrop');
         if (modal && backdrop) {
+            // 모달 내용 동적 생성
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-tools"></i> 새 정비 이력 입력</h2>
+                        <button class="close-btn" onclick="closeMaintenanceInputModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="newMaintenanceModalForm">
+                            <div class="input-group">
+                                <div class="input-label">
+                                    <i class="fas fa-motorcycle"></i>
+                                    <label for="maintenanceCarNumberModal">오토바이 번호</label>
+                                </div>
+                                <input type="text" id="maintenanceCarNumberModal" required>
+                            </div>
+                            
+                            <div class="input-group">
+                                <div class="input-label">
+                                    <i class="fas fa-calendar"></i>
+                                    <label for="maintenanceDateModal">정비 날짜</label>
+                                </div>
+                                <input type="date" id="maintenanceDateModal" required>
+                            </div>
+                            
+                            <div class="input-group">
+                                <div class="input-label">
+                                    <i class="fas fa-tachometer-alt"></i>
+                                    <label for="maintenanceMileageModal">키로수 (km)</label>
+                                </div>
+                                <input type="number" id="maintenanceMileageModal" required>
+                            </div>
+                            
+                            <div class="input-group">
+                                <div class="input-label">
+                                    <i class="fas fa-wrench"></i>
+                                    <label for="maintenanceTypeModal">정비 종류</label>
+                                </div>
+                                <select id="maintenanceTypeModal" required>
+                                    <option value="">선택하세요</option>
+                                    <option value="일반점검">일반점검</option>
+                                    <option value="엔진오일교체">엔진오일교체</option>
+                                    <option value="타이어교체">타이어교체</option>
+                                    <option value="브레이크정비">브레이크정비</option>
+                                    <option value="기타">기타</option>
+                                </select>
+                            </div>
+                            
+                            <div class="input-group">
+                                <div class="input-label">
+                                    <i class="fas fa-comment"></i>
+                                    <label for="descriptionModal">정비 내용</label>
+                                </div>
+                                <textarea id="descriptionModal" rows="4" required></textarea>
+                            </div>
+                            
+                            <div class="photos-section">
+                                <div class="photos-title">
+                                    <i class="fas fa-camera"></i>
+                                    정비 사진
+                                </div>
+                                <div class="photos-grid">
+                                    <div class="photo-item" data-type="before">
+                                        <div class="photo-label">정비 전</div>
+                                        <input type="file" class="photo-input" data-type="before" accept="image/*">
+                                        <div id="beforePhotoPreview" class="photo-preview"></div>
+                                    </div>
+                                    <div class="photo-item" data-type="during">
+                                        <div class="photo-label">정비 중</div>
+                                        <input type="file" class="photo-input" data-type="during" accept="image/*">
+                                        <div id="duringPhotoPreview" class="photo-preview"></div>
+                                    </div>
+                                    <div class="photo-item" data-type="after">
+                                        <div class="photo-label">정비 후</div>
+                                        <input type="file" class="photo-input" data-type="after" accept="image/*">
+                                        <div id="afterPhotoPreview" class="photo-preview"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" onclick="closeMaintenanceInputModal()">
+                                    <i class="fas fa-times"></i> 취소
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> 저장
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            
+            // 이벤트 리스너 다시 연결
+            setupPhotoInputListeners();
+            setupMaintenanceFormListener();
+            
             modal.classList.add('show');
             backdrop.classList.add('show');
         }
     }
+
+    // 정비 이력 입력 모달 닫기 함수
     window.closeMaintenanceInputModal = function() {
         const modal = document.getElementById('maintenanceInputModal');
         const backdrop = document.getElementById('modalBackdrop');
         if (modal && backdrop) {
             modal.classList.remove('show');
             backdrop.classList.remove('show');
+            // 폼 초기화
+            const form = document.getElementById('newMaintenanceModalForm');
+            if (form) {
+                form.reset();
+            }
+            // 사진 미리보기 초기화
+            document.querySelectorAll('.photo-preview').forEach(preview => {
+                preview.innerHTML = '';
+            });
+            // 업로드된 사진 데이터 초기화
+            uploadedPhotos = { before: null, during: null, after: null };
         }
     }
 
-    // 모달 폼 제출 시 정비이력 저장
-    const newMaintenanceModalForm = document.getElementById('newMaintenanceModalForm');
-    if (newMaintenanceModalForm) {
-        newMaintenanceModalForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!isAdmin) return;
+    // 사진 입력 이벤트 리스너 설정 함수
+    function setupPhotoInputListeners() {
+        document.querySelectorAll('.photo-input').forEach(input => {
+            const type = input.dataset.type;
+            const previewId = `${type}PhotoPreview`;
+            const previewDiv = document.getElementById(previewId);
 
-            try {
-                const carNumber = document.getElementById('maintenanceCarNumberModal').value.trim().toLowerCase().replace(/\s+/g, '');
-                const maintenanceData = {
-                    carNumber,
-                    date: document.getElementById('maintenanceDateModal').value,
-                    mileage: document.getElementById('maintenanceMileageModal').value,
-                    type: document.getElementById('maintenanceTypeModal').value,
-                    description: document.getElementById('descriptionModal').value,
-                    status: 'pending',
-                    adminEmail: currentUser.email,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
-
-                // 먼저 정비이력 문서 생성
-                const docRef = await db.collection('maintenance').add(maintenanceData);
-                
-                // 사진 업로드
-                const photos = await uploadMaintenancePhotos(docRef.id);
-                
-                // 사진 정보 업데이트
-                if (photos.length > 0) {
-                    await docRef.update({ photos });
-                }
-
-                closeMaintenanceInputModal();
-                newMaintenanceModalForm.reset();
-                
-                // 사진 미리보기 초기화
-                document.querySelectorAll('.photo-preview').forEach(preview => {
-                    const img = preview.querySelector('img');
-                    const removeBtn = preview.querySelector('.remove-photo');
-                    if (img) img.remove();
-                    if (removeBtn) removeBtn.remove();
+            if (previewDiv) {
+                previewDiv.addEventListener('click', () => {
+                    input.click();
                 });
-                uploadedPhotos = { before: null, during: null, after: null };
-                
-                loadMaintenanceHistory();
-                showNotification('정비 이력이 저장되었습니다.', 'success');
-                
-            } catch (err) {
-                console.error('정비 이력 저장 중 오류:', err);
-                showNotification('정비 이력 저장 실패: ' + err.message, 'error');
             }
+
+            input.addEventListener('change', async function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                try {
+                    if (!file.type.startsWith('image/')) {
+                        showNotification('이미지 파일만 업로드 가능합니다.', 'error');
+                        return;
+                    }
+
+                    if (file.size > 5 * 1024 * 1024) {
+                        showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
+                        return;
+                    }
+
+                    previewDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 처리중...</div>';
+
+                    const resizedImage = await resizeImage(file);
+                    previewDiv.innerHTML = '';
+                    
+                    const previewContainer = document.createElement('div');
+                    previewContainer.className = 'preview-container';
+                    
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(resizedImage);
+                    img.onload = () => URL.revokeObjectURL(img.src);
+                    previewContainer.appendChild(img);
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-photo';
+                    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    removeBtn.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        previewContainer.remove();
+                        uploadedPhotos[type] = null;
+                        input.value = '';
+                        previewDiv.innerHTML = '';
+                    };
+                    previewContainer.appendChild(removeBtn);
+                    
+                    previewDiv.appendChild(previewContainer);
+                    uploadedPhotos[type] = resizedImage;
+                    
+                } catch (err) {
+                    console.error('사진 처리 중 오류:', err);
+                    showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
+                    previewDiv.innerHTML = '';
+                }
+            });
         });
+    }
+
+    // 정비 폼 이벤트 리스너 설정 함수
+    function setupMaintenanceFormListener() {
+        const form = document.getElementById('newMaintenanceModalForm');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!isAdmin) return;
+
+                try {
+                    const carNumber = document.getElementById('maintenanceCarNumberModal').value.trim().toLowerCase().replace(/\s+/g, '');
+                    const maintenanceData = {
+                        carNumber,
+                        date: document.getElementById('maintenanceDateModal').value,
+                        mileage: document.getElementById('maintenanceMileageModal').value,
+                        type: document.getElementById('maintenanceTypeModal').value,
+                        description: document.getElementById('descriptionModal').value,
+                        status: 'pending',
+                        adminEmail: currentUser.email,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    const docRef = await db.collection('maintenance').add(maintenanceData);
+                    const photos = await uploadMaintenancePhotos(docRef.id);
+                    
+                    if (photos.length > 0) {
+                        await docRef.update({ photos });
+                    }
+
+                    closeMaintenanceInputModal();
+                    form.reset();
+                    uploadedPhotos = { before: null, during: null, after: null };
+                    loadMaintenanceHistory();
+                    showNotification('정비 이력이 저장되었습니다.', 'success');
+                    
+                } catch (err) {
+                    console.error('정비 이력 저장 중 오류:', err);
+                    showNotification('정비 이력 저장 실패: ' + err.message, 'error');
+                }
+            });
+        }
     }
 
     // 정비 이력 상세 보기 모달 열기
@@ -309,92 +476,186 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!modal || !backdrop) return;
 
+        const typeInfo = getTypeIconAndColor(maintenance.type);
+
         // 모달 내용 업데이트
-        const detailType = modal.querySelector('.detail-type');
-        const detailDate = modal.querySelector('.detail-date');
-        const detailStatus = modal.querySelector('.detail-status');
-        const detailCarNumber = modal.querySelector('.detail-motorcycle-number');
-        const detailMileage = modal.querySelector('.detail-mileage');
-        const detailDescription = modal.querySelector('.detail-description');
-        const detailAdmin = modal.querySelector('.detail-admin');
-        const detailPhotos = modal.querySelector('.detail-photos');
-
-        if (detailType) {
-            detailType.innerHTML = `${getTypeIcon(maintenance.type)} ${maintenance.type || ''}`;
-        }
-        if (detailDate) {
-            detailDate.textContent = maintenance.date || '';
-        }
-        if (detailStatus) {
-            detailStatus.textContent = getStatusText(maintenance.status);
-            detailStatus.className = `detail-status ${maintenance.status}`;
-        }
-        if (detailCarNumber) {
-            detailCarNumber.innerHTML = `<i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}`;
-        }
-        if (detailMileage) {
-            detailMileage.textContent = maintenance.mileage ? `키로수: ${maintenance.mileage}km` : '';
-        }
-        if (detailDescription) {
-            detailDescription.textContent = maintenance.description || '';
-        }
-        if (detailAdmin) {
-            detailAdmin.innerHTML = maintenance.adminName ? 
-                `<i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}` : '';
-        }
-
-        // 사진 표시
-        if (detailPhotos && maintenance.photos && maintenance.photos.length > 0) {
-            detailPhotos.innerHTML = `
-                <div class="photos-title">정비 사진</div>
-                <div class="photos-grid">
-                    ${maintenance.photos.map(photo => {
-                        // 생성 시간을 Date 객체로 변환
-                        const createdAt = new Date(photo.createdAt);
-                        const now = new Date();
-                        
-                        // 30일 후 날짜 계산
-                        const expiryDate = new Date(createdAt);
-                        expiryDate.setDate(expiryDate.getDate() + 30);
-                        
-                        // 남은 일수 계산
-                        const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-                        
-                        // 남은 시간 문자열 생성
-                        const timeLeftText = daysLeft > 0 ? 
-                            `삭제까지 ${daysLeft}일 남음` : 
-                            '곧 삭제됨';
-                        
-                        return `
-                            <div class="photo-item">
-                                <div class="photo-label">${photo.type === 'before' ? '정비 전' : 
-                                                         photo.type === 'during' ? '정비 중' : '정비 후'}</div>
-                                <img src="${photo.thumbnailUrl}" 
-                                     onclick="window.open('${photo.url}', '_blank')" 
-                                     alt="${photo.type} 사진"
-                                     class="detail-photo">
-                                <div class="photo-actions">
-                                    <div class="countdown ${daysLeft <= 7 ? 'urgent' : ''}">${timeLeftText}</div>
-                                    <button class="download-btn" 
-                                           onclick="event.stopPropagation(); downloadImage('${photo.url}', 'maintenance_${maintenance.id}_${photo.type}.jpg')">
-                                        <i class="fas fa-download"></i> 다운로드
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-tools"></i> 정비 이력 상세</h2>
+                    <button class="close-btn" onclick="closeMaintenanceDetailModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-            `;
-        } else if (detailPhotos) {
-            detailPhotos.innerHTML = '';
-        }
+                <div class="modal-body">
+                    <div class="detail-info">
+                        <div class="detail-title-row">
+                            <div class="detail-type" style="color: ${typeInfo.color}">
+                                <i class="fas ${typeInfo.icon}"></i> ${maintenance.type || ''}
+                            </div>
+                            <div class="detail-date">${maintenance.date || ''}</div>
+                        </div>
+                        <div class="detail-status ${maintenance.status}">${getStatusText(maintenance.status)}</div>
+                        <div class="detail-info-row">
+                            <div class="detail-motorcycle-number">
+                                <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
+                            </div>
+                            <div class="spacer"></div>
+                            ${maintenance.mileage ? `
+                                <div class="detail-mileage" style="color: ${typeInfo.color}">
+                                    <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="detail-description">${maintenance.description || ''}</div>
+                        ${maintenance.adminName ? `
+                            <div class="detail-admin">
+                                <i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${maintenance.photos && maintenance.photos.length > 0 ? `
+                        <div class="photos-section">
+                            <div class="photos-title">
+                                <i class="fas fa-camera"></i> 정비 사진
+                            </div>
+                            <div class="photos-grid">
+                                ${maintenance.photos.map(photo => `
+                                    <div class="photo-item" data-type="${photo.type}">
+                                        <div class="photo-label">
+                                            ${photo.type === 'before' ? 
+                                              '<i class="fas fa-exclamation-triangle"></i> 정비 전' : 
+                                              photo.type === 'during' ? 
+                                              '<i class="fas fa-cog"></i> 정비 중' : 
+                                              '<i class="fas fa-check-circle"></i> 정비 후'}
+                                        </div>
+                                        <div class="photo-preview">
+                                            <img src="${photo.thumbnailUrl}" 
+                                                 onclick="window.open('${photo.url}', '_blank')" 
+                                                 alt="${photo.type} 사진"
+                                                 class="detail-photo">
+                                        </div>
+                                        <div class="photo-actions">
+                                            ${getPhotoTimeLeftHtml(photo)}
+                                            <button class="download-btn" 
+                                                    onclick="event.stopPropagation(); downloadImage('${photo.url}', 'maintenance_${maintenance.id}_${photo.type}.jpg')">
+                                                <i class="fas fa-download"></i> 다운로드
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+
+        // CSS 스타일 수정
+        const detailStyle = document.createElement('style');
+        detailStyle.textContent = `
+            .detail-info {
+                background: #f8f9fa;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+
+            .detail-title-row {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                margin-bottom: 8px;
+            }
+
+            .detail-type {
+                font-size: 1.2em;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .detail-date {
+                color: #666;
+                margin-left: auto;
+            }
+
+            .detail-status {
+                padding: 6px 10px;
+                border-radius: 4px;
+                font-size: 0.9em;
+                font-weight: 500;
+                margin-bottom: 12px;
+                display: inline-block;
+            }
+
+            .detail-info-row {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                margin-bottom: 12px;
+                flex-wrap: nowrap;
+            }
+
+            .spacer {
+                width: 20px;
+            }
+
+            .detail-motorcycle-number,
+            .detail-mileage {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                white-space: nowrap;
+            }
+
+            .detail-motorcycle-number {
+                color: #666;
+            }
+
+            .detail-description {
+                margin-top: 12px;
+                padding: 12px;
+                background: white;
+                border-radius: 6px;
+                white-space: pre-wrap;
+                line-height: 1.5;
+            }
+
+            .detail-admin {
+                margin-top: 12px;
+                color: #666;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+        `;
+        document.head.appendChild(detailStyle);
 
         // 모달 표시
         modal.classList.add('show');
         backdrop.classList.add('show');
-
-        // history state 추가
         history.pushState({ page: 'detail', modalId: 'maintenanceDetail' }, '');
+    }
+
+    // 사진 남은 시간 HTML 생성 함수
+    function getPhotoTimeLeftHtml(photo) {
+        const createdAt = new Date(photo.createdAt);
+        const now = new Date();
+        const expiryDate = new Date(createdAt);
+        expiryDate.setDate(expiryDate.getDate() + 30);
+        const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+        const timeLeftText = daysLeft > 0 ? `삭제까지 ${daysLeft}일 남음` : '곧 삭제됨';
+        const urgentClass = daysLeft <= 7 ? 'urgent' : '';
+        
+        return `
+            <div class="countdown ${urgentClass}">
+                <i class="fas fa-clock"></i>
+                ${timeLeftText}
+            </div>
+        `;
     }
 
     // 정비 이력 상세 보기 모달 닫기
@@ -614,6 +875,244 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     `;
     document.head.appendChild(style);
+
+    // CSS 스타일 수정
+    const modalStyle = document.createElement('style');
+    modalStyle.textContent = `
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 700px;
+            width: 90%;
+            margin: 20px auto;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-header {
+            background: #007bff;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-body {
+            padding: 15px;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+
+        .input-label i {
+            color: #007bff;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        select {
+            background-color: white;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .photos-section {
+            margin-top: 15px;
+        }
+
+        .photos-title {
+            font-size: 1.1em;
+            color: #333;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .photos-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .photo-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            position: relative;
+            border-radius: 6px;
+            padding: 8px;
+            transition: all 0.3s ease;
+            background: #fff;
+        }
+
+        .photo-item[data-type="before"] {
+            background: rgba(255, 99, 71, 0.1);
+            border: 2px solid rgba(255, 99, 71, 0.3);
+        }
+
+        .photo-item[data-type="during"] {
+            background: rgba(255, 206, 86, 0.1);
+            border: 2px solid rgba(255, 206, 86, 0.3);
+        }
+
+        .photo-item[data-type="after"] {
+            background: rgba(75, 192, 192, 0.1);
+            border: 2px solid rgba(75, 192, 192, 0.3);
+        }
+
+        .photo-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .photo-preview {
+            width: 100%;
+            height: 120px;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .detail-photo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .detail-photo:hover {
+            transform: scale(1.05);
+        }
+
+        .photo-label {
+            font-size: 0.85em;
+            font-weight: 600;
+            text-align: center;
+            padding: 4px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .photo-item[data-type="before"] .photo-label {
+            background: rgba(255, 99, 71, 0.2);
+            color: #ff6347;
+        }
+
+        .photo-item[data-type="during"] .photo-label {
+            background: rgba(255, 206, 86, 0.2);
+            color: #d4ac0d;
+        }
+
+        .photo-item[data-type="after"] .photo-label {
+            background: rgba(75, 192, 192, 0.2);
+            color: #4bc0c0;
+        }
+
+        .photo-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .countdown {
+            font-size: 0.8em;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .countdown.urgent {
+            color: #ff6347;
+        }
+
+        .download-btn {
+            padding: 3px 6px;
+            font-size: 0.85em;
+        }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+                margin: 10px;
+            }
+
+            .modal-body {
+                padding: 12px;
+            }
+
+            .photos-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+            }
+            
+            .photo-preview {
+                height: 100px;
+            }
+            
+            .detail-row {
+                gap: 8px;
+            }
+
+            .photo-label {
+                font-size: 0.8em;
+                padding: 3px;
+            }
+
+            .download-btn {
+                padding: 2px 4px;
+                font-size: 0.8em;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .photos-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    `;
+    document.head.appendChild(modalStyle);
 });
 
 // 관리자 이메일로 이름 가져오기 (비동기)
@@ -798,6 +1297,195 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
+// 정비 타입별 아이콘과 색상 가져오기 함수
+function getTypeIconAndColor(type) {
+    const types = {
+        '일반점검': { icon: 'fa-tools', color: '#4bc0c0' },
+        '엔진오일교체': { icon: 'fa-oil-can', color: '#ff6347' },
+        '타이어교체': { icon: 'fa-circle-notch', color: '#d4ac0d' },
+        '브레이크정비': { icon: 'fa-brake', color: '#ff9f40' },
+        '기타': { icon: 'fa-wrench', color: '#666' }
+    };
+    return types[type] || types['기타'];
+}
+
+// 정비 이력 상세 보기 모달 열기
+window.showMaintenanceDetail = function(maintenance) {
+    const modal = document.getElementById('maintenanceDetailModal');
+    const backdrop = document.getElementById('modalBackdrop');
+    
+    if (!modal || !backdrop) return;
+
+    const typeInfo = getTypeIconAndColor(maintenance.type);
+
+    // 모달 내용 업데이트
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-tools"></i> 정비 이력 상세</h2>
+                <button class="close-btn" onclick="closeMaintenanceDetailModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-info">
+                    <div class="detail-title-row">
+                        <div class="detail-type" style="color: ${typeInfo.color}">
+                            <i class="fas ${typeInfo.icon}"></i> ${maintenance.type || ''}
+                        </div>
+                        <div class="detail-date">${maintenance.date || ''}</div>
+                    </div>
+                    <div class="detail-status ${maintenance.status}">${getStatusText(maintenance.status)}</div>
+                    <div class="detail-info-row">
+                        <div class="detail-motorcycle-number">
+                            <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
+                        </div>
+                        <div class="spacer"></div>
+                        ${maintenance.mileage ? `
+                            <div class="detail-mileage" style="color: ${typeInfo.color}">
+                                <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="detail-description">${maintenance.description || ''}</div>
+                    ${maintenance.adminName ? `
+                        <div class="detail-admin">
+                            <i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}
+                        </div>
+                    ` : ''}
+                </div>
+                
+                ${maintenance.photos && maintenance.photos.length > 0 ? `
+                    <div class="photos-section">
+                        <div class="photos-title">
+                            <i class="fas fa-camera"></i> 정비 사진
+                        </div>
+                        <div class="photos-grid">
+                            ${maintenance.photos.map(photo => `
+                                <div class="photo-item" data-type="${photo.type}">
+                                    <div class="photo-label">
+                                        ${photo.type === 'before' ? 
+                                          '<i class="fas fa-exclamation-triangle"></i> 정비 전' : 
+                                          photo.type === 'during' ? 
+                                          '<i class="fas fa-cog"></i> 정비 중' : 
+                                          '<i class="fas fa-check-circle"></i> 정비 후'}
+                                    </div>
+                                    <div class="photo-preview">
+                                        <img src="${photo.thumbnailUrl}" 
+                                             onclick="window.open('${photo.url}', '_blank')" 
+                                             alt="${photo.type} 사진"
+                                             class="detail-photo">
+                                    </div>
+                                    <div class="photo-actions">
+                                        ${getPhotoTimeLeftHtml(photo)}
+                                        <button class="download-btn" 
+                                                onclick="event.stopPropagation(); downloadImage('${photo.url}', 'maintenance_${maintenance.id}_${photo.type}.jpg')">
+                                            <i class="fas fa-download"></i> 다운로드
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    // CSS 스타일 수정
+    const detailStyle = document.createElement('style');
+    detailStyle.textContent = `
+        .detail-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .detail-title-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 8px;
+        }
+
+        .detail-type {
+            font-size: 1.2em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .detail-date {
+            color: #666;
+            margin-left: auto;
+        }
+
+        .detail-status {
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: 500;
+            margin-bottom: 12px;
+            display: inline-block;
+        }
+
+        .detail-info-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 12px;
+            flex-wrap: nowrap;
+        }
+
+        .spacer {
+            width: 20px;
+        }
+
+        .detail-motorcycle-number,
+        .detail-mileage {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .detail-motorcycle-number {
+            color: #666;
+        }
+
+        .detail-description {
+            margin-top: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .detail-admin {
+            margin-top: 12px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    `;
+    document.head.appendChild(detailStyle);
+
+    // 모달 표시
+    modal.classList.add('show');
+    backdrop.classList.add('show');
+    history.pushState({ page: 'detail', modalId: 'maintenanceDetail' }, '');
+}
+
+// 정비 타입 아이콘 가져오기 함수 수정
+function getTypeIcon(type) {
+    const typeInfo = getTypeIconAndColor(type);
+    return `<i class="fas ${typeInfo.icon}"></i>`;
+}
+
 // 아이콘 가져오기 함수들
 function getTypeIcon(type) {
     const icons = {
@@ -958,32 +1646,28 @@ async function resizeImage(file) {
                         height = maxSize;
                     }
                 }
-                
-                // EXIF 방향 정보에 따라 캔버스 크기 조정
-                const orientation = getImageOrientation(e.target.result);
-                if (orientation > 4 && orientation < 9) {
-                    [width, height] = [height, width];
+
+                // 항상 세로가 더 길게 설정
+                if (width > height) {
+                    canvas.width = height;
+                    canvas.height = width;
+                } else {
+                    canvas.width = width;
+                    canvas.height = height;
                 }
-                
-                canvas.width = width;
-                canvas.height = height;
                 
                 const ctx = canvas.getContext('2d');
                 
-                // EXIF 방향에 따른 변환 적용
-                ctx.save();
-                switch (orientation) {
-                    case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
-                    case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
-                    case 4: ctx.transform(1, 0, 0, -1, 0, height); break;
-                    case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
-                    case 6: ctx.transform(0, 1, -1, 0, height, 0); break;
-                    case 7: ctx.transform(0, -1, -1, 0, height, width); break;
-                    case 8: ctx.transform(0, -1, 1, 0, 0, width); break;
+                // 이미지를 항상 정방향으로 그리기
+                if (width > height) {
+                    // 가로가 더 길면 90도 회전
+                    ctx.translate(canvas.width/2, canvas.height/2);
+                    ctx.rotate(-Math.PI/2);
+                    ctx.drawImage(img, -height/2, -width/2, height, width);
+                } else {
+                    // 세로가 더 길면 그대로 그리기
+                    ctx.drawImage(img, 0, 0, width, height);
                 }
-                
-                ctx.drawImage(img, 0, 0, width, height);
-                ctx.restore();
                 
                 canvas.toBlob(blob => {
                     resolve(new File([blob], file.name, {
@@ -999,7 +1683,7 @@ async function resizeImage(file) {
             img.src = url;
         };
         reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
+        reader.readAsDataURL(file);
     });
 }
 
