@@ -414,6 +414,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             modal.classList.add('show');
             backdrop.classList.add('show');
+
+            // 모달이 열린 후 첫 번째 input에 포커스 (모바일 대응)
+            setTimeout(() => {
+                const firstInput = modal.querySelector('input, textarea, select');
+                if (firstInput) firstInput.focus();
+            }, 100);
         }
     }
 
