@@ -773,6 +773,41 @@ html, body {
     background: #fff;
 }
 
+/* 오토바이 번호 변경 모달만 좁게! */
+#carNumberModal .modal-content {
+    max-width: 400px !important;
+    width: 90% !important;
+    margin: 40px auto !important;
+    padding: 24px 18px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+}
+
+#carNumberModal .modal-header,
+#carNumberModal .modal-body,
+#carNumberModal .modal-footer {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+#carNumberModal input[type="text"] {
+    font-size: 1.1em;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    width: 100%;
+    margin-bottom: 18px;
+}
+
+#carNumberModal .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 10px;
+}
+
 /* 정비 상세 보기 모달 */
 #maintenanceDetailModal .detail-photos {
     margin-top: 1.5rem;
@@ -1297,37 +1332,56 @@ html, body {
     }
 }
 
-/* 오토바이 번호 변경 모달만 좁게! */
-#carNumberModal .modal-content {
-    max-width: 400px !important;
-    width: 90% !important;
-    margin: 40px auto !important;
-    padding: 24px 18px !important;
-    border-radius: 12px !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
-}
-
-#carNumberModal .modal-header,
-#carNumberModal .modal-body,
-#carNumberModal .modal-footer {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-}
-
-#carNumberModal input[type="text"] {
-    font-size: 1.1em;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid #ddd;
+/* 이스터에그 스타일 */
+#easterEggOverlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
-    margin-bottom: 18px;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 99998;
+    opacity: 0;
+    transition: opacity 0.5s ease;
 }
 
-#carNumberModal .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 10px;
+#easterEggThanks {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 99999;
+    font-size: 2.3em;
+    font-weight: bold;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+.thanks-gradient {
+    background: linear-gradient(90deg, #00c853, #00bfae, #fff176, #ff4081);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-fill-color: transparent;
+    font-family: 'Nanum Brush Script', cursive, sans-serif;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.show-easter-egg #easterEggOverlay,
+.show-easter-egg #easterEggThanks {
+    display: block;
+    opacity: 1;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translate(-50%, -50%); }
+    25% { transform: translate(-52%, -50%); }
+    75% { transform: translate(-48%, -50%); }
+}
+
+.show-easter-egg #easterEggThanks {
+    animation: shake 0.5s ease-in-out;
 } 
