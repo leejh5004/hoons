@@ -13,4 +13,7 @@ firebase.initializeApp(firebaseConfig);
 
 // Firebase 서비스 초기화
 const auth = firebase.auth();
-const db = firebase.firestore(); 
+const db = firebase.firestore();
+
+// ImgBB API 설정
+const IMGBB_API_KEY = 'f894050dd0ffa9923ef7049a58f02292'; 
