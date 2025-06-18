@@ -463,21 +463,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
+                    // 로딩 표시
+                    previewDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 처리중...</div>';
+
                     // 이미지 리사이징
                     const resizedImage = await resizeImage(file);
                     
-                    // 미리보기 표시
+                    // 기존 미리보기 제거
+                    previewDiv.innerHTML = '';
+                    
+                    // 새 미리보기 컨테이너 생성
+                    const previewContainer = document.createElement('div');
+                    previewContainer.className = 'preview-container';
+                    
+                    // 이미지 미리보기 생성
                     const img = document.createElement('img');
                     img.src = URL.createObjectURL(resizedImage);
-                    
-                    // 기존 미리보기 제거
-                    const existingImg = previewDiv.querySelector('img');
-                    const existingBtn = previewDiv.querySelector('.remove-photo');
-                    if (existingImg) existingImg.remove();
-                    if (existingBtn) existingBtn.remove();
-                    
-                    // 새 미리보기 추가
-                    previewDiv.appendChild(img);
+                    img.onload = () => URL.revokeObjectURL(img.src); // 메모리 해제
+                    previewContainer.appendChild(img);
                     
                     // 삭제 버튼 추가
                     const removeBtn = document.createElement('button');
@@ -486,12 +489,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     removeBtn.onclick = (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        img.remove();
-                        removeBtn.remove();
+                        previewContainer.remove();
                         uploadedPhotos[type] = null;
                         this.value = '';
                     };
-                    previewDiv.appendChild(removeBtn);
+                    previewContainer.appendChild(removeBtn);
+                    
+                    // 미리보기 추가
+                    previewDiv.appendChild(previewContainer);
                     
                     // 업로드된 파일 저장
                     uploadedPhotos[type] = resizedImage;
@@ -499,10 +504,70 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (err) {
                     console.error('사진 처리 중 오류:', err);
                     showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
+                    previewDiv.innerHTML = ''; // 에러 시 미리보기 초기화
                 }
             }
         });
     });
+
+    // CSS 스타일 동적 추가
+    const style = document.createElement('style');
+    style.textContent = `
+        .preview-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .preview-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .remove-photo {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+        
+        .remove-photo:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+        
+        .loading-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+        }
+        
+        .photo-preview {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            background: #f5f5f5;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+    `;
+    document.head.appendChild(style);
 });
 
 // 관리자 이메일로 이름 가져오기 (비동기)
