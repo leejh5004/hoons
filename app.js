@@ -558,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 모달 내용 업데이트
         modal.innerHTML = `
-            <div class="modal-content">
+            <div class="modal-content" onclick="event.stopPropagation();">
                 <div class="modal-header">
                     <h2><i class="fas fa-tools"></i> 정비 이력 상세</h2>
                     <button class="close-btn" onclick="closeMaintenanceDetailModal()">
@@ -1205,32 +1205,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 모달 터치 이벤트 처리
+    // 모달 클릭 이벤트 처리
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
-        // 터치 이벤트 전파 중단
-        modal.addEventListener('touchmove', (e) => {
-            e.stopPropagation();
-        }, { passive: true });
-
-        // 모달 내부 스크롤 허용
-        const modalContent = modal.querySelector('.modal-content');
-        if (modalContent) {
-            modalContent.addEventListener('touchmove', (e) => {
+        modal.addEventListener('click', (e) => {
+            // 모달 내부 클릭 시 이벤트 전파 중단
+            if (e.target.closest('.modal-content')) {
                 e.stopPropagation();
-            }, { passive: true });
-        }
+            }
+            // 모달 외부 클릭 시 모달 닫기
+            else if (e.target === modal) {
+                if (modal.id === 'maintenanceDetailModal') {
+                    closeMaintenanceDetailModal();
+                } else if (modal.id === 'maintenanceInputModal') {
+                    closeMaintenanceInputModal();
+                } else if (modal.id === 'carNumberModal') {
+                    closeCarNumberModal();
+                }
+            }
+        });
+
+        // 터치 이벤트 처리
+        modal.addEventListener('touchmove', (e) => {
+            if (e.target.closest('.modal-content')) {
+                e.stopPropagation();
+            }
+        }, { passive: true });
     });
 
-    // 백드롭 터치 이벤트 처리
+    // 백드롭 클릭 이벤트 처리
     const backdrop = document.getElementById('modalBackdrop');
     if (backdrop) {
-        backdrop.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-        }, { passive: false });
-
-        // 백드롭 터치로 모달 닫기
         backdrop.addEventListener('click', (e) => {
+            // 백드롭 클릭 시에만 모달 닫기
             if (e.target === backdrop) {
                 const activeModals = document.querySelectorAll('.modal.show');
                 activeModals.forEach(modal => {
@@ -1244,6 +1251,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         });
+
+        // 백드롭 터치 이벤트 처리
+        backdrop.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
     }
 
     // 정비 이력 상세 보기 모달 스크롤 개선
@@ -1280,7 +1292,12 @@ async function getAdminNameByEmail(email) {
 async function createMaintenanceCard(maintenance) {
     const card = document.createElement('div');
     card.className = 'maintenance-card';
-    card.onclick = () => showMaintenanceDetail(maintenance);
+    
+    // 클릭 이벤트에서 이벤트 전파 중단 추가
+    card.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showMaintenanceDetail(maintenance);
+    });
 
     // 관리자 이름 가져오기
     let adminName = maintenance.adminName;
@@ -1457,7 +1474,7 @@ window.showMaintenanceDetail = function(maintenance) {
 
     // 모달 내용 업데이트
     modal.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content" onclick="event.stopPropagation();">
             <div class="modal-header">
                 <h2><i class="fas fa-tools"></i> 정비 이력 상세</h2>
                 <button class="close-btn" onclick="closeMaintenanceDetailModal()">
@@ -1855,7 +1872,14 @@ window.showMaintenanceDetail = function(maintenance) {
     // 모달 표시
     modal.classList.add('show');
     backdrop.classList.add('show');
-    history.pushState({ page: 'detail', modalId: 'maintenanceDetail' }, '');
+    
+    // 모달 내부 클릭 이벤트 처리
+    const modalContent = modal.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
 }
 
 // 정비 이력 상세 보기 모달 닫기
