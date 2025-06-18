@@ -15,57 +15,6 @@ let uploadedPhotos = {
     after: null
 };
 
-// UI 업데이트 함수
-function updateUI() {
-    const userName = document.getElementById('userName');
-    const loginForm = document.getElementById('loginForm');
-    const registerForm = document.getElementById('registerForm');
-    const maintenanceList = document.getElementById('maintenanceList');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const addBtnBox = document.getElementById('addBtnBox');
-    const searchBox = document.getElementById('searchBox');
-    const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
-
-    if (userName) {
-        userName.textContent = isAdmin ? 
-            `관리자 (${currentUser.email})` : 
-            `오토바이 번호: ${currentUser.carNumber}`;
-    }
-    
-    if (updateCarNumberBtn) {
-        updateCarNumberBtn.style.display = isAdmin ? 'none' : 'inline-block';
-    }
-    
-    if (loginForm) loginForm.style.display = 'none';
-    if (registerForm) registerForm.style.display = 'none';
-    if (maintenanceList) maintenanceList.style.display = 'block';
-    if (logoutBtn) logoutBtn.style.display = 'block';
-    if (addBtnBox) addBtnBox.style.display = isAdmin ? 'block' : 'none';
-    if (searchBox) searchBox.style.display = 'block';
-}
-
-// 알림 표시 함수
-function showNotification(message, type = 'info') {
-    // 기존 알림 제거
-    const existingNotification = document.querySelector('.notification');
-    if (existingNotification) {
-        existingNotification.remove();
-    }
-
-    // 새 알림 생성
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-
-    // 알림 추가
-    document.body.appendChild(notification);
-
-    // 3초 후 자동 제거
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
-}
-
 // DOM이 로드된 후 실행
 document.addEventListener('DOMContentLoaded', () => {
     // 초기 history state 추가
@@ -79,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const maintenanceItems = document.getElementById('maintenanceItems');
     const addMaintenanceBtn = document.getElementById('addMaintenanceBtn');
     const logoutBtn = document.getElementById('logoutBtn');
+    const userName = document.getElementById('userName');
     const searchBox = document.getElementById('searchBox');
     const searchInput = document.getElementById('searchInput');
     const addBtnBox = document.getElementById('addBtnBox');
@@ -108,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const email = document.getElementById('regEmail').value.trim().toLowerCase();
             const password = document.getElementById('regPassword').value;
-            const carNumber = document.getElementById('regCarNumber').value.trim().toLowerCase().replace(/\s+/g, '');
+            const carNumber = document.getElementById('regCarNumber').value.trim().toLowerCase().replace(/\\s+/g, '');
             
             if (!email || !password || !carNumber) {
                 showNotification('모든 정보를 입력하세요.', 'error');
@@ -118,11 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
             auth.createUserWithEmailAndPassword(email, password)
                 .then((userCredential) => {
                     const uid = userCredential.user.uid;
-                    return db.collection('users').doc(uid).set({ 
-                        email, 
-                        carNumber,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
+                    return db.collection('users').doc(uid).set({ email, carNumber });
                 })
                 .then(() => {
                     showNotification('회원가입이 완료되었습니다! 로그인 해주세요.', 'success');
@@ -146,13 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             auth.signInWithEmailAndPassword(email, password)
-                .then(() => {
-                    showNotification('로그인 성공!', 'success');
-                })
-                .catch(err => {
-                    console.error('Login error:', err);
-                    showNotification('로그인 실패: ' + err.message, 'error');
-                });
+                .catch(err => showNotification('로그인 실패: ' + err.message, 'error'));
         });
     }
 
@@ -227,14 +167,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 인증 상태 감지
     auth.onAuthStateChanged(user => {
-        console.log('Auth state changed:', user ? user.email : 'logged out');
-        
         if (user) {
             // users 컬렉션이 삭제된 상황을 처리
             db.collection('users').doc(user.uid).get()
                 .then(doc => {
-                    console.log('User doc:', doc.exists ? 'exists' : 'not found');
-                    
                     if (!doc.exists) {
                         // users 컬렉션이 없거나 문서가 없는 경우
                         console.log('Users collection or document not found, attempting to recover...');
@@ -254,18 +190,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .then(doc => {
                     if (doc.exists) {
-                        const userData = doc.data();
-                        console.log('User data:', userData);
-                        
                         currentUser = {
                             uid: user.uid,
                             email: user.email,
-                            carNumber: userData.carNumber
+                            carNumber: doc.data().carNumber
                         };
                         isAdmin = ADMIN_EMAILS.includes(user.email);
-                        
-                        console.log('Current user:', currentUser);
-                        console.log('Is admin:', isAdmin);
                         
                         // UI 업데이트
                         updateUI();
@@ -285,15 +215,6 @@ document.addEventListener('DOMContentLoaded', () => {
             isAdmin = false;
             
             // UI 초기화
-            const loginForm = document.getElementById('loginForm');
-            const registerForm = document.getElementById('registerForm');
-            const maintenanceList = document.getElementById('maintenanceList');
-            const logoutBtn = document.getElementById('logoutBtn');
-            const addBtnBox = document.getElementById('addBtnBox');
-            const searchBox = document.getElementById('searchBox');
-            const maintenanceItems = document.getElementById('maintenanceItems');
-            const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
-            
             if (loginForm) loginForm.style.display = 'block';
             if (registerForm) registerForm.style.display = 'none';
             if (maintenanceList) maintenanceList.style.display = 'none';
@@ -301,7 +222,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (addBtnBox) addBtnBox.style.display = 'none';
             if (searchBox) searchBox.style.display = 'none';
             if (maintenanceItems) maintenanceItems.innerHTML = '';
-            if (updateCarNumberBtn) updateCarNumberBtn.style.display = 'none';
+            
+            const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
+            if (updateCarNumberBtn) {
+                updateCarNumberBtn.style.display = 'none';
+            }
         }
     });
 
@@ -374,23 +299,20 @@ document.addEventListener('DOMContentLoaded', () => {
                                     정비 사진
                                 </div>
                                 <div class="photos-grid">
-                                    <div class="photo-item">
+                                    <div class="photo-item" data-type="before">
+                                        <div class="photo-label">정비 전</div>
                                         <input type="file" class="photo-input" data-type="before" accept="image/*">
-                                        <div id="beforePhotoPreview" class="photo-preview" title="정비 전 사진">
-                                            <i class="fas fa-camera"></i>
-                                        </div>
+                                        <div id="beforePhotoPreview" class="photo-preview"></div>
                                     </div>
-                                    <div class="photo-item">
+                                    <div class="photo-item" data-type="during">
+                                        <div class="photo-label">정비 중</div>
                                         <input type="file" class="photo-input" data-type="during" accept="image/*">
-                                        <div id="duringPhotoPreview" class="photo-preview" title="정비 중 사진">
-                                            <i class="fas fa-camera"></i>
-                                        </div>
+                                        <div id="duringPhotoPreview" class="photo-preview"></div>
                                     </div>
-                                    <div class="photo-item">
+                                    <div class="photo-item" data-type="after">
+                                        <div class="photo-label">정비 후</div>
                                         <input type="file" class="photo-input" data-type="after" accept="image/*">
-                                        <div id="afterPhotoPreview" class="photo-preview" title="정비 후 사진">
-                                            <i class="fas fa-camera"></i>
-                                        </div>
+                                        <div id="afterPhotoPreview" class="photo-preview"></div>
                                     </div>
                                 </div>
                             </div>
@@ -558,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 모달 내용 업데이트
         modal.innerHTML = `
-            <div class="modal-content" onclick="event.stopPropagation();">
+            <div class="modal-content">
                 <div class="modal-header">
                     <h2><i class="fas fa-tools"></i> 정비 이력 상세</h2>
                     <button class="close-btn" onclick="closeMaintenanceDetailModal()">
@@ -631,327 +553,86 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         // CSS 스타일 수정
-        const style = document.createElement('style');
-        style.textContent = `
-            .photo-input {
-                display: none;
-            }
-            
-            .preview-container {
-                position: relative;
-                width: 100%;
-                height: 100%;
-                background: #fff;
+        const detailStyle = document.createElement('style');
+        detailStyle.textContent = `
+            .detail-info {
+                background: #f8f9fa;
                 border-radius: 8px;
-                overflow: hidden;
-            }
-            
-            .preview-container img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-            
-            .remove-photo {
-                position: absolute;
-                top: 8px;
-                right: 8px;
-                background: rgba(0, 0, 0, 0.5);
-                color: white;
-                border: none;
-                border-radius: 50%;
-                width: 24px;
-                height: 24px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: background-color 0.2s;
-                z-index: 1;
-            }
-            
-            .remove-photo:hover {
-                background: rgba(0, 0, 0, 0.7);
-            }
-            
-            .loading-spinner {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                height: 100%;
-                color: #666;
-            }
-            
-            .photo-preview {
-                position: relative;
-                width: 100%;
-                height: 200px;
-                background: #f5f5f5;
-                border: 2px dashed #ddd;
-                border-radius: 8px;
-                overflow: hidden;
-                cursor: pointer;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.2s;
-            }
-            
-            .photo-preview:hover {
-                border-color: #999;
-                background: #eee;
-            }
-            
-            .photo-preview:empty::before {
-                content: "\\f030";  /* 카메라 아이콘 */
-                font-family: "Font Awesome 5 Free";
-                font-weight: 900;
-                font-size: 2em;
-                color: #999;
-                margin-bottom: 8px;
-            }
-            
-            .photo-preview:empty::after {
-                content: "사진 추가";
-                color: #666;
-                font-size: 14px;
-            }
-
-            .modal-content {
-                background: white;
-                border-radius: 12px;
-                max-width: 700px;
-                width: 90%;
-                margin: 20px auto;
-                position: relative;
-                overflow: hidden;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            }
-
-            .modal-header {
-                background: #007bff;
-                color: white;
-                padding: 15px 20px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-            }
-
-            .modal-header h2 {
-                margin: 0;
-                font-size: 1.5em;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-
-            .modal-body {
                 padding: 15px;
-                max-height: calc(100vh - 200px);
-                overflow-y: auto;
-            }
-
-            .input-group {
-                margin-bottom: 20px;
-            }
-
-            .input-label {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-bottom: 8px;
-                color: #666;
-            }
-
-            .input-label i {
-                color: #007bff;
-            }
-
-            input[type="text"],
-            input[type="date"],
-            input[type="number"],
-            select,
-            textarea {
-                width: 100%;
-                padding: 8px 12px;
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                font-size: 16px;
-            }
-
-            select {
-                background-color: white;
-            }
-
-            textarea {
-                resize: vertical;
-                min-height: 100px;
-            }
-
-            .photos-section {
-                margin-top: 15px;
-            }
-
-            .photos-title {
-                font-size: 1.1em;
-                color: #333;
-                margin-bottom: 12px;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-            }
-
-            .photos-grid {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 12px;
                 margin-bottom: 15px;
             }
 
-            .photo-item {
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-                position: relative;
-                border-radius: 6px;
-                padding: 8px;
-                transition: all 0.3s ease;
-                background: #fff;
-            }
-
-            .photo-item[data-type="before"] {
-                background: rgba(255, 99, 71, 0.1);
-                border: 2px solid rgba(255, 99, 71, 0.3);
-            }
-
-            .photo-item[data-type="during"] {
-                background: rgba(255, 206, 86, 0.1);
-                border: 2px solid rgba(255, 206, 86, 0.3);
-            }
-
-            .photo-item[data-type="after"] {
-                background: rgba(75, 192, 192, 0.1);
-                border: 2px solid rgba(75, 192, 192, 0.3);
-            }
-
-            .photo-item:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            }
-
-            .photo-preview {
-                width: 100%;
-                height: 120px;
-                border-radius: 4px;
-                overflow: hidden;
-                position: relative;
-            }
-
-            .detail-photo {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                cursor: pointer;
-                transition: transform 0.2s;
-            }
-
-            .detail-photo:hover {
-                transform: scale(1.05);
-            }
-
-            .photo-label {
-                font-size: 0.85em;
-                font-weight: 600;
-                text-align: center;
-                padding: 4px;
-                border-radius: 4px;
-                margin-bottom: 2px;
+            .detail-title-row {
                 display: flex;
                 align-items: center;
-                justify-content: center;
-                gap: 4px;
+                gap: 15px;
+                margin-bottom: 8px;
             }
 
-            .photo-item[data-type="before"] .photo-label {
-                background: rgba(255, 99, 71, 0.2);
-                color: #ff6347;
-            }
-
-            .photo-item[data-type="during"] .photo-label {
-                background: rgba(255, 206, 86, 0.2);
-                color: #d4ac0d;
-            }
-
-            .photo-item[data-type="after"] .photo-label {
-                background: rgba(75, 192, 192, 0.2);
-                color: #4bc0c0;
-            }
-
-            .photo-actions {
+            .detail-type {
+                font-size: 1.2em;
+                font-weight: 600;
                 display: flex;
-                flex-direction: column;
-                gap: 4px;
+                align-items: center;
+                gap: 8px;
             }
 
-            .countdown {
-                font-size: 0.8em;
+            .detail-date {
+                color: #666;
+                margin-left: auto;
+            }
+
+            .detail-status {
+                padding: 6px 10px;
+                border-radius: 4px;
+                font-size: 0.9em;
+                font-weight: 500;
+                margin-bottom: 12px;
+                display: inline-block;
+            }
+
+            .detail-info-row {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                margin-bottom: 12px;
+                flex-wrap: nowrap;
+            }
+
+            .spacer {
+                width: 20px;
+            }
+
+            .detail-motorcycle-number,
+            .detail-mileage {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                white-space: nowrap;
+            }
+
+            .detail-motorcycle-number {
+                color: #666;
+            }
+
+            .detail-description {
+                margin-top: 12px;
+                padding: 12px;
+                background: white;
+                border-radius: 6px;
+                white-space: pre-wrap;
+                line-height: 1.5;
+            }
+
+            .detail-admin {
+                margin-top: 12px;
                 color: #666;
                 display: flex;
                 align-items: center;
-                gap: 3px;
-            }
-
-            .countdown.urgent {
-                color: #ff6347;
-            }
-
-            .download-btn {
-                padding: 3px 6px;
-                font-size: 0.85em;
-            }
-
-            @media (max-width: 768px) {
-                .modal-content {
-                    width: 95%;
-                    margin: 10px;
-                }
-
-                .modal-body {
-                    padding: 12px;
-                }
-
-                .photos-grid {
-                    grid-template-columns: repeat(3, 1fr);
-                    gap: 8px;
-                }
-                
-                .photo-preview {
-                    height: 100px;
-                }
-                
-                .detail-row {
-                    gap: 8px;
-                }
-
-                .photo-label {
-                    font-size: 0.8em;
-                    padding: 3px;
-                }
-
-                .download-btn {
-                    padding: 2px 4px;
-                    font-size: 0.8em;
-                }
-            }
-
-            @media (max-width: 480px) {
-                .photos-grid {
-                    grid-template-columns: repeat(2, 1fr);
-                }
+                gap: 8px;
             }
         `;
-        document.head.appendChild(style);
+        document.head.appendChild(detailStyle);
 
         // 모달 표시
         modal.classList.add('show');
@@ -1105,447 +786,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 오토바이 번호 수정 함수
-    window.updateCarNumber = async function() {
-        if (!currentUser) return;
-
-        const modal = document.getElementById('carNumberModal');
-        const newCarNumber = document.getElementById('newCarNumber').value.trim().toLowerCase();
-        
-        if (!newCarNumber) {
-            showNotification('오토바이 번호를 입력해주세요.', 'error');
-            return;
-        }
-
-        try {
-            // 현재 번호와 동일한 경우 변경하지 않음
-            if (newCarNumber === currentUser.carNumber) {
-                showNotification('현재 번호와 동일합니다.', 'info');
-                return;
-            }
-
-            // 중복 체크
-            const snapshot = await db.collection('users')
-                .where('carNumber', '==', newCarNumber)
-                .get();
-
-            if (!snapshot.empty) {
-                showNotification('이미 등록된 오토바이 번호입니다.', 'error');
-                return;
-            }
-
-            // 번호 업데이트
-            await db.collection('users').doc(currentUser.uid).update({
-                carNumber: newCarNumber,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-
-            // 정비 이력의 차량번호도 함께 업데이트
-            const maintenanceSnapshot = await db.collection('maintenance')
-                .where('carNumber', '==', currentUser.carNumber)
-                .get();
-
-            const batch = db.batch();
-            maintenanceSnapshot.forEach(doc => {
-                batch.update(doc.ref, { 
-                    carNumber: newCarNumber,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            });
-            await batch.commit();
-
-            currentUser.carNumber = newCarNumber;
-            updateUI();
-            closeCarNumberModal();
-            showNotification('오토바이 번호가 수정되었습니다.', 'success');
-            
-            // 정비 이력 목록 새로고침
-            loadMaintenanceHistory();
-        } catch (error) {
-            console.error('Error updating car number:', error);
-            showNotification('오토바이 번호 수정 실패: ' + error.message, 'error');
-        }
-    }
-
-    // 오토바이 번호 수정 모달 열기
-    window.openCarNumberModal = function() {
-        const modal = document.getElementById('carNumberModal');
-        const backdrop = document.getElementById('modalBackdrop');
-        const input = document.getElementById('newCarNumber');
-        
-        if (modal && backdrop && input) {
-            input.value = currentUser ? currentUser.carNumber : '';
-            modal.classList.add('show');
-            backdrop.classList.add('show');
-            input.focus();
-        }
-    }
-
-    // 오토바이 번호 수정 모달 닫기
-    window.closeCarNumberModal = function() {
-        const modal = document.getElementById('carNumberModal');
-        const backdrop = document.getElementById('modalBackdrop');
-        
-        if (modal && backdrop) {
-            modal.classList.remove('show');
-            backdrop.classList.remove('show');
-            document.getElementById('newCarNumber').value = '';
-        }
-    }
-
-    // 오토바이 번호 수정 버튼 이벤트 리스너
-    const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
-    if (updateCarNumberBtn) {
-        updateCarNumberBtn.addEventListener('click', () => {
-            if (!currentUser) {
-                showNotification('로그인이 필요합니다.', 'error');
-                return;
-            }
-            openCarNumberModal();
-        });
-    }
-
-    // 모달 클릭 이벤트 처리
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            // 모달 내부 클릭 시 이벤트 전파 중단
-            if (e.target.closest('.modal-content')) {
-                e.stopPropagation();
-            }
-            // 모달 외부 클릭 시 모달 닫기
-            else if (e.target === modal) {
-                if (modal.id === 'maintenanceDetailModal') {
-                    closeMaintenanceDetailModal();
-                } else if (modal.id === 'maintenanceInputModal') {
-                    closeMaintenanceInputModal();
-                } else if (modal.id === 'carNumberModal') {
-                    closeCarNumberModal();
-                }
-            }
-        });
-
-        // 터치 이벤트 처리
-        modal.addEventListener('touchmove', (e) => {
-            if (e.target.closest('.modal-content')) {
-                e.stopPropagation();
-            }
-        }, { passive: true });
-    });
-
-    // 백드롭 클릭 이벤트 처리
-    const backdrop = document.getElementById('modalBackdrop');
-    if (backdrop) {
-        backdrop.addEventListener('click', (e) => {
-            // 백드롭 클릭 시에만 모달 닫기
-            if (e.target === backdrop) {
-                const activeModals = document.querySelectorAll('.modal.show');
-                activeModals.forEach(modal => {
-                    if (modal.id === 'maintenanceDetailModal') {
-                        closeMaintenanceDetailModal();
-                    } else if (modal.id === 'maintenanceInputModal') {
-                        closeMaintenanceInputModal();
-                    } else if (modal.id === 'carNumberModal') {
-                        closeCarNumberModal();
-                    }
-                });
-            }
-        });
-
-        // 백드롭 터치 이벤트 처리
-        backdrop.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-        }, { passive: false });
-    }
-
-    // 정비 이력 상세 보기 모달 스크롤 개선
-    const detailModal = document.getElementById('maintenanceDetailModal');
-    if (detailModal) {
-        detailModal.addEventListener('touchstart', (e) => {
-            const modalBody = detailModal.querySelector('.modal-body');
-            if (modalBody) {
-                const touchY = e.touches[0].clientY;
-                const modalRect = modalBody.getBoundingClientRect();
-                
-                // 모달 내부 영역인 경우에만 스크롤 허용
-                if (touchY >= modalRect.top && touchY <= modalRect.bottom) {
-                    e.stopPropagation();
-                }
-            }
-        }, { passive: true });
-    }
-});
-
-// 관리자 이메일로 이름 가져오기 (비동기)
-async function getAdminNameByEmail(email) {
-    if (adminNameCache[email]) return adminNameCache[email];
-    const snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
-    if (!snapshot.empty) {
-        const name = snapshot.docs[0].data().name || email;
-        adminNameCache[email] = name;
-        return name;
-    }
-    return email;
-}
-
-// 정비카드 생성 함수
-async function createMaintenanceCard(maintenance) {
-    const card = document.createElement('div');
-    card.className = 'maintenance-card';
-    
-    // 클릭 이벤트에서 이벤트 전파 중단 추가
-    card.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showMaintenanceDetail(maintenance);
-    });
-
-    // 관리자 이름 가져오기
-    let adminName = maintenance.adminName;
-    if (!adminName && maintenance.adminEmail) {
-        adminName = await getAdminNameByEmail(maintenance.adminEmail);
-    }
-
-    // 상태별 활성화/비활성화 클래스
-    const approvedClass = maintenance.status === 'approved' ? '' : ' badge-inactive';
-    const rejectedClass = maintenance.status === 'rejected' ? '' : ' badge-inactive';
-    const pendingClass = maintenance.status === 'pending' ? '' : ' badge-inactive';
-
-    // 도장(관리자 이름) 노출 조건: 승인/거절 상태일 때만
-    const showAdminSeal = maintenance.status === 'approved' || maintenance.status === 'rejected';
-
-    card.innerHTML = `
-        <div class="maintenance-card-header">
-            <span class="maintenance-type-icon">${getTypeIcon(maintenance.type)}</span>
-            <span class="maintenance-card-title">${maintenance.type || ''}</span>
-            <span class="maintenance-date">${maintenance.date || ''}</span>
-            <span class="maintenance-status-badge ${maintenance.status}">${getStatusText(maintenance.status)}</span>
-        </div>
-        <div class="maintenance-card-body">
-            <div class="maintenance-motorcycle-number">
-                <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
-            </div>
-            ${maintenance.mileage ? `
-                <div class="maintenance-mileage">
-                    <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
-                </div>
-            ` : ''}
-            <div class="maintenance-description">${maintenance.description || ''}</div>
-        </div>
-        <div class="maintenance-card-footer">
-            ${showAdminSeal ? `
-                <span class="maintenance-admin">
-                    <i class="fas fa-user-shield"></i> 관리자: ${adminName}
-                </span>
-            ` : ''}
-            ${!isAdmin && maintenance.status === 'pending' ? `
-                <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'approved')">
-                    <i class="fas fa-check"></i> 승인
-                </button>
-                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'rejected')">
-                    <i class="fas fa-times"></i> 거절
-                </button>
-            ` : ''}
-        </div>
-    `;
-    return card;
-}
-
-// 정비 타입 아이콘 가져오기 함수
-function getTypeIcon(type) {
-    const icons = {
-        '일반점검': '<i class="fas fa-tools"></i>',
-        '엔진오일교체': '<i class="fas fa-oil-can"></i>',
-        '타이어교체': '<i class="fas fa-circle-notch"></i>',
-        '브레이크정비': '<i class="fas fa-brake"></i>',
-        '기타': '<i class="fas fa-wrench"></i>'
-    };
-    return icons[type] || icons['기타'];
-}
-
-// 상태 텍스트 가져오기 함수
-function getStatusText(status) {
-    const statusTexts = {
-        'approved': '승인됨',
-        'rejected': '거절됨',
-        'pending': '대기중'
-    };
-    return statusTexts[status] || status;
-}
-
-// 정비 이력 목록을 비동기로 렌더링
-async function loadMaintenanceHistory(search = '') {
-    const maintenanceItems = document.getElementById('maintenanceItems');
-    if (!maintenanceItems) return;
-
-    maintenanceItems.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 로딩중...</div>';
-
-    let query = db.collection('maintenance');
-    if (isAdmin) {
-        query = query.where('adminEmail', '==', currentUser.email);
-    } else if (currentUser) {
-        query = query.where('carNumber', '==', currentUser.carNumber);
-    }
-
-    try {
-        const snapshot = await query.orderBy('createdAt', 'desc').get();
-        maintenanceItems.innerHTML = '';
-        let maintenances = [];
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            maintenances.push({ ...data, id: doc.id });
-        });
-
-        if (search && search.trim() !== '') {
-            const searchTerms = search.trim().toLowerCase().split(/\s+/);
-            maintenances = maintenances.filter(m => {
-                const type = (m.type || '').toLowerCase();
-                const description = (m.description || '').toLowerCase();
-                const carNumber = (m.carNumber || '').toLowerCase();
-                const date = (m.date || '').toLowerCase();
-                return searchTerms.every(term =>
-                    type.includes(term) ||
-                    description.includes(term) ||
-                    carNumber.includes(term) ||
-                    date.includes(term)
-                );
-            });
-        }
-
-        if (maintenances.length === 0) {
-            maintenanceItems.innerHTML = `
-                <div class="no-data">
-                    <i class="fas fa-search fa-2x mb-3"></i>
-                    <p>검색 결과가 없습니다.</p>
-                    ${search ? '<p class="text-muted">다른 검색어를 입력해보세요.</p>' : '<p class="text-muted">정비 이력이 없습니다.</p>'}
-                </div>`;
-            return;
-        }
-
-        // 타임라인 생성
-        const timeline = document.createElement('div');
-        timeline.className = 'maintenance-timeline';
-
-        // 카드 비동기 생성
-        for (const maintenance of maintenances) {
-            const card = await createMaintenanceCard(maintenance);
-            timeline.appendChild(card);
-        }
-
-        maintenanceItems.appendChild(timeline);
-    } catch (error) {
-        console.error('Error loading maintenance list:', error);
-        showNotification('정비 이력을 불러오는데 실패했습니다.', 'error');
-        maintenanceItems.innerHTML = `
-            <div class="error-message">
-                <i class="fas fa-exclamation-circle fa-2x mb-3"></i>
-                <p>정비 이력을 불러오는데 실패했습니다.</p>
-                <p class="text-muted">잠시 후 다시 시도해주세요.</p>
-            </div>`;
-    }
-}
-
-// 정비 상태 업데이트 함수
-function updateMaintenanceStatus(maintenanceId, newStatus) {
-    if (!currentUser) return;
-    
-    db.collection('maintenance').doc(maintenanceId)
-        .update({
-            status: newStatus,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        })
-        .then(() => {
-            showNotification(`정비 이력이 ${newStatus === 'approved' ? '승인' : '거절'}되었습니다.`, 'success');
-            loadMaintenanceHistory();
-        })
-        .catch(error => {
-            console.error('Error updating maintenance status:', error);
-            showNotification('상태 업데이트 실패: ' + error.message, 'error');
-        });
-}
-
-// 정비 이력 상세 보기 모달 열기
-window.showMaintenanceDetail = function(maintenance) {
-    const modal = document.getElementById('maintenanceDetailModal');
-    const backdrop = document.getElementById('modalBackdrop');
-    
-    if (!modal || !backdrop) return;
-
-    const typeInfo = getTypeIconAndColor(maintenance.type);
-
-    // 모달 내용 업데이트
-    modal.innerHTML = `
-        <div class="modal-content" onclick="event.stopPropagation();">
-            <div class="modal-header">
-                <h2><i class="fas fa-tools"></i> 정비 이력 상세</h2>
-                <button class="close-btn" onclick="closeMaintenanceDetailModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="detail-info">
-                    <div class="detail-title-row">
-                        <div class="detail-type" style="color: ${typeInfo.color}">
-                            <i class="fas ${typeInfo.icon}"></i> ${maintenance.type || ''}
-                        </div>
-                        <div class="detail-date">${maintenance.date || ''}</div>
-                    </div>
-                    <div class="detail-status ${maintenance.status}">${getStatusText(maintenance.status)}</div>
-                    <div class="detail-info-row">
-                        <div class="detail-motorcycle-number">
-                            <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
-                        </div>
-                        <div class="spacer"></div>
-                        ${maintenance.mileage ? `
-                            <div class="detail-mileage" style="color: ${typeInfo.color}">
-                                <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
-                            </div>
-                        ` : ''}
-                    </div>
-                    <div class="detail-description">${maintenance.description || ''}</div>
-                    ${maintenance.adminName ? `
-                        <div class="detail-admin">
-                            <i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}
-                        </div>
-                    ` : ''}
-                </div>
-                
-                ${maintenance.photos && maintenance.photos.length > 0 ? `
-                    <div class="photos-section">
-                        <div class="photos-title">
-                            <i class="fas fa-camera"></i> 정비 사진
-                        </div>
-                        <div class="photos-grid">
-                            ${maintenance.photos.map(photo => `
-                                <div class="photo-item" data-type="${photo.type}">
-                                    <div class="photo-label">
-                                        ${photo.type === 'before' ? 
-                                          '<i class="fas fa-exclamation-triangle"></i> 정비 전' : 
-                                          photo.type === 'during' ? 
-                                          '<i class="fas fa-cog"></i> 정비 중' : 
-                                          '<i class="fas fa-check-circle"></i> 정비 후'}
-                                    </div>
-                                    <div class="photo-preview">
-                                        <img src="${photo.thumbnailUrl}" 
-                                             onclick="window.open('${photo.url}', '_blank')" 
-                                             alt="${photo.type} 사진"
-                                             class="detail-photo">
-                                    </div>
-                                    <div class="photo-actions">
-                                        ${getPhotoTimeLeftHtml(photo)}
-                                        <button class="download-btn" 
-                                                onclick="event.stopPropagation(); downloadImage('${photo.url}', 'maintenance_${maintenance.id}_${photo.type}.jpg')">
-                                            <i class="fas fa-download"></i> 다운로드
-                                        </button>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-            </div>
-        </div>
-    `;
-
     // CSS 스타일 수정
     const style = document.createElement('style');
     style.textContent = `
@@ -1633,7 +873,12 @@ window.showMaintenanceDetail = function(maintenance) {
             color: #666;
             font-size: 14px;
         }
+    `;
+    document.head.appendChild(style);
 
+    // CSS 스타일 수정
+    const modalStyle = document.createElement('style');
+    modalStyle.textContent = `
         .modal-content {
             background: white;
             border-radius: 12px;
@@ -1867,42 +1112,668 @@ window.showMaintenanceDetail = function(maintenance) {
             }
         }
     `;
-    document.head.appendChild(style);
+    document.head.appendChild(modalStyle);
+});
 
-    // 모달 표시
-    modal.classList.add('show');
-    backdrop.classList.add('show');
-    
-    // 모달 내부 클릭 이벤트 처리
-    const modalContent = modal.querySelector('.modal-content');
-    if (modalContent) {
-        modalContent.addEventListener('click', (e) => {
-            e.stopPropagation();
+// 관리자 이메일로 이름 가져오기 (비동기)
+async function getAdminNameByEmail(email) {
+    if (adminNameCache[email]) return adminNameCache[email];
+    const snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+    if (!snapshot.empty) {
+        const name = snapshot.docs[0].data().name || email;
+        adminNameCache[email] = name;
+        return name;
+    }
+    return email;
+}
+
+// 정비카드 생성 함수 비동기로 변경
+async function createMaintenanceCard(maintenance) {
+    const card = document.createElement('div');
+    card.className = 'maintenance-card glass-card';
+    card.onclick = () => showMaintenanceDetail(maintenance);
+
+    // 관리자 이름 가져오기
+    let adminName = maintenance.adminName;
+    if (!adminName && maintenance.adminEmail) {
+        adminName = await getAdminNameByEmail(maintenance.adminEmail);
+    }
+
+    // 상태별 활성화/비활성화 클래스
+    const approvedClass = maintenance.status === 'approved' ? '' : ' badge-inactive';
+    const rejectedClass = maintenance.status === 'rejected' ? '' : ' badge-inactive';
+    const pendingClass = maintenance.status === 'pending' ? '' : ' badge-inactive';
+
+    // 도장(관리자 이름) 노출 조건: 승인/거절 상태일 때만
+    const showAdminSeal = maintenance.status === 'approved' || maintenance.status === 'rejected';
+
+    card.innerHTML = `
+        <div class="maintenance-card-header">
+            <span class="maintenance-type-icon">${getTypeIcon(maintenance.type)}</span>
+            <span class="maintenance-card-title">${maintenance.type || ''}</span>
+            <span class="maintenance-date">${maintenance.date || ''}</span>
+            <span class="maintenance-status-badge ${maintenance.status}">${getStatusText(maintenance.status)}</span>
+        </div>
+        <div class="maintenance-card-body">
+            <div class="maintenance-motorcycle-number">
+                <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
+            </div>
+            ${maintenance.mileage ? `
+                <div class="maintenance-mileage">
+                    <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
+                </div>
+            ` : ''}
+            <div class="maintenance-description">${maintenance.description || ''}</div>
+        </div>
+        <div class="maintenance-card-footer">
+            ${showAdminSeal ? `
+                <span class="maintenance-admin">
+                    <i class="fas fa-user-shield"></i> 관리자: ${adminName}
+                </span>
+            ` : ''}
+            ${!isAdmin && maintenance.status === 'pending' ? `
+                <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'approved')">
+                    <i class="fas fa-check"></i> 승인
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'rejected')">
+                    <i class="fas fa-times"></i> 거절
+                </button>
+            ` : ''}
+        </div>
+    `;
+    return card;
+}
+
+// 정비 이력 목록을 비동기로 렌더링
+async function loadMaintenanceHistory(search = '') {
+    const maintenanceItems = document.getElementById('maintenanceItems');
+    if (!maintenanceItems) return;
+
+    maintenanceItems.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 로딩중...</div>';
+
+    let query = db.collection('maintenance');
+    if (isAdmin) {
+        query = query.where('adminEmail', '==', currentUser.email);
+    } else if (currentUser) {
+        query = query.where('carNumber', '==', currentUser.carNumber);
+    }
+
+    try {
+        const snapshot = await query.orderBy('createdAt', 'desc').get();
+        maintenanceItems.innerHTML = '';
+        let maintenances = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            maintenances.push({ ...data, id: doc.id });
         });
+
+        if (search && search.trim() !== '') {
+            const searchTerms = search.trim().toLowerCase().split(/\s+/);
+            maintenances = maintenances.filter(m => {
+                const type = (m.type || '').toLowerCase();
+                const description = (m.description || '').toLowerCase();
+                const carNumber = (m.carNumber || '').toLowerCase();
+                const date = (m.date || '').toLowerCase();
+                return searchTerms.every(term =>
+                    type.includes(term) ||
+                    description.includes(term) ||
+                    carNumber.includes(term) ||
+                    date.includes(term)
+                );
+            });
+        }
+
+        if (maintenances.length === 0) {
+            maintenanceItems.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-search fa-2x mb-3"></i>
+                    <p>검색 결과가 없습니다.</p>
+                    ${search ? '<p class="text-muted">다른 검색어를 입력해보세요.</p>' : '<p class="text-muted">정비 이력이 없습니다.</p>'}
+                </div>`;
+            return;
+        }
+
+        // 타임라인 생성
+        const timeline = document.createElement('div');
+        timeline.className = 'maintenance-timeline';
+
+        // 카드 비동기 생성
+        for (const maintenance of maintenances) {
+            const card = await createMaintenanceCard(maintenance);
+            timeline.appendChild(card);
+        }
+
+        maintenanceItems.appendChild(timeline);
+    } catch (error) {
+        console.error('Error loading maintenance list:', error);
+        showNotification('정비 이력을 불러오는데 실패했습니다.', 'error');
+        maintenanceItems.innerHTML = `
+            <div class="error-message">
+                <i class="fas fa-exclamation-circle fa-2x mb-3"></i>
+                <p>정비 이력을 불러오는데 실패했습니다.</p>
+                <p class="text-muted">잠시 후 다시 시도해주세요.</p>
+            </div>`;
     }
 }
 
-// 정비 이력 상세 보기 모달 닫기
-window.closeMaintenanceDetailModal = function() {
+// 정비 상태 업데이트 함수 추가
+function updateMaintenanceStatus(maintenanceId, newStatus) {
+    if (!currentUser) return;
+    
+    db.collection('maintenance').doc(maintenanceId)
+        .update({
+            status: newStatus,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        })
+        .then(() => {
+            showNotification(`정비 이력이 ${newStatus === 'approved' ? '승인' : '거절'}되었습니다.`, 'success');
+            loadMaintenanceHistory();
+        })
+        .catch(error => {
+            console.error('Error updating maintenance status:', error);
+            showNotification('상태 업데이트 실패: ' + error.message, 'error');
+        });
+}
+
+// 알림 표시
+function showNotification(message, type = 'info') {
+    // 기존 알림 제거
+    const existingNotification = document.querySelector('.notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+
+    // 새 알림 생성
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+
+    // 알림 추가
+    document.body.appendChild(notification);
+
+    // 3초 후 자동 제거
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+
+// 정비 타입별 아이콘과 색상 가져오기 함수
+function getTypeIconAndColor(type) {
+    const types = {
+        '일반점검': { icon: 'fa-tools', color: '#4bc0c0' },
+        '엔진오일교체': { icon: 'fa-oil-can', color: '#ff6347' },
+        '타이어교체': { icon: 'fa-circle-notch', color: '#d4ac0d' },
+        '브레이크정비': { icon: 'fa-brake', color: '#ff9f40' },
+        '기타': { icon: 'fa-wrench', color: '#666' }
+    };
+    return types[type] || types['기타'];
+}
+
+// 정비 이력 상세 보기 모달 열기
+window.showMaintenanceDetail = function(maintenance) {
     const modal = document.getElementById('maintenanceDetailModal');
     const backdrop = document.getElementById('modalBackdrop');
     
     if (!modal || !backdrop) return;
 
-    modal.classList.remove('show');
-    backdrop.classList.remove('show');
+    const typeInfo = getTypeIconAndColor(maintenance.type);
+
+    // 모달 내용 업데이트
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-tools"></i> 정비 이력 상세</h2>
+                <button class="close-btn" onclick="closeMaintenanceDetailModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-info">
+                    <div class="detail-title-row">
+                        <div class="detail-type" style="color: ${typeInfo.color}">
+                            <i class="fas ${typeInfo.icon}"></i> ${maintenance.type || ''}
+                        </div>
+                        <div class="detail-date">${maintenance.date || ''}</div>
+                    </div>
+                    <div class="detail-status ${maintenance.status}">${getStatusText(maintenance.status)}</div>
+                    <div class="detail-info-row">
+                        <div class="detail-motorcycle-number">
+                            <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
+                        </div>
+                        <div class="spacer"></div>
+                        ${maintenance.mileage ? `
+                            <div class="detail-mileage" style="color: ${typeInfo.color}">
+                                <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="detail-description">${maintenance.description || ''}</div>
+                    ${maintenance.adminName ? `
+                        <div class="detail-admin">
+                            <i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}
+                        </div>
+                    ` : ''}
+                </div>
+                
+                ${maintenance.photos && maintenance.photos.length > 0 ? `
+                    <div class="photos-section">
+                        <div class="photos-title">
+                            <i class="fas fa-camera"></i> 정비 사진
+                        </div>
+                        <div class="photos-grid">
+                            ${maintenance.photos.map(photo => `
+                                <div class="photo-item" data-type="${photo.type}">
+                                    <div class="photo-label">
+                                        ${photo.type === 'before' ? 
+                                          '<i class="fas fa-exclamation-triangle"></i> 정비 전' : 
+                                          photo.type === 'during' ? 
+                                          '<i class="fas fa-cog"></i> 정비 중' : 
+                                          '<i class="fas fa-check-circle"></i> 정비 후'}
+                                    </div>
+                                    <div class="photo-preview">
+                                        <img src="${photo.thumbnailUrl}" 
+                                             onclick="window.open('${photo.url}', '_blank')" 
+                                             alt="${photo.type} 사진"
+                                             class="detail-photo">
+                                    </div>
+                                    <div class="photo-actions">
+                                        ${getPhotoTimeLeftHtml(photo)}
+                                        <button class="download-btn" 
+                                                onclick="event.stopPropagation(); downloadImage('${photo.url}', 'maintenance_${maintenance.id}_${photo.type}.jpg')">
+                                            <i class="fas fa-download"></i> 다운로드
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    // CSS 스타일 수정
+    const detailStyle = document.createElement('style');
+    detailStyle.textContent = `
+        .detail-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .detail-title-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 8px;
+        }
+
+        .detail-type {
+            font-size: 1.2em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .detail-date {
+            color: #666;
+            margin-left: auto;
+        }
+
+        .detail-status {
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: 500;
+            margin-bottom: 12px;
+            display: inline-block;
+        }
+
+        .detail-info-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 12px;
+            flex-wrap: nowrap;
+        }
+
+        .spacer {
+            width: 20px;
+        }
+
+        .detail-motorcycle-number,
+        .detail-mileage {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .detail-motorcycle-number {
+            color: #666;
+        }
+
+        .detail-description {
+            margin-top: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .detail-admin {
+            margin-top: 12px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    `;
+    document.head.appendChild(detailStyle);
+
+    // 모달 표시
+    modal.classList.add('show');
+    backdrop.classList.add('show');
+    history.pushState({ page: 'detail', modalId: 'maintenanceDetail' }, '');
 }
 
-// 정비 타입별 아이콘과 색상 가져오기
-function getTypeIconAndColor(type) {
-    const types = {
-        '일반점검': { icon: 'fa-tools', color: '#4bc0c0', bgColor: 'rgba(75, 192, 192, 0.1)' },
-        '엔진오일교체': { icon: 'fa-oil-can', color: '#ff6347', bgColor: 'rgba(255, 99, 71, 0.1)' },
-        '타이어교체': { icon: 'fa-circle-notch', color: '#d4ac0d', bgColor: 'rgba(212, 172, 13, 0.1)' },
-        '브레이크정비': { icon: 'fa-brake', color: '#ff9f40', bgColor: 'rgba(255, 159, 64, 0.1)' },
-        '기타': { icon: 'fa-wrench', color: '#666', bgColor: 'rgba(102, 102, 102, 0.1)' }
+// 정비 타입 아이콘 가져오기 함수 수정
+function getTypeIcon(type) {
+    const typeInfo = getTypeIconAndColor(type);
+    return `<i class="fas ${typeInfo.icon}"></i>`;
+}
+
+// 아이콘 가져오기 함수들
+function getTypeIcon(type) {
+    const icons = {
+        '일반점검': '<i class="fas fa-tools"></i>',
+        '엔진오일교체': '<i class="fas fa-oil-can"></i>',
+        '타이어교체': '<i class="fas fa-circle-notch"></i>',
+        '브레이크정비': '<i class="fas fa-brake"></i>',
+        '기타': '<i class="fas fa-wrench"></i>'
     };
-    return types[type] || types['기타'];
+    return icons[type] || icons['기타'];
+}
+
+function getStatusIcon(status) {
+    const icons = {
+        'pending': '<i class="fas fa-clock"></i>',
+        'in-progress': '<i class="fas fa-cog fa-spin"></i>',
+        'completed': '<i class="fas fa-check"></i>',
+        'rejected': '<i class="fas fa-times"></i>',
+        'approved': '<i class="fas fa-check-double"></i>'
+    };
+    return icons[status] || icons['pending'];
+}
+
+function getStatusText(status) {
+    const statusTexts = {
+        'approved': '승인됨',
+        'rejected': '거절됨',
+        'pending': '대기중'
+    };
+    return statusTexts[status] || status;
+}
+
+// 차량번호 수정 함수 추가
+async function updateCarNumber(newCarNumber) {
+    if (!currentUser) return;
+    
+    const trimmedCarNumber = newCarNumber.trim().toLowerCase().replace(/\s+/g, '');
+    
+    try {
+        // 현재 사용자의 차량번호와 동일한 경우 업데이트 불필요
+        if (trimmedCarNumber === currentUser.carNumber) {
+            showNotification('현재 등록된 차량번호와 동일합니다.', 'info');
+            return;
+        }
+        
+        // 차량번호 중복 체크
+        const duplicateCheck = await db.collection('users')
+            .where('carNumber', '==', trimmedCarNumber)
+            .get();
+            
+        if (!duplicateCheck.empty) {
+            showNotification('이미 등록된 차량번호입니다.', 'error');
+            return;
+        }
+        
+        // 중복이 없는 경우에만 업데이트 진행
+        await db.collection('users').doc(currentUser.uid)
+            .update({
+                carNumber: trimmedCarNumber,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+        currentUser.carNumber = trimmedCarNumber;
+        if (userName) {
+            userName.textContent = `오토바이 번호: ${currentUser.carNumber}`;
+        }
+        showNotification('오토바이 번호가 수정되었습니다.', 'success');
+        
+    } catch (error) {
+        console.error('Error updating car number:', error);
+        showNotification('오토바이 번호 수정 실패: ' + error.message, 'error');
+    }
+}
+
+// 차량번호 수정 모달 관련 함수들
+function showCarNumberUpdateModal() {
+    const modal = document.getElementById('carNumberModal');
+    const backdrop = document.getElementById('modalBackdrop');
+    const newCarNumberInput = document.getElementById('newCarNumber');
+    
+    if (modal && backdrop && newCarNumberInput) {
+        newCarNumberInput.value = currentUser.carNumber;
+        modal.classList.add('show');
+        backdrop.classList.add('show');
+        try {
+            newCarNumberInput.focus();
+        } catch (e) {
+            // 모바일 환경 등에서 focus 에러 무시
+        }
+    }
+}
+
+function closeCarNumberModal() {
+    const modal = document.getElementById('carNumberModal');
+    const backdrop = document.getElementById('modalBackdrop');
+    
+    if (modal && backdrop) {
+        modal.classList.remove('show');
+        backdrop.classList.remove('show');
+    }
+}
+
+function submitCarNumberUpdate() {
+    const newCarNumberInput = document.getElementById('newCarNumber');
+    if (!newCarNumberInput || !newCarNumberInput.value.trim()) {
+        showNotification('오토바이 번호를 입력해주세요.', 'error');
+        return;
+    }
+    
+    updateCarNumber(newCarNumberInput.value);
+    closeCarNumberModal();
+}
+
+// UI 업데이트 함수 수정
+function updateUI() {
+    if (userName) {
+        userName.textContent = isAdmin ? 
+            `관리자 (${currentUser.email})` : 
+            `오토바이 번호: ${currentUser.carNumber}`;
+    }
+    
+    const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
+    if (updateCarNumberBtn) {
+        updateCarNumberBtn.style.display = isAdmin ? 'none' : 'inline-block';
+    }
+    
+    if (loginForm) loginForm.style.display = 'none';
+    if (registerForm) registerForm.style.display = 'none';
+    if (maintenanceList) maintenanceList.style.display = 'block';
+    if (logoutBtn) logoutBtn.style.display = 'block';
+    if (addBtnBox) addBtnBox.style.display = 'block';
+    if (searchBox) searchBox.style.display = 'block';
+}
+
+// 이미지 리사이징 함수 수정
+async function resizeImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            
+            img.onload = function() {
+                URL.revokeObjectURL(url);
+                
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // 최대 크기 설정 (1920px)
+                const maxSize = 1920;
+                if (width > maxSize || height > maxSize) {
+                    if (width > height) {
+                        height = (height / width) * maxSize;
+                        width = maxSize;
+                    } else {
+                        width = (width / height) * maxSize;
+                        height = maxSize;
+                    }
+                }
+
+                // 항상 세로가 더 길게 설정
+                if (width > height) {
+                    canvas.width = height;
+                    canvas.height = width;
+                } else {
+                    canvas.width = width;
+                    canvas.height = height;
+                }
+                
+                const ctx = canvas.getContext('2d');
+                
+                // 이미지를 항상 정방향으로 그리기
+                if (width > height) {
+                    // 가로가 더 길면 90도 회전
+                    ctx.translate(canvas.width/2, canvas.height/2);
+                    ctx.rotate(-Math.PI/2);
+                    ctx.drawImage(img, -height/2, -width/2, height, width);
+                } else {
+                    // 세로가 더 길면 그대로 그리기
+                    ctx.drawImage(img, 0, 0, width, height);
+                }
+                
+                canvas.toBlob(blob => {
+                    resolve(new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    }));
+                    canvas.width = 1;
+                    canvas.height = 1;
+                }, 'image/jpeg', 0.8);
+            };
+            
+            img.onerror = reject;
+            img.src = url;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// EXIF 방향 정보 추출 함수
+function getImageOrientation(arrayBuffer) {
+    const view = new DataView(arrayBuffer);
+    if (view.getUint16(0, false) !== 0xFFD8) return 1; // Not a JPEG
+    
+    const length = view.byteLength;
+    let offset = 2;
+    
+    while (offset < length) {
+        const marker = view.getUint16(offset, false);
+        offset += 2;
+        
+        if (marker === 0xFFE1) {
+            if (view.getUint32(offset += 2, false) !== 0x45786966) return 1;
+            
+            const little = view.getUint16(offset += 6, false) === 0x4949;
+            offset += view.getUint32(offset + 4, little);
+            
+            const tags = view.getUint16(offset, little);
+            offset += 2;
+            
+            for (let i = 0; i < tags; i++) {
+                if (view.getUint16(offset + (i * 12), little) === 0x0112) {
+                    return view.getUint16(offset + (i * 12) + 8, little);
+                }
+            }
+        } else if ((marker & 0xFF00) !== 0xFF00) break;
+        else offset += view.getUint16(offset, false);
+    }
+    
+    return 1; // Default orientation
+}
+
+// Firebase Storage 대신 ImgBB로 사진 업로드
+async function uploadMaintenancePhotos(maintenanceId) {
+    const photos = [];
+    
+    for (const [type, file] of Object.entries(uploadedPhotos)) {
+        if (file) {
+            try {
+                // 이미지를 Base64로 변환
+                const base64Image = await convertToBase64(file);
+                
+                // ImgBB API 호출을 위한 FormData 생성
+                const formData = new FormData();
+                formData.append('key', IMGBB_API_KEY);
+                formData.append('image', base64Image.split(',')[1]);
+                formData.append('name', `maintenance_${maintenanceId}_${type}_${Date.now()}`);
+                
+                // ImgBB API 호출
+                const response = await fetch('https://api.imgbb.com/1/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    photos.push({
+                        type,
+                        url: result.data.url,               // 원본 이미지 URL
+                        thumbnailUrl: result.data.thumb.url, // 썸네일 URL (자동 생성)
+                        deleteUrl: result.data.delete_url,   // 삭제 URL (필요시 사용)
+                        createdAt: new Date().toISOString() // serverTimestamp() 대신 ISO 문자열 사용
+                    });
+                } else {
+                    throw new Error('이미지 업로드 실패');
+                }
+                
+            } catch (err) {
+                console.error(`${type} 사진 업로드 중 오류:`, err);
+                showNotification(`${type} 사진 업로드 실패`, 'error');
+            }
+        }
+    }
+    
+    return photos;
+}
+
+// 파일을 Base64로 변환하는 함수
+function convertToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
 }
 
 // popstate 이벤트 핸들러

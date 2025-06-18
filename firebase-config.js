@@ -9,9 +9,7 @@ const firebaseConfig = {
 };
 
 // Firebase 초기화
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
+firebase.initializeApp(firebaseConfig);
 
 // Firebase 서비스 초기화
 const auth = firebase.auth();
