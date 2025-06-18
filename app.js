@@ -337,11 +337,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // popstate 이벤트 핸들러
     function handlePopState(event) {
         const state = event.state;
+        const maintenanceDetailModal = document.getElementById('maintenanceDetailModal');
         
         // 메인 페이지에서 뒤로가기 시
         if (!state || state.page === 'main') {
-            if (confirm('앱을 종료하시겠습니까?')) {
-                window.close();
+            if (confirm('이전 화면으로 돌아가시겠습니까?')) {
+                // 메인 화면의 상단으로 부드럽게 스크롤
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+                
+                // 혹시 모달이 열려있다면 닫기
+                if (maintenanceDetailModal && maintenanceDetailModal.classList.contains('show')) {
+                    closeMaintenanceDetailModal();
+                }
             } else {
                 history.pushState({ page: 'main' }, '');
             }
