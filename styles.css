@@ -1103,8 +1103,16 @@ html, body {
 }
 
 @media (max-width: 600px) {
-    .modal-content, .modal-body {
+    .modal-content, .modal-body, .detail-info, .photos-section, .photos-grid, .photo-item, .input-group, .modal-header, .modal-footer {
         overflow-x: hidden !important;
+        max-width: 100vw !important;
+        box-sizing: border-box !important;
+    }
+    img, .detail-photo, .photo-preview img {
+        max-width: 100% !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        display: block !important;
     }
     .modal-content {
         max-width: 98vw !important;
