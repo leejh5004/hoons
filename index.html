@@ -150,6 +150,44 @@
                             <option value="기타">기타</option>
                         </select>
                     </div>
+
+                    <!-- 사진 업로드 섹션 -->
+                    <div class="form-group mt-4">
+                        <label class="form-label">정비 사진</label>
+                        <div class="photo-upload-container">
+                            <div class="photo-upload-group">
+                                <label class="photo-label">정비 전</label>
+                                <div class="photo-preview" id="beforePhotoPreview">
+                                    <input type="file" class="photo-input" id="beforePhoto" accept="image/*" data-type="before">
+                                    <div class="photo-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>사진 추가</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="photo-upload-group">
+                                <label class="photo-label">정비 중</label>
+                                <div class="photo-preview" id="duringPhotoPreview">
+                                    <input type="file" class="photo-input" id="duringPhoto" accept="image/*" data-type="during">
+                                    <div class="photo-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>사진 추가</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="photo-upload-group">
+                                <label class="photo-label">정비 후</label>
+                                <div class="photo-preview" id="afterPhotoPreview">
+                                    <input type="file" class="photo-input" id="afterPhoto" accept="image/*" data-type="after">
+                                    <div class="photo-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>사진 추가</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label for="descriptionModal" class="form-label">상세 설명</label>
                         <textarea class="form-control" id="descriptionModal" rows="3" required></textarea>
@@ -290,6 +328,9 @@
                 <div class="detail-footer">
                     <div class="detail-admin"></div>
                 </div>
+
+                <!-- 사진 섹션 추가 -->
+                <div class="detail-photos"></div>
             </div>
         </div>
         <div class="modal-footer">

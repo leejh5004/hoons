@@ -8,6 +8,13 @@ const adminNameCache = {};
 let currentUser = null;
 let isAdmin = false;
 
+// 사진 업로드 관련 변수
+let uploadedPhotos = {
+    before: null,
+    during: null,
+    after: null
+};
+
 // DOM이 로드된 후 실행
 document.addEventListener('DOMContentLoaded', () => {
     // 초기 history state 추가
@@ -244,31 +251,54 @@ document.addEventListener('DOMContentLoaded', () => {
     // 모달 폼 제출 시 정비이력 저장
     const newMaintenanceModalForm = document.getElementById('newMaintenanceModalForm');
     if (newMaintenanceModalForm) {
-        newMaintenanceModalForm.addEventListener('submit', (e) => {
+        newMaintenanceModalForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!isAdmin) return;
 
-            const carNumber = document.getElementById('maintenanceCarNumberModal').value.trim().toLowerCase().replace(/\s+/g, '');
-            const maintenanceData = {
-                carNumber,
-                date: document.getElementById('maintenanceDateModal').value,
-                mileage: document.getElementById('maintenanceMileageModal').value,
-                type: document.getElementById('maintenanceTypeModal').value,
-                description: document.getElementById('descriptionModal').value,
-                status: 'pending',
-                adminEmail: currentUser.email,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
+            try {
+                const carNumber = document.getElementById('maintenanceCarNumberModal').value.trim().toLowerCase().replace(/\s+/g, '');
+                const maintenanceData = {
+                    carNumber,
+                    date: document.getElementById('maintenanceDateModal').value,
+                    mileage: document.getElementById('maintenanceMileageModal').value,
+                    type: document.getElementById('maintenanceTypeModal').value,
+                    description: document.getElementById('descriptionModal').value,
+                    status: 'pending',
+                    adminEmail: currentUser.email,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
 
-            db.collection('maintenance').add(maintenanceData)
-                .then(() => {
-                    closeMaintenanceInputModal();
-                    newMaintenanceModalForm.reset();
-                    loadMaintenanceHistory();
-                    showNotification('정비 이력이 저장되었습니다.', 'success');
-                })
-                .catch(err => showNotification('정비 이력 저장 실패: ' + err.message, 'error'));
+                // 먼저 정비이력 문서 생성
+                const docRef = await db.collection('maintenance').add(maintenanceData);
+                
+                // 사진 업로드
+                const photos = await uploadMaintenancePhotos(docRef.id);
+                
+                // 사진 정보 업데이트
+                if (photos.length > 0) {
+                    await docRef.update({ photos });
+                }
+
+                closeMaintenanceInputModal();
+                newMaintenanceModalForm.reset();
+                
+                // 사진 미리보기 초기화
+                document.querySelectorAll('.photo-preview').forEach(preview => {
+                    const img = preview.querySelector('img');
+                    const removeBtn = preview.querySelector('.remove-photo');
+                    if (img) img.remove();
+                    if (removeBtn) removeBtn.remove();
+                });
+                uploadedPhotos = { before: null, during: null, after: null };
+                
+                loadMaintenanceHistory();
+                showNotification('정비 이력이 저장되었습니다.', 'success');
+                
+            } catch (err) {
+                console.error('정비 이력 저장 중 오류:', err);
+                showNotification('정비 이력 저장 실패: ' + err.message, 'error');
+            }
         });
     }
 
@@ -287,6 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const detailMileage = modal.querySelector('.detail-mileage');
         const detailDescription = modal.querySelector('.detail-description');
         const detailAdmin = modal.querySelector('.detail-admin');
+        const detailPhotos = modal.querySelector('.detail-photos');
 
         if (detailType) {
             detailType.innerHTML = `${getTypeIcon(maintenance.type)} ${maintenance.type || ''}`;
@@ -310,6 +341,54 @@ document.addEventListener('DOMContentLoaded', () => {
         if (detailAdmin) {
             detailAdmin.innerHTML = maintenance.adminName ? 
                 `<i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}` : '';
+        }
+
+        // 사진 표시
+        if (detailPhotos && maintenance.photos && maintenance.photos.length > 0) {
+            detailPhotos.innerHTML = `
+                <div class="photos-title">정비 사진</div>
+                <div class="photos-grid">
+                    ${maintenance.photos.map(photo => {
+                        // 생성 시간을 Date 객체로 변환
+                        const createdAt = new Date(photo.createdAt);
+                        const now = new Date();
+                        
+                        // 30일 후 날짜 계산
+                        const expiryDate = new Date(createdAt);
+                        expiryDate.setDate(expiryDate.getDate() + 30);
+                        
+                        // 남은 일수 계산
+                        const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+                        
+                        // 남은 시간 문자열 생성
+                        const timeLeftText = daysLeft > 0 ? 
+                            `삭제까지 ${daysLeft}일 남음` : 
+                            '곧 삭제됨';
+                        
+                        return `
+                            <div class="photo-item">
+                                <div class="photo-label">${photo.type === 'before' ? '정비 전' : 
+                                                         photo.type === 'during' ? '정비 중' : '정비 후'}</div>
+                                <img src="${photo.thumbnailUrl}" 
+                                     onclick="window.open('${photo.url}', '_blank')" 
+                                     alt="${photo.type} 사진"
+                                     class="detail-photo">
+                                <div class="photo-actions">
+                                    <div class="countdown ${daysLeft <= 7 ? 'urgent' : ''}">${timeLeftText}</div>
+                                    <a href="${photo.url}" 
+                                       download="maintenance_${maintenance.id}_${photo.type}.jpg"
+                                       class="download-btn"
+                                       onclick="event.stopPropagation()">
+                                        <i class="fas fa-download"></i> 다운로드
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        } else if (detailPhotos) {
+            detailPhotos.innerHTML = '';
         }
 
         // 모달 표시
@@ -366,6 +445,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 앱 시작 시 popstate 이벤트 리스너 추가
     window.addEventListener('popstate', handlePopState);
+
+    // 사진 미리보기 및 업로드 처리
+    document.querySelectorAll('.photo-input').forEach(input => {
+        input.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            const type = this.dataset.type;
+            const previewId = `${type}PhotoPreview`;
+            const previewDiv = document.getElementById(previewId);
+
+            if (file) {
+                try {
+                    // 파일 크기 체크 (5MB 제한)
+                    if (file.size > 5 * 1024 * 1024) {
+                        showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
+                        return;
+                    }
+
+                    // 이미지 리사이징
+                    const resizedImage = await resizeImage(file);
+                    
+                    // 미리보기 표시
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(resizedImage);
+                    
+                    // 기존 미리보기 제거
+                    const existingImg = previewDiv.querySelector('img');
+                    const existingBtn = previewDiv.querySelector('.remove-photo');
+                    if (existingImg) existingImg.remove();
+                    if (existingBtn) existingBtn.remove();
+                    
+                    // 새 미리보기 추가
+                    previewDiv.appendChild(img);
+                    
+                    // 삭제 버튼 추가
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-photo';
+                    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    removeBtn.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        img.remove();
+                        removeBtn.remove();
+                        uploadedPhotos[type] = null;
+                        this.value = '';
+                    };
+                    previewDiv.appendChild(removeBtn);
+                    
+                    // 업로드된 파일 저장
+                    uploadedPhotos[type] = resizedImage;
+                    
+                } catch (err) {
+                    console.error('사진 처리 중 오류:', err);
+                    showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
+                }
+            }
+        });
+    });
 });
 
 // 관리자 이메일로 이름 가져오기 (비동기)
@@ -672,4 +808,105 @@ function updateUI() {
     if (logoutBtn) logoutBtn.style.display = 'block';
     if (addBtnBox) addBtnBox.style.display = 'block';
     if (searchBox) searchBox.style.display = 'block';
+}
+
+// 이미지 리사이징 함수
+async function resizeImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // 최대 크기 설정 (1920px)
+                const maxSize = 1920;
+                if (width > maxSize || height > maxSize) {
+                    if (width > height) {
+                        height = (height / width) * maxSize;
+                        width = maxSize;
+                    } else {
+                        width = (width / height) * maxSize;
+                        height = maxSize;
+                    }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // 품질 0.8로 압축
+                canvas.toBlob(blob => {
+                    resolve(new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    }));
+                }, 'image/jpeg', 0.8);
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// Firebase Storage 대신 ImgBB로 사진 업로드
+async function uploadMaintenancePhotos(maintenanceId) {
+    const photos = [];
+    
+    for (const [type, file] of Object.entries(uploadedPhotos)) {
+        if (file) {
+            try {
+                // 이미지를 Base64로 변환
+                const base64Image = await convertToBase64(file);
+                
+                // ImgBB API 호출을 위한 FormData 생성
+                const formData = new FormData();
+                formData.append('key', IMGBB_API_KEY);
+                formData.append('image', base64Image.split(',')[1]);
+                formData.append('name', `maintenance_${maintenanceId}_${type}_${Date.now()}`);
+                
+                // ImgBB API 호출
+                const response = await fetch('https://api.imgbb.com/1/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    photos.push({
+                        type,
+                        url: result.data.url,               // 원본 이미지 URL
+                        thumbnailUrl: result.data.thumb.url, // 썸네일 URL (자동 생성)
+                        deleteUrl: result.data.delete_url,   // 삭제 URL (필요시 사용)
+                        createdAt: new Date().toISOString() // serverTimestamp() 대신 ISO 문자열 사용
+                    });
+                } else {
+                    throw new Error('이미지 업로드 실패');
+                }
+                
+            } catch (err) {
+                console.error(`${type} 사진 업로드 중 오류:`, err);
+                showNotification(`${type} 사진 업로드 실패`, 'error');
+            }
+        }
+    }
+    
+    return photos;
+}
+
+// 파일을 Base64로 변환하는 함수
+function convertToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
 } 
