@@ -376,12 +376,14 @@ function showMaintenanceDetail(maintenance) {
 
 // 정비 이력 상세 보기 모달 닫기
 function closeMaintenanceDetailModal() {
-    const modal = document.getElementById('maintenanceDetailModal');
-    const backdrop = document.getElementById('modalBackdrop');
-    
-    if (modal && backdrop) {
-        modal.classList.remove('show');
-        backdrop.classList.remove('show');
+    if (confirm('이전 화면으로 돌아가시겠습니까?')) {
+        const modal = document.getElementById('maintenanceDetailModal');
+        const backdrop = document.getElementById('modalBackdrop');
+        
+        if (modal && backdrop) {
+            modal.classList.remove('show');
+            backdrop.classList.remove('show');
+        }
     }
 }
 
