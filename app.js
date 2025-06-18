@@ -375,12 +375,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                      class="detail-photo">
                                 <div class="photo-actions">
                                     <div class="countdown ${daysLeft <= 7 ? 'urgent' : ''}">${timeLeftText}</div>
-                                    <a href="${photo.url}" 
-                                       download="maintenance_${maintenance.id}_${photo.type}.jpg"
-                                       class="download-btn"
-                                       onclick="event.stopPropagation()">
+                                    <button class="download-btn" 
+                                           onclick="event.stopPropagation(); downloadImage('${photo.url}', 'maintenance_${maintenance.id}_${photo.type}.jpg')">
                                         <i class="fas fa-download"></i> 다운로드
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
                         `;
@@ -955,4 +953,23 @@ function handlePopState(event) {
 }
 
 // 앱 시작 시 popstate 이벤트 리스너 추가
-window.addEventListener('popstate', handlePopState); 
+window.addEventListener('popstate', handlePopState);
+
+// 사진 다운로드 함수 추가
+async function downloadImage(url, filename) {
+    try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+        document.body.removeChild(a);
+    } catch (error) {
+        console.error('이미지 다운로드 중 오류:', error);
+        showNotification('이미지 다운로드에 실패했습니다.', 'error');
+    }
+} 
