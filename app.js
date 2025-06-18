@@ -178,11 +178,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         // 현재 로그인된 사용자의 이메일로 users 컬렉션 재생성
                         return db.collection('users').doc(user.uid).set({
                             email: user.email,
-                            carNumber: user.email.split('@')[0], // 임시 차량번호 (이메일 아이디 사용)
+                            carNumber: user.email.split('@')[0], // 임시 오토바이 번호 (이메일 아이디 사용)
                             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                             isRecovered: true // 복구된 계정 표시
                         }).then(() => {
-                            showNotification('계정 정보가 복구되었습니다. 차량번호를 수정해주세요.', 'info');
+                            showNotification('계정 정보가 복구되었습니다. 오토바이 번호를 수정해주세요.', 'info');
                             return db.collection('users').doc(user.uid).get();
                         });
                     }
@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const detailType = modal.querySelector('.detail-type');
         const detailDate = modal.querySelector('.detail-date');
         const detailStatus = modal.querySelector('.detail-status');
-        const detailCarNumber = modal.querySelector('.detail-car-number');
+        const detailCarNumber = modal.querySelector('.detail-motorcycle-number');
         const detailMileage = modal.querySelector('.detail-mileage');
         const detailDescription = modal.querySelector('.detail-description');
         const detailAdmin = modal.querySelector('.detail-admin');
@@ -330,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
             detailStatus.className = `detail-status ${maintenance.status}`;
         }
         if (detailCarNumber) {
-            detailCarNumber.textContent = `차량번호: ${maintenance.carNumber}`;
+            detailCarNumber.innerHTML = `<i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}`;
         }
         if (detailMileage) {
             detailMileage.textContent = maintenance.mileage ? `키로수: ${maintenance.mileage}km` : '';
@@ -547,12 +547,22 @@ async function createMaintenanceCard(maintenance) {
             <span class="maintenance-status-badge ${maintenance.status}">${getStatusText(maintenance.status)}</span>
         </div>
         <div class="maintenance-card-body">
-            <div class="maintenance-car-number">차량번호: ${maintenance.carNumber}</div>
-            ${maintenance.mileage ? `<div class="maintenance-mileage">키로수: ${maintenance.mileage}km</div>` : ''}
+            <div class="maintenance-motorcycle-number">
+                <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
+            </div>
+            ${maintenance.mileage ? `
+                <div class="maintenance-mileage">
+                    <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
+                </div>
+            ` : ''}
             <div class="maintenance-description">${maintenance.description || ''}</div>
         </div>
         <div class="maintenance-card-footer">
-            ${showAdminSeal ? `<span class="maintenance-admin">관리자 ${adminName}</span>` : ''}
+            ${showAdminSeal ? `
+                <span class="maintenance-admin">
+                    <i class="fas fa-user-shield"></i> 관리자: ${adminName}
+                </span>
+            ` : ''}
             ${!isAdmin && maintenance.status === 'pending' ? `
                 <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'approved')">
                     <i class="fas fa-check"></i> 승인
@@ -743,13 +753,13 @@ async function updateCarNumber(newCarNumber) {
             
         currentUser.carNumber = trimmedCarNumber;
         if (userName) {
-            userName.textContent = `차량번호: ${currentUser.carNumber}`;
+            userName.textContent = `오토바이 번호: ${currentUser.carNumber}`;
         }
-        showNotification('차량번호가 수정되었습니다.', 'success');
+        showNotification('오토바이 번호가 수정되었습니다.', 'success');
         
     } catch (error) {
         console.error('Error updating car number:', error);
-        showNotification('차량번호 수정 실패: ' + error.message, 'error');
+        showNotification('오토바이 번호 수정 실패: ' + error.message, 'error');
     }
 }
 
@@ -784,7 +794,7 @@ function closeCarNumberModal() {
 function submitCarNumberUpdate() {
     const newCarNumberInput = document.getElementById('newCarNumber');
     if (!newCarNumberInput || !newCarNumberInput.value.trim()) {
-        showNotification('차량번호를 입력해주세요.', 'error');
+        showNotification('오토바이 번호를 입력해주세요.', 'error');
         return;
     }
     
@@ -797,7 +807,7 @@ function updateUI() {
     if (userName) {
         userName.textContent = isAdmin ? 
             `관리자 (${currentUser.email})` : 
-            `차량번호: ${currentUser.carNumber}`;
+            `오토바이 번호: ${currentUser.carNumber}`;
     }
     
     const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');

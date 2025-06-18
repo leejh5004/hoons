@@ -701,935 +701,207 @@ html, body {
     }
 }
 
-/* 모달 스타일 */
-.modal-backdrop {
+/* 모달 기본 레이아웃 */
+.maintenance-modal {
+    display: none;
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0,0,0,0.5);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    z-index: 9998;
-    visibility: hidden;
-    opacity: 0;
-    transition: all 0.3s ease;
-    pointer-events: none;
-}
-
-.modal-backdrop.show {
-    visibility: visible;
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.maintenance-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.9);
-    background: white;
-    border-radius: 20px;
-    padding: 0;
-    width: 90%;
-    max-width: 600px;
-    max-height: 90vh;
+    width: 100%;
+    height: 100%;
+    z-index: 1050;
     overflow-y: auto;
-    z-index: 9999;
-    visibility: hidden;
-    opacity: 0;
-    transition: all 0.3s ease;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-    pointer-events: none;
-    padding-bottom: 80px; /* footer 높이만큼 여유 */
+    padding: 20px;
 }
 
 .maintenance-modal.show {
-    visibility: visible;
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-    pointer-events: auto;
-}
-
-.maintenance-modal .modal-header {
-    background: linear-gradient(90deg, #0071c5 0%, #181c20 100%);
-    color: #fff;
-    border-radius: 18px 18px 0 0;
-    padding: 1.2em 1em 1em 1em;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.maintenance-modal .modal-title {
-    color: #fff;
-    font-size: 1.2em;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 0.5em;
-}
-
-.maintenance-modal {
-    overflow: hidden !important;
-}
-
-.maintenance-modal .modal-body {
-    padding: 1.2em 1.2em 1em 1.2em !important;
-    background: #fff;
-    max-height: 70vh;
-    overflow-y: auto;
-}
-
-.maintenance-modal .modal-footer {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    padding: 1em 1.2em 1.2em 1.2em !important;
-    background: #fff;
-    border-radius: 0 0 18px 18px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.7em;
-    z-index: 2;
-    box-sizing: border-box;
-}
-
-@media (max-width: 576px) {
-  .maintenance-modal {
-    width: 95vw !important;
-    max-width: 420px !important;
-    min-width: 0 !important;
-    border-radius: 18px !important;
-    padding-bottom: 90px;
-  }
-  .maintenance-modal .modal-body {
-    max-height: 60vh !important;
-    padding: 1em 0.7em 0.7em 0.7em !important;
-  }
-  .maintenance-modal .modal-header {
-    padding: 1em 0.7em 0.7em 0.7em !important;
-  }
-  .maintenance-modal .modal-footer {
-    padding: 1em 0.7em 1em 0.7em !important;
-  }
-}
-
-.modal-close {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1.5em;
-    cursor: pointer;
-    padding: 0.5em;
-    margin: -0.5em;
-    transition: transform 0.2s;
-    z-index: 2;
-}
-
-.modal-close:hover {
-    transform: scale(1.1);
-}
-
-.modal-body {
-    padding: 1.5rem;
-    background: white;
-    position: relative;
-}
-
-.modal-info-group {
-    margin-bottom: 1.5rem;
-}
-
-.modal-info-label {
-    font-size: 0.9em;
-    color: #666;
-    margin-bottom: 0.3em;
-}
-
-.modal-info-value {
-    font-size: 1.1em;
-    color: #181c20;
-    font-weight: 500;
-}
-
-.modal-description {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 12px;
-    margin: 1rem 0;
-}
-
-.modal-footer {
-    position: sticky;
-    bottom: 0;
-    padding: 1rem 1.5rem;
-    border-top: 1px solid #eee;
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.7em;
-    background: white;
-}
-
-/* 모바일 최적화 */
-@media (max-width: 576px) {
-    .maintenance-modal {
-        width: 100%;
-        height: 100vh;
-        max-height: 100vh;
-        border-radius: 0;
-        margin: 0;
-        -webkit-overflow-scrolling: touch;
-        overflow-y: auto;
-        position: fixed;
-        top: 0;
-        left: 0;
-        transform: none;
-        -webkit-transform: none;
-    }
-    
-    .modal-header {
-        border-radius: 0;
-        padding: 1rem;
-        position: sticky;
-        top: 0;
-        background: #fff;
-        z-index: 1;
-    }
-    
-    .modal-title {
-        font-size: 1.2em;
-    }
-    
-    .modal-body {
-        padding: 1rem;
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    .modal-footer {
-        padding: 1rem;
-        position: sticky;
-        bottom: 0;
-        background: #fff;
-        z-index: 1;
-    }
-    
-    .modal-backdrop {
-        background: rgba(0,0,0,0.7);
-    }
-
-    .maintenance-timeline {
-        -webkit-overflow-scrolling: touch;
-        overflow-y: auto;
-        padding-bottom: 2rem;
-    }
-
-    .maintenance-card {
-        transform: translateZ(0);
-        -webkit-transform: translateZ(0);
-        backface-visibility: hidden;
-        -webkit-backface-visibility: hidden;
-        perspective: 1000;
-        -webkit-perspective: 1000;
-    }
-}
-
-/* iOS Safari 대응 */
-@supports (-webkit-touch-callout: none) {
-    .modal-backdrop {
-        background: rgba(0,0,0,0.7);
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-    }
-    
-    .maintenance-modal {
-        transform: none;
-        -webkit-transform: none;
-    }
-
-    body {
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .maintenance-timeline {
-        -webkit-overflow-scrolling: touch;
-    }
-}
-
-.maintenance-status-badge {
-    min-width: 60px;
-    max-width: 100px;
-    text-align: center;
-    font-size: 0.95em;
-    font-weight: 600;
-    line-height: 1.2;
-    padding: 0.18em 1.1em 0.18em 1.1em;
-    box-sizing: border-box;
-    display: inline-block;
-    border-radius: 12px;
-    color: #fff;
-    margin: 0.2em;
-    letter-spacing: 0.02em;
-    vertical-align: middle;
-}
-
-.maintenance-status-badge.approved {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
-}
-
-.maintenance-status-badge.rejected {
-    background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
-    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
-}
-
-.maintenance-status-badge.pending {
-    background: linear-gradient(135deg, #fd7e14 0%, #ffc107 100%);
-    box-shadow: 0 2px 8px rgba(253, 126, 20, 0.2);
-    color: #000;
-}
-
-.maintenance-status-badge i {
-    margin-right: 0.4em;
-}
-
-/* 검색 관련 스타일 */
-#searchBox {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background: rgba(255,255,255,0.95);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    padding: 1rem 0;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid rgba(0,0,0,0.1);
-}
-
-#searchInput {
-    border-radius: 10px;
-    padding: 0.8rem 1rem;
-    font-size: 1rem;
-    border: 2px solid rgba(0,113,197,0.2);
-    transition: all 0.3s ease;
-}
-
-#searchInput:focus {
-    border-color: var(--main-blue);
-    box-shadow: 0 0 0 0.2rem rgba(0,113,197,0.15);
-}
-
-.input-group-text {
-    border-radius: 10px 0 0 10px;
-    padding: 0.8rem 1rem;
-    background: var(--main-blue);
-    border: none;
-    color: white;
-}
-
-/* 로딩 스피너 */
-.loading-spinner {
-    text-align: center;
-    padding: 2rem;
-    color: var(--main-blue);
-    font-size: 1.2rem;
-}
-
-.loading-spinner i {
-    margin-right: 0.5rem;
-}
-
-/* 검색 결과 없음 */
-.no-data {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: #666;
-    background: rgba(255,255,255,0.8);
-    border-radius: 15px;
-    margin: 2rem 0;
-}
-
-.no-data i {
-    color: var(--main-blue);
-    margin-bottom: 1rem;
-}
-
-.no-data p {
-    margin: 0.5rem 0;
-}
-
-.no-data .text-muted {
-    font-size: 0.9rem;
-    color: #999;
-}
-
-/* 에러 메시지 */
-.error-message {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--main-red);
-    background: rgba(255,255,255,0.8);
-    border-radius: 15px;
-    margin: 2rem 0;
-}
-
-.error-message i {
-    margin-bottom: 1rem;
-}
-
-.error-message p {
-    margin: 0.5rem 0;
-}
-
-.error-message .text-muted {
-    font-size: 0.9rem;
-    color: #999;
-}
-
-/* 모바일 최적화 */
-@media (max-width: 576px) {
-    #searchBox {
-        padding: 0.8rem 0;
-    }
-
-    #searchInput {
-        font-size: 0.95rem;
-        padding: 0.7rem 0.8rem;
-    }
-
-    .input-group-text {
-        padding: 0.7rem 0.8rem;
-    }
-
-    .loading-spinner {
-        padding: 1.5rem;
-        font-size: 1rem;
-    }
-
-    .no-data, .error-message {
-        padding: 2rem 1rem;
-        margin: 1rem 0;
-    }
-}
-
-.maintenance-header-badges {
-    display: flex;
-    gap: 0.3em;
-    margin-left: 1em;
-}
-
-.badge-inactive {
-    opacity: 0.4;
-    filter: grayscale(0.2);
-}
-
-.maintenance-status-row {
-    margin: 0.5em 0 0.5em 0;
-}
-
-.maintenance-car-number {
-    margin-bottom: 0.5em;
-    margin-top: 0.5em;
-}
-
-.maintenance-description {
-    margin-top: 0.5em;
-    margin-bottom: 0.5em;
-}
-
-.maintenance-card-body {
-    padding-left: 1.2em;
-    padding-right: 1.2em;
-}
-
-.brand-header {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(90deg, #0071c5 0%, #181c20 100%);
-    color: #fff;
-    padding: 1.2em 1em 0.7em 1em;
-    border-radius: 18px 18px 0 0;
-    font-size: 1.2em;
-    font-weight: 700;
-}
-
-.brand-title {
-    font-size: 1.1em;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-}
-
-.maintenance-modal .modal-body {
-    padding: 1.5em 1.2em 1.2em 1.2em !important;
-    background: #fff;
-}
-
-.maintenance-modal .modal-footer {
-    padding: 1em 1.2em 1.2em 1.2em !important;
-    background: #fff;
-    border-radius: 0 0 18px 18px;
-}
-
-@media (max-width: 576px) {
-  .maintenance-modal {
-    width: 95vw !important;
-    max-width: 420px !important;
-    min-width: 0 !important;
-    border-radius: 18px !important;
-  }
-}
-
-.brand-logo {
-    width: 56px;
-    height: 56px;
-    margin-bottom: 0.5em;
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    object-fit: contain;
-}
-
-.maintenance-footer-fixed {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    padding: 1em 1.2em 1.2em 1.2em !important;
-    background: #fff;
-    border-radius: 0 0 18px 18px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.7em;
-    z-index: 2;
-    box-sizing: border-box;
-}
-
-.maintenance-modal#maintenanceInputModal {
-    display: flex;
-    flex-direction: column;
-    height: 90vh;
-    max-height: 90vh;
-    min-height: 400px;
-    position: relative;
-    padding-bottom: 0;
-}
-.maintenance-modal#maintenanceInputModal .modal-body {
-    flex: 1 1 0%;
-    min-height: 0;
-    overflow-y: auto;
-    padding-bottom: 1em !important;
-    max-height: unset;
-}
-.maintenance-modal#maintenanceInputModal .maintenance-footer-fixed {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    padding: 1em 1.2em 1.2em 1.2em !important;
-    background: #fff;
-    border-radius: 0 0 18px 18px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.7em;
-    z-index: 2;
-    box-sizing: border-box;
-}
-@media (max-width: 576px) {
-  .maintenance-modal#maintenanceInputModal {
-    max-height: 90vh !important;
-  }
-  .maintenance-modal#maintenanceInputModal .modal-body {
-    max-height: 50vh !important;
-  }
-  .maintenance-modal#maintenanceInputModal .maintenance-footer-fixed {
-    padding: 1em 0.7em 1em 0.7em !important;
-  }
-}
-
-.maintenance-modal#carNumberModal {
-    display: block !important;
-    height: auto !important;
-    min-height: unset !important;
-    max-height: unset !important;
-    padding-bottom: 0 !important;
-}
-.maintenance-modal#carNumberModal .modal-body {
-    max-height: unset !important;
-    overflow-y: visible !important;
-    padding-bottom: 0 !important;
-}
-.maintenance-modal#carNumberModal .modal-footer {
-    position: static !important;
-    width: 100%;
-    padding: 1em 1.2em 1.2em 1.2em !important;
-    background: #fff;
-    border-radius: 0 0 18px 18px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.7em;
-    z-index: 2;
-    box-sizing: border-box;
-}
-@media (max-width: 576px) {
-  .maintenance-modal#carNumberModal {
-    max-height: unset !important;
-  }
-  .maintenance-modal#carNumberModal .modal-footer {
-    padding: 1em 0.7em 1em 0.7em !important;
-  }
-}
-
-/* 정비 이력 상세 보기 모달 스타일 */
-.maintenance-detail-content {
-    padding: 1.5rem;
-    max-width: 500px;
-    margin: 0 auto;
-}
-
-.detail-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(0,113,197,0.1);
-}
-
-.detail-type {
-    font-size: 1.2em;
-    font-weight: 600;
-    color: #23272b;
-    display: flex;
-    align-items: center;
-    gap: 0.5em;
-}
-
-.detail-type i {
-    color: #0071c5;
-    font-size: 1.1em;
-}
-
-.detail-date {
-    font-size: 0.95em;
-    color: #666;
-    background: rgba(0,113,197,0.05);
-    padding: 0.4em 1em;
-    border-radius: 8px;
-}
-
-.detail-status {
-    font-size: 0.9em;
-    font-weight: 600;
-    padding: 0.3em 1em;
-    border-radius: 12px;
-    margin-top: 0.5rem;
-}
-
-.detail-status.approved {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
-}
-
-.detail-status.rejected {
-    background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
-}
-
-.detail-status.pending {
-    background: linear-gradient(135deg, #fd7e14 0%, #ffc107 100%);
-    color: #000;
-    box-shadow: 0 2px 8px rgba(253, 126, 20, 0.2);
-}
-
-.detail-info {
-    margin-bottom: 1.5rem;
-    background: rgba(255,255,255,0.8);
-    border-radius: 12px;
-    padding: 1.2rem;
-    box-shadow: 0 2px 12px rgba(0,113,197,0.08);
-}
-
-.detail-car-number {
-    font-size: 1.1em;
-    color: #0071c5;
-    font-weight: 600;
-    margin-bottom: 0.8rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5em;
-}
-
-.detail-car-number::before {
-    content: '\f1b9';
-    font-family: 'Font Awesome 5 Free';
-    font-weight: 900;
-    color: #0071c5;
-}
-
-.detail-mileage {
-    font-size: 0.95em;
-    color: #28a745;
-    background: rgba(40, 167, 69, 0.1);
-    padding: 0.4em 1em;
-    border-radius: 8px;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5em;
-    margin-bottom: 1rem;
-}
-
-.detail-mileage::before {
-    content: '\f3fd';
-    font-family: 'Font Awesome 5 Free';
-    font-weight: 900;
-}
-
-.detail-description {
-    font-size: 1em;
-    color: #333;
-    line-height: 1.6;
-    white-space: pre-line;
-    background: rgba(0,113,197,0.05);
-    padding: 1rem;
-    border-radius: 12px;
-    margin-bottom: 1rem;
-    border-left: 4px solid #0071c5;
-}
-
-.detail-footer {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(0,113,197,0.1);
-}
-
-.detail-admin {
-    font-size: 0.9em;
-    color: #666;
-    display: flex;
-    align-items: center;
-    gap: 0.5em;
-    background: rgba(0,113,197,0.05);
-    padding: 0.4em 1em;
-    border-radius: 8px;
-}
-
-.detail-admin i {
-    color: #0071c5;
-}
-
-/* 모바일 최적화 */
-@media (max-width: 576px) {
-    .maintenance-detail-content {
-        padding: 1rem;
-    }
-
-    .detail-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-
-    .detail-type {
-        font-size: 1.1em;
-    }
-
-    .detail-date {
-        font-size: 0.9em;
-    }
-
-    .detail-status {
-        font-size: 0.85em;
-    }
-
-    .detail-car-number {
-        font-size: 1em;
-    }
-
-    .detail-mileage {
-        font-size: 0.9em;
-    }
-
-    .detail-description {
-        font-size: 0.95em;
-    }
-
-    .detail-info {
-        padding: 1rem;
-    }
-}
-
-/* 사진 업로드 관련 스타일 */
-.photo-upload-container {
-    display: flex;
-    gap: 1rem;
-    margin-top: 0.5rem;
-}
-
-.photo-upload-group {
-    flex: 1;
-}
-
-.photo-label {
-    display: block;
-    font-size: 0.9em;
-    color: #666;
-    margin-bottom: 0.5rem;
-}
-
-.photo-preview {
-    position: relative;
-    width: 100%;
-    height: 150px;
-    border: 2px dashed #ddd;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.photo-preview:hover {
-    border-color: #0071c5;
-}
-
-.photo-input {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    cursor: pointer;
-    z-index: 2;
-}
-
-.photo-placeholder {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    color: #888;
-}
-
-.photo-placeholder i {
-    font-size: 2em;
-    margin-bottom: 0.5rem;
     display: block;
 }
 
-.photo-preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    position: absolute;
+/* 모달 백드롭 */
+.modal-backdrop {
+    display: none;
+    position: fixed;
     top: 0;
     left: 0;
-}
-
-.photo-preview .remove-photo {
-    position: absolute;
-    top: 5px;
-    right: 5px;
+    width: 100%;
+    height: 100%;
     background: rgba(0,0,0,0.5);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 3;
+    z-index: 1040;
 }
 
-/* 상세보기 사진 관련 스타일 */
-.detail-photos {
-    margin-top: 2rem;
-}
-
-.photo-container {
-    margin-bottom: 1.5rem;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.photo-wrapper {
-    position: relative;
-}
-
-.maintenance-photo {
-    width: 100%;
-    height: auto;
+.modal-backdrop.show {
     display: block;
 }
 
-.photo-countdown {
-    padding: 0.8rem;
+/* 모달 컨텐츠 */
+.maintenance-modal .modal-content {
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+}
+
+/* 모달 헤더 */
+.maintenance-modal .modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #dee2e6;
+    border-radius: 18px 18px 0 0;
+    background: linear-gradient(90deg, #0071c5 0%, #181c20 100%);
+    color: #fff;
+}
+
+/* 모달 본문 */
+.maintenance-modal .modal-body {
+    padding: 1.5rem;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    background: #fff;
+}
+
+/* 모달 푸터 */
+.maintenance-modal .modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    border-radius: 0 0 18px 18px;
+    background: #fff;
+}
+
+/* 정비 상세 보기 모달 */
+#maintenanceDetailModal .detail-photos {
+    margin-top: 1.5rem;
+}
+
+#maintenanceDetailModal .photos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+#maintenanceDetailModal .photo-item {
     background: #f8f9fa;
-    border-top: 1px solid rgba(0,0,0,0.1);
-    font-size: 0.9em;
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
 }
 
-.countdown-normal {
-    color: #666;
-}
-
-.countdown-warning {
-    color: #e65100;
-}
-
-.countdown-expired {
-    color: #888;
-}
-
-.download-btn {
-    float: right;
-    background: none;
-    border: none;
+#maintenanceDetailModal .photo-label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
     color: #0071c5;
-    cursor: pointer;
-    padding: 0 0.5rem;
 }
 
-.download-btn:hover {
-    color: #005293;
+#maintenanceDetailModal .detail-photo {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+#maintenanceDetailModal .detail-photo:hover {
+    transform: scale(1.02);
+}
+
+/* 정비 입력 모달 */
+#maintenanceInputModal .photo-upload-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+#maintenanceInputModal .photo-preview {
+    position: relative;
+    min-height: 150px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* 모바일 대응 */
-@media (max-width: 576px) {
-    .photo-upload-container {
-        flex-direction: column;
+@media (max-width: 768px) {
+    .maintenance-modal {
+        padding: 10px;
+    }
+
+    .maintenance-modal .modal-content {
+        margin: 0;
     }
     
-    .photo-preview {
-        height: 120px;
+    .maintenance-modal .modal-body {
+        max-height: calc(100vh - 160px);
+    }
+    
+    .photos-grid {
+        grid-template-columns: 1fr;
     }
 }
 
-/* 정비 이력 상세 보기 사진 스타일 */
-.photos-title {
-    font-size: 1.1em;
-    font-weight: bold;
-    margin: 20px 0 10px;
-    color: #333;
+/* 작은 화면 대응 */
+@media (max-width: 576px) {
+    .maintenance-modal {
+        padding: 0;
+    }
+
+    .maintenance-modal .modal-content {
+        border-radius: 0;
+        height: 100%;
+    }
+
+    .maintenance-modal .modal-header {
+        border-radius: 0;
+    }
+    
+    .maintenance-modal .modal-footer {
+        border-radius: 0;
+    }
+    
+    .photo-upload-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 사진 업로드 섹션 스타일 개선 */
+.photo-upload-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.photo-preview {
+    aspect-ratio: 4/3;
+    min-height: 200px;
+}
+
+/* 상세보기 모달 개선 */
+.maintenance-detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.detail-photos {
+    margin-top: 1.5rem;
 }
 
 .photos-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    margin-top: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
 }
 
 .photo-item {
