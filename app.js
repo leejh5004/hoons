@@ -388,13 +388,13 @@ function closeMaintenanceDetailModal() {
     if (modal && backdrop) {
         modal.classList.remove('show');
         backdrop.classList.remove('show');
+        
+        // popstate 이벤트 리스너 제거
+        window.removeEventListener('popstate', handlePopState);
     }
-
-    // popstate 이벤트 리스너 제거
-    window.removeEventListener('popstate', handlePopState);
 }
 
-// popstate 이벤트 핸들러
+// popstate 이벤트 핸들러 (모바일 뒤로가기 버튼용)
 function handlePopState(event) {
     if (confirm('이전 화면으로 돌아가시겠습니까?')) {
         closeMaintenanceDetailModal();
