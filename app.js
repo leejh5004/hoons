@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 정비 이력 상세 보기 모달 열기
-    function showMaintenanceDetail(maintenance) {
+    window.showMaintenanceDetail = function(maintenance) {
         const modal = document.getElementById('maintenanceDetailModal');
         const backdrop = document.getElementById('modalBackdrop');
         
@@ -324,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 정비 이력 상세 보기 모달 닫기
-    function closeMaintenanceDetailModal() {
+    window.closeMaintenanceDetailModal = function() {
         const modal = document.getElementById('maintenanceDetailModal');
         const backdrop = document.getElementById('modalBackdrop');
         
