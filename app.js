@@ -365,37 +365,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 사진 입력 이벤트 리스너 설정 함수 (모바일 대응)
+    // 사진 입력 이벤트 리스너 설정 함수 (모바일 대응 강화)
     function setupPhotoInputListeners() {
-        document.querySelectorAll('.photo-input').forEach(input => {
+        console.log('사진 업로드 리스너 설정 시작');
+        
+        document.querySelectorAll('.photo-input').forEach((input, index) => {
             const type = input.dataset.type;
             const previewId = `${type}PhotoPreview`;
             const previewDiv = document.getElementById(previewId);
+            
+            console.log(`설정 중: ${type} (${index + 1}/3)`, { input, previewDiv });
 
             if (previewDiv) {
-                // 모바일에서 클릭 이벤트가 안 될 수 있으므로 여러 이벤트 추가
-                previewDiv.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    input.click();
-                });
+                // 모든 가능한 이벤트 추가
+                const events = ['click', 'touchstart', 'touchend', 'mousedown'];
                 
-                // 터치 이벤트도 추가 (모바일 대응)
-                previewDiv.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    input.click();
+                events.forEach(eventType => {
+                    previewDiv.addEventListener(eventType, (e) => {
+                        console.log(`${type} ${eventType} 이벤트 발생`);
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        // input 클릭 시도
+                        try {
+                            input.click();
+                            console.log(`${type} input.click() 성공`);
+                        } catch (error) {
+                            console.error(`${type} input.click() 실패:`, error);
+                        }
+                    }, { passive: false });
                 });
                 
                 // 포커스 이벤트도 추가
                 previewDiv.addEventListener('focus', () => {
+                    console.log(`${type} focus 이벤트 발생`);
                     input.click();
+                });
+                
+                // 모바일에서 더블탭 방지
+                let lastTap = 0;
+                previewDiv.addEventListener('touchend', (e) => {
+                    const currentTime = new Date().getTime();
+                    const tapLength = currentTime - lastTap;
+                    if (tapLength < 500 && tapLength > 0) {
+                        e.preventDefault();
+                        return;
+                    }
+                    lastTap = currentTime;
                 });
             }
 
             input.addEventListener('change', async function(e) {
+                console.log(`${type} 파일 선택됨:`, e.target.files[0]);
                 const file = e.target.files[0];
-                if (!file) return;
+                if (!file) {
+                    console.log(`${type} 파일이 선택되지 않음`);
+                    return;
+                }
 
                 try {
                     if (!file.type.startsWith('image/')) {
@@ -408,6 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
+                    console.log(`${type} 이미지 처리 시작`);
                     previewDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 처리중...</div>';
 
                     const resizedImage = await resizeImage(file);
@@ -431,21 +458,30 @@ document.addEventListener('DOMContentLoaded', () => {
                         uploadedPhotos[type] = null;
                         input.value = '';
                         previewDiv.innerHTML = '';
+                        console.log(`${type} 사진 제거됨`);
                     };
                     previewContainer.appendChild(removeBtn);
                     
                     previewDiv.appendChild(previewContainer);
                     uploadedPhotos[type] = resizedImage;
                     
+                    console.log(`${type} 사진 업로드 완료`);
                     showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
                     
                 } catch (err) {
-                    console.error('사진 처리 중 오류:', err);
+                    console.error(`${type} 사진 처리 중 오류:`, err);
                     showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
                     previewDiv.innerHTML = '';
                 }
             });
+            
+            // input에 직접 이벤트도 추가
+            input.addEventListener('click', (e) => {
+                console.log(`${type} input 직접 클릭됨`);
+            });
         });
+        
+        console.log('사진 업로드 리스너 설정 완료');
     }
 
     // 정비 폼 이벤트 리스너 설정 함수
@@ -1827,16 +1863,32 @@ function handlePopState(event) {
 // 앱 시작 시 popstate 이벤트 리스너 추가
 window.addEventListener('popstate', handlePopState);
 
-// 사진 다운로드 함수 추가 (모바일 대응)
+// 사진 다운로드 함수 추가 (모바일 대응 강화)
 async function downloadImage(url, filename) {
     try {
         // 모바일 기기 감지
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
         if (isMobile) {
-            // 모바일에서는 새 창에서 이미지 열기 (사용자가 직접 저장 가능)
-            window.open(url, '_blank');
-            showNotification('모바일에서는 새 창에서 이미지가 열립니다. 이미지를 길게 눌러 저장하세요.', 'info');
+            // 모바일에서는 직접 다운로드 링크 생성
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.target = '_blank';
+            a.style.display = 'none';
+            
+            // iOS Safari 대응
+            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                // iOS에서는 새 창에서 열기
+                window.open(url, '_blank');
+                showNotification('iOS에서는 새 창에서 이미지가 열립니다. 이미지를 길게 눌러 저장하세요.', 'info');
+            } else {
+                // Android에서는 직접 다운로드 시도
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showNotification('다운로드가 시작되었습니다.', 'success');
+            }
         } else {
             // 데스크톱에서는 기존 다운로드 방식 사용
             const response = await fetch(url);
@@ -1853,6 +1905,12 @@ async function downloadImage(url, filename) {
         }
     } catch (error) {
         console.error('이미지 다운로드 중 오류:', error);
-        showNotification('이미지 다운로드에 실패했습니다.', 'error');
+        // 오류 시에도 새 창에서 열기 시도
+        try {
+            window.open(url, '_blank');
+            showNotification('다운로드 실패. 새 창에서 이미지가 열립니다.', 'info');
+        } catch (fallbackError) {
+            showNotification('이미지 다운로드에 실패했습니다.', 'error');
+        }
     }
 } 
