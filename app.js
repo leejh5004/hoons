@@ -17,9 +17,6 @@ let uploadedPhotos = {
 
 // DOM이 로드된 후 실행
 document.addEventListener('DOMContentLoaded', () => {
-    // 초기 history state 추가
-    history.pushState({ page: 'main' }, '');
-
     // DOM 요소
     const loginForm = document.getElementById('loginForm');
     const registerForm = document.getElementById('registerForm');
@@ -719,30 +716,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function createPhotoItem(label, photoData) {
         if (!photoData || !photoData.url) return '';
 
-        const uploadTime = new Date(photoData.uploadTime);
-        const expirationTime = new Date(uploadTime.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30일 후
-        const now = new Date();
-        const remainingDays = Math.ceil((expirationTime - now) / (1000 * 60 * 60 * 24));
+        // Base64 데이터인지 확인
+        const isBase64 = photoData.url.startsWith('data:image/');
         
-        const countdownClass = remainingDays <= 5 ? 'urgent' : '';
-        const countdownText = remainingDays > 0 
-            ? `${remainingDays}일 후 삭제됩니다.`
-            : '만료되었습니다.';
+        // 파일명 생성
+        const filename = photoData.filename || `${label}_${new Date().toISOString().split('T')[0]}.jpg`;
 
         return `
             <div class="photo-item">
                 <div class="photo-label">${label}</div>
                 <img src="${photoData.url}" alt="${label}" class="detail-photo" 
-                    onclick="window.open('${photoData.url}', '_blank')">
+                    onclick="downloadImage('${photoData.url}', '${filename}')">
                 <div class="photo-actions">
-                    <div class="countdown ${countdownClass}">
-                        <i class="fas fa-clock"></i>
-                        ${countdownText}
-                    </div>
-                    <a href="${photoData.url}" class="download-btn" 
-                        download="${label}_${new Date().toISOString().split('T')[0]}"
-                        target="_blank"
-                        onclick="event.stopPropagation()">
+                    <a href="#" class="download-btn" 
+                        onclick="downloadImage('${photoData.url}', '${filename}'); return false;">
                         <i class="fas fa-download"></i>
                         다운로드
                     </a>
@@ -754,145 +741,58 @@ document.addEventListener('DOMContentLoaded', () => {
     // 앱 시작 시 popstate 이벤트 리스너 추가
     window.addEventListener('popstate', handlePopState);
 
-    // 사진 미리보기 및 업로드 처리
-    document.querySelectorAll('.photo-input').forEach(input => {
-        const type = input.dataset.type;
-        const previewId = `${type}PhotoPreview`;
-        const previewDiv = document.getElementById(previewId);
-
-        // 미리보기 영역 클릭 시 파일 선택 창 열기
-        if (previewDiv) {
-            previewDiv.addEventListener('click', () => {
-                input.click();
-            });
-        }
-
-        input.addEventListener('change', async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            try {
-                // 파일 타입 체크
-                if (!file.type.startsWith('image/')) {
-                    showNotification('이미지 파일만 업로드 가능합니다.', 'error');
-                    return;
-                }
-
-                // 파일 크기 체크 (5MB 제한)
-                if (file.size > 5 * 1024 * 1024) {
-                    showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
-                    return;
-                }
-
-                // 로딩 표시
-                previewDiv.innerHTML = '<div class="loading-spinner" style="display: flex; align-items: center; justify-content: center; height: 100px; color: #007bff;"><i class="fas fa-spinner fa-spin" style="font-size: 2em; margin-right: 10px;"></i> 처리중...</div>';
-
-                // 이미지 리사이징
-                const resizedImage = await resizeImage(file);
-                
-                // 기존 미리보기 제거
-                previewDiv.innerHTML = '';
-                
-                // 새 미리보기 컨테이너 생성
-                const previewContainer = document.createElement('div');
-                previewContainer.className = 'preview-container';
-                previewContainer.style.cssText = `
-                    position: relative;
-                    width: 100%;
-                    height: 100%;
-                    border-radius: 8px;
-                    overflow: hidden;
-                    background: #fff;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                `;
-                
-                // 이미지 생성
-                const img = document.createElement('img');
-                img.style.cssText = `
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    border-radius: 8px;
-                `;
-                
-                // Blob URL 생성 및 이미지 로드
-                const blobUrl = URL.createObjectURL(resizedImage);
-                img.src = blobUrl;
-                img.alt = `${type} 사진 미리보기`;
-                
-                img.onload = () => {
-                    console.log(`${type} 이미지 로드 완료`);
-                    URL.revokeObjectURL(blobUrl);
-                };
-                
-                img.onerror = () => {
-                    console.error(`${type} 이미지 로드 실패`);
-                    URL.revokeObjectURL(blobUrl);
-                };
-                
-                previewContainer.appendChild(img);
-                
-                // 제거 버튼 생성
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'remove-photo';
-                removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                removeBtn.style.cssText = `
-                    position: absolute;
-                    top: 5px;
-                    right: 5px;
-                    background: rgba(255,0,0,0.8);
-                    color: white;
-                    border: none;
-                    border-radius: 50%;
-                    width: 30px;
-                    height: 30px;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 12px;
-                    z-index: 10;
-                `;
-                
-                removeBtn.onclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log(`${type} 사진 제거 버튼 클릭`);
-                    previewContainer.remove();
-                    uploadedPhotos[type] = null;
-                    input.value = '';
-                    
-                    // 원래 placeholder로 복원
-                    previewDiv.innerHTML = `
-                        <div class="photo-placeholder">
-                            <i class="fas fa-camera"></i>
-                            <span>사진 추가</span>
-                        </div>
-                    `;
-                    console.log(`${type} 사진 제거됨`);
-                };
-                
-                previewContainer.appendChild(removeBtn);
-                previewDiv.appendChild(previewContainer);
-                uploadedPhotos[type] = resizedImage;
-                
-                console.log(`${type} 사진 업로드 완료, 미리보기 표시됨`);
-                showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
-                
-            } catch (err) {
-                console.error(`${type} 사진 처리 중 오류:`, err);
-                showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
-                
-                // 오류 시 원래 placeholder로 복원
-                previewDiv.innerHTML = `
-                    <div class="photo-placeholder">
-                        <i class="fas fa-camera"></i>
-                        <span>사진 추가</span>
-                    </div>
-                `;
+    // 사진 다운로드 함수 (Base64 지원)
+    async function downloadImage(url, filename) {
+        try {
+            console.log('다운로드 시작:', filename);
+            
+            let blob;
+            
+            // Base64 데이터인지 확인
+            if (url.startsWith('data:image/')) {
+                // Base64 데이터를 Blob으로 변환
+                const response = await fetch(url);
+                blob = await response.blob();
+            } else {
+                // 일반 URL에서 다운로드
+                const response = await fetch(url);
+                blob = await response.blob();
             }
-        });
-    });
+            
+            // Blob URL 생성
+            const blobUrl = window.URL.createObjectURL(blob);
+            
+            // 다운로드 링크 생성
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename;
+            a.style.display = 'none';
+            
+            // DOM에 추가하고 클릭
+            document.body.appendChild(a);
+            a.click();
+            
+            // 정리
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(blobUrl);
+            }, 100);
+            
+            showNotification('다운로드가 시작되었습니다.', 'success');
+            
+        } catch (error) {
+            console.error('다운로드 실패:', error);
+            
+            // 실패 시 새 창에서 열기
+            try {
+                window.open(url, '_blank');
+                showNotification('새 창에서 이미지가 열렸습니다.', 'info');
+            } catch (fallbackError) {
+                console.error('폴백 다운로드도 실패:', fallbackError);
+                showNotification('다운로드에 실패했습니다.', 'error');
+            }
+        }
+    }
 
     // CSS 스타일 수정
     const style = document.createElement('style');
@@ -1726,69 +1626,82 @@ function updateUI() {
     if (searchBox) searchBox.style.display = 'block';
 }
 
-// 이미지 리사이징 함수 수정
+// 이미지 리사이즈 함수 (간단하고 확실한 버전)
 async function resizeImage(file) {
     return new Promise((resolve, reject) => {
+        // 파일 크기가 1MB 이하면 리사이즈하지 않고 그대로 반환
+        if (file.size <= 1024 * 1024) {
+            resolve(file);
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = function(e) {
-            const url = URL.createObjectURL(file);
             const img = new Image();
-            
             img.onload = function() {
-                URL.revokeObjectURL(url);
-                
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                
-                // 최대 크기 설정 (1920px)
-                const maxSize = 1920;
-                if (width > maxSize || height > maxSize) {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // 최대 크기 설정 (800x800)
+                    const maxSize = 800;
+                    let { width, height } = img;
+                    
+                    // 비율 유지하면서 크기 조정
                     if (width > height) {
-                        height = (height / width) * maxSize;
-                        width = maxSize;
+                        if (width > maxSize) {
+                            height = (height * maxSize) / width;
+                            width = maxSize;
+                        }
                     } else {
-                        width = (width / height) * maxSize;
-                        height = maxSize;
+                        if (height > maxSize) {
+                            width = (width * maxSize) / height;
+                            height = maxSize;
+                        }
                     }
-                }
-
-                // 항상 세로가 더 길게 설정
-                if (width > height) {
-                    canvas.width = height;
-                    canvas.height = width;
-                } else {
+                    
                     canvas.width = width;
                     canvas.height = height;
-                }
-                
-                const ctx = canvas.getContext('2d');
-                
-                // 이미지를 항상 정방향으로 그리기
-                if (width > height) {
-                    // 가로가 더 길면 90도 회전
-                    ctx.translate(canvas.width/2, canvas.height/2);
-                    ctx.rotate(-Math.PI/2);
-                    ctx.drawImage(img, -height/2, -width/2, height, width);
-                } else {
-                    // 세로가 더 길면 그대로 그리기
+                    
+                    // 이미지 그리기
                     ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Blob으로 변환
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            const resizedFile = new File([blob], file.name, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now()
+                            });
+                            resolve(resizedFile);
+                        } else {
+                            // Blob 생성 실패 시 원본 파일 반환
+                            resolve(file);
+                        }
+                    }, 'image/jpeg', 0.8);
+                    
+                } catch (error) {
+                    console.error('이미지 리사이즈 실패:', error);
+                    // 에러 시 원본 파일 반환
+                    resolve(file);
                 }
-                
-                canvas.toBlob(blob => {
-                    resolve(new File([blob], file.name, {
-                        type: 'image/jpeg',
-                        lastModified: Date.now()
-                    }));
-                    canvas.width = 1;
-                    canvas.height = 1;
-                }, 'image/jpeg', 0.8);
             };
             
-            img.onerror = reject;
-            img.src = url;
+            img.onerror = function() {
+                console.error('이미지 로드 실패');
+                // 이미지 로드 실패 시 원본 파일 반환
+                resolve(file);
+            };
+            
+            img.src = e.target.result;
         };
-        reader.onerror = reject;
+        
+        reader.onerror = function() {
+            console.error('파일 읽기 실패');
+            // 파일 읽기 실패 시 원본 파일 반환
+            resolve(file);
+        };
+        
         reader.readAsDataURL(file);
     });
 }
@@ -1826,45 +1739,32 @@ function getImageOrientation(arrayBuffer) {
     return 1; // Default orientation
 }
 
-// Firebase Storage 대신 ImgBB로 사진 업로드
+// 사진 업로드 함수 (간단한 버전)
 async function uploadMaintenancePhotos(maintenanceId) {
     const photos = [];
     
     for (const [type, file] of Object.entries(uploadedPhotos)) {
         if (file) {
             try {
-                // 이미지를 Base64로 변환
+                console.log(`${type} 사진 업로드 시작`);
+                
+                // 파일을 Base64로 변환
                 const base64Image = await convertToBase64(file);
                 
-                // ImgBB API 호출을 위한 FormData 생성
-                const formData = new FormData();
-                formData.append('key', IMGBB_API_KEY);
-                formData.append('image', base64Image.split(',')[1]);
-                formData.append('name', `maintenance_${maintenanceId}_${type}_${Date.now()}`);
-                
-                // ImgBB API 호출
-                const response = await fetch('https://api.imgbb.com/1/upload', {
-                    method: 'POST',
-                    body: formData
+                // Firestore에 직접 저장 (간단한 방법)
+                photos.push({
+                    type,
+                    url: base64Image, // Base64 데이터 직접 저장
+                    thumbnailUrl: base64Image, // 썸네일도 동일하게
+                    createdAt: new Date().toISOString(),
+                    filename: `${type}_${Date.now()}.jpg`
                 });
                 
-                const result = await response.json();
-                
-                if (result.success) {
-                    photos.push({
-                        type,
-                        url: result.data.url,               // 원본 이미지 URL
-                        thumbnailUrl: result.data.thumb.url, // 썸네일 URL (자동 생성)
-                        deleteUrl: result.data.delete_url,   // 삭제 URL (필요시 사용)
-                        createdAt: new Date().toISOString() // serverTimestamp() 대신 ISO 문자열 사용
-                    });
-                } else {
-                    throw new Error('이미지 업로드 실패');
-                }
+                console.log(`${type} 사진 업로드 완료`);
                 
             } catch (err) {
                 console.error(`${type} 사진 업로드 중 오류:`, err);
-                showNotification(`${type} 사진 업로드 실패`, 'error');
+                showNotification(`${type} 사진 업로드 실패: ${err.message}`, 'error');
             }
         }
     }
@@ -1882,86 +1782,33 @@ function convertToBase64(file) {
     });
 }
 
-// popstate 이벤트 핸들러
+// popstate 이벤트 핸들러 (간단한 버전)
 function handlePopState(event) {
-    const state = event.state;
-    const maintenanceDetailModal = document.getElementById('maintenanceDetailModal');
+    // 스크롤 위치를 맨 위로 고정
+    window.scrollTo(0, 0);
     
-    // 상세 페이지에서 뒤로가기 시
-    if (state && state.page === 'detail') {
+    // 모달이 열려있으면 닫기
+    const maintenanceDetailModal = document.getElementById('maintenanceDetailModal');
+    const maintenanceInputModal = document.getElementById('maintenanceInputModal');
+    const carNumberModal = document.getElementById('carNumberModal');
+    
+    if (maintenanceDetailModal && maintenanceDetailModal.classList.contains('show')) {
         closeMaintenanceDetailModal();
-        history.pushState({ page: 'main' }, '');
         return;
     }
     
-    // 메인 페이지에서 뒤로가기 시 (한 번만 물어보기)
-    if (!state || state.page === 'main') {
-        // 모달이 열려있으면 닫기만 하고 종료하지 않음
-        if (maintenanceDetailModal && maintenanceDetailModal.classList.contains('show')) {
-            closeMaintenanceDetailModal();
-            history.pushState({ page: 'main' }, '');
-            return;
-        }
-        
-        // 모달이 닫혀있는 상태에서 뒤로가기 시 종료 여부 확인
-        if (confirm('앱을 종료하시겠습니까?')) {
-            window.close();
-        } else {
-            history.pushState({ page: 'main' }, '');
-        }
+    if (maintenanceInputModal && maintenanceInputModal.classList.contains('show')) {
+        closeMaintenanceInputModal();
+        return;
     }
-}
-
-// 앱 시작 시 popstate 이벤트 리스너 추가
-window.addEventListener('popstate', handlePopState);
-
-// 사진 다운로드 함수 (바로 다운로드)
-async function downloadImage(url, filename) {
-    try {
-        console.log('다운로드 시작:', url, filename);
-        
-        // 모든 기기에서 직접 다운로드 시도
-        const response = await fetch(url);
-        const blob = await response.blob();
-        
-        // Blob URL 생성
-        const blobUrl = window.URL.createObjectURL(blob);
-        
-        // 다운로드 링크 생성
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        a.style.display = 'none';
-        
-        // DOM에 추가하고 클릭
-        document.body.appendChild(a);
-        a.click();
-        
-        // 정리
-        setTimeout(() => {
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(blobUrl);
-        }, 100);
-        
-        showNotification('다운로드가 시작되었습니다.', 'success');
-        
-    } catch (error) {
-        console.error('다운로드 실패:', error);
-        
-        // 실패 시 직접 링크로 다운로드 시도
-        try {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.target = '_blank';
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            showNotification('다운로드 링크가 생성되었습니다.', 'info');
-        } catch (fallbackError) {
-            console.error('폴백 다운로드도 실패:', fallbackError);
-            showNotification('다운로드에 실패했습니다. 브라우저 설정을 확인해주세요.', 'error');
-        }
+    
+    if (carNumberModal && carNumberModal.classList.contains('show')) {
+        closeCarNumberModal();
+        return;
+    }
+    
+    // 모달이 닫혀있으면 앱 종료 확인
+    if (confirm('앱을 종료하시겠습니까?')) {
+        window.close();
     }
 } 

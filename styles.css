@@ -20,6 +20,9 @@ html, body {
     color: var(--main-dark-gray);
     font-family: 'Pretendard', 'Helvetica Neue', Arial, sans-serif;
     min-height: 100vh;
+    /* 모바일에서 스크롤 위치 복원 방지 */
+    scroll-behavior: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .container {
