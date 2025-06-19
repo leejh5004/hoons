@@ -243,101 +243,38 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modal && backdrop) {
             console.log('정비 이력 입력 모달 열기 시작');
             
-            // 모달 내용 업데이트
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2 class="modal-title">
-                            <i class="fas fa-tools"></i>
-                            <span>새 정비 이력 입력</span>
-                        </h2>
-                        <button class="modal-close" onclick="closeMaintenanceInputModal()">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="newMaintenanceModalForm">
-                            <div class="mb-3">
-                                <label for="maintenanceCarNumberModal" class="form-label">오토바이 번호</label>
-                                <input type="text" class="form-control" id="maintenanceCarNumberModal" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="maintenanceDateModal" class="form-label">정비 날짜</label>
-                                <input type="date" class="form-control" id="maintenanceDateModal" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="maintenanceMileageModal" class="form-label">키로수</label>
-                                <input type="number" class="form-control" id="maintenanceMileageModal" placeholder="현재 주행거리 (km)" min="0" step="1" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="maintenanceTypeModal" class="form-label">정비 종류</label>
-                                <select class="form-control" id="maintenanceTypeModal" required>
-                                    <option value="">선택하세요</option>
-                                    <option value="일반점검">일반점검</option>
-                                    <option value="엔진오일교체">엔진오일교체</option>
-                                    <option value="타이어교체">타이어교체</option>
-                                    <option value="브레이크정비">브레이크정비</option>
-                                    <option value="기타">기타</option>
-                                </select>
-                            </div>
-
-                            <!-- 사진 업로드 섹션 -->
-                            <div class="form-group mt-4">
-                                <label class="form-label">정비 사진</label>
-                                <div class="photo-upload-container">
-                                    <div class="photo-upload-group">
-                                        <label class="photo-label">정비 전</label>
-                                        <div class="photo-preview" id="beforePhotoPreview">
-                                            <input type="file" class="photo-input" id="beforePhoto" accept="image/*" data-type="before" capture="environment">
-                                            <div class="photo-placeholder">
-                                                <i class="fas fa-camera"></i>
-                                                <span>사진 추가</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="photo-upload-group">
-                                        <label class="photo-label">정비 중</label>
-                                        <div class="photo-preview" id="duringPhotoPreview">
-                                            <input type="file" class="photo-input" id="duringPhoto" accept="image/*" data-type="during" capture="environment">
-                                            <div class="photo-placeholder">
-                                                <i class="fas fa-camera"></i>
-                                                <span>사진 추가</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="photo-upload-group">
-                                        <label class="photo-label">정비 후</label>
-                                        <div class="photo-preview" id="afterPhotoPreview">
-                                            <input type="file" class="photo-input" id="afterPhoto" accept="image/*" data-type="after" capture="environment">
-                                            <div class="photo-placeholder">
-                                                <i class="fas fa-camera"></i>
-                                                <span>사진 추가</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="descriptionModal" class="form-label">상세 설명</label>
-                                <textarea class="form-control" id="descriptionModal" rows="3" required></textarea>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer maintenance-footer-fixed">
-                        <button type="submit" class="btn btn-primary" form="newMaintenanceModalForm">
-                            <i class="fas fa-save me-1"></i>저장
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="closeMaintenanceInputModal()">
-                            <i class="fas fa-times me-1"></i>취소
-                        </button>
-                    </div>
-                </div>
-            `;
+            // 폼 초기화
+            const form = document.getElementById('newMaintenanceModalForm');
+            if (form) {
+                form.reset();
+            }
             
-            console.log('모달 HTML 설정 완료, 이벤트 리스너 설정 시작');
+            // 사진 미리보기 초기화
+            uploadedPhotos = { before: null, during: null, after: null };
             
-            // 이벤트 리스너 다시 연결
+            // 사진 미리보기 영역 초기화
+            const photoTypes = ['before', 'during', 'after'];
+            photoTypes.forEach(type => {
+                const previewDiv = document.getElementById(`${type}PhotoPreview`);
+                const img = document.getElementById(`${type}PhotoImg`);
+                if (previewDiv && img) {
+                    img.src = '';
+                    img.style.display = 'none';
+                    const placeholder = previewDiv.querySelector('.photo-placeholder');
+                    if (placeholder) {
+                        placeholder.style.display = 'flex';
+                    }
+                    // 기존 제거 버튼 제거
+                    const existingRemoveBtn = previewDiv.querySelector('button');
+                    if (existingRemoveBtn) {
+                        existingRemoveBtn.remove();
+                    }
+                }
+            });
+            
+            console.log('모달 초기화 완료, 이벤트 리스너 설정 시작');
+            
+            // 이벤트 리스너 설정
             setupPhotoInputListeners();
             setupMaintenanceFormListener();
             
@@ -357,17 +294,35 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modal && backdrop) {
             modal.classList.remove('show');
             backdrop.classList.remove('show');
+            
             // 폼 초기화
             const form = document.getElementById('newMaintenanceModalForm');
             if (form) {
                 form.reset();
             }
+            
             // 사진 미리보기 초기화
-            document.querySelectorAll('.photo-preview').forEach(preview => {
-                preview.innerHTML = '';
-            });
-            // 업로드된 사진 데이터 초기화
             uploadedPhotos = { before: null, during: null, after: null };
+            
+            // 사진 미리보기 영역 초기화
+            const photoTypes = ['before', 'during', 'after'];
+            photoTypes.forEach(type => {
+                const previewDiv = document.getElementById(`${type}PhotoPreview`);
+                const img = document.getElementById(`${type}PhotoImg`);
+                if (previewDiv && img) {
+                    img.src = '';
+                    img.style.display = 'none';
+                    const placeholder = previewDiv.querySelector('.photo-placeholder');
+                    if (placeholder) {
+                        placeholder.style.display = 'flex';
+                    }
+                    // 기존 제거 버튼 제거
+                    const existingRemoveBtn = previewDiv.querySelector('button');
+                    if (existingRemoveBtn) {
+                        existingRemoveBtn.remove();
+                    }
+                }
+            });
         }
     }
 
@@ -383,157 +338,139 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 사진 입력 이벤트 리스너 설정 함수 (강화된 클릭 처리)
+    // 사진 입력 이벤트 리스너 설정 함수 (간단하고 확실한 구조)
     function setupPhotoInputListeners() {
         console.log('사진 업로드 리스너 설정 시작');
-        // 기존 이벤트 리스너 제거 (중복 방지)
-        document.querySelectorAll('.photo-preview').forEach(preview => {
-            const newPreview = preview.cloneNode(true);
-            preview.parentNode.replaceChild(newPreview, preview);
-        });
-        document.querySelectorAll('.photo-input').forEach((input, index) => {
-            const type = input.dataset.type;
-            const previewId = `${type}PhotoPreview`;
+        
+        // 각 사진 input에 change 이벤트 리스너 추가
+        const photoInputs = [
+            { id: 'beforePhoto', type: 'before', previewId: 'beforePhotoPreview', imgId: 'beforePhotoImg' },
+            { id: 'duringPhoto', type: 'during', previewId: 'duringPhotoPreview', imgId: 'duringPhotoImg' },
+            { id: 'afterPhoto', type: 'after', previewId: 'afterPhotoPreview', imgId: 'afterPhotoImg' }
+        ];
+
+        photoInputs.forEach(({ id, type, previewId, imgId }) => {
+            const input = document.getElementById(id);
             const previewDiv = document.getElementById(previewId);
-            console.log(`설정 중: ${type} (${index + 1}/3)`, { input, previewDiv });
-            if (previewDiv) {
-                const clickHandler = (e) => {
-                    console.log(`${type} 클릭 이벤트 발생`);
-                    e.preventDefault();
-                    e.stopPropagation();
-                    try {
-                        input.click();
-                        console.log(`${type} input.click() 성공`);
-                    } catch (error) {
-                        console.error(`${type} input.click() 실패:`, error);
-                    }
-                };
-                previewDiv.addEventListener('click', clickHandler);
-                previewDiv.addEventListener('touchstart', clickHandler);
-                previewDiv.addEventListener('mousedown', clickHandler);
-                previewDiv.addEventListener('focus', () => {
-                    console.log(`${type} focus 이벤트 발생`);
-                    input.click();
-                });
-                let lastTap = 0;
-                previewDiv.addEventListener('touchend', (e) => {
-                    const currentTime = new Date().getTime();
-                    const tapLength = currentTime - lastTap;
-                    if (tapLength < 500 && tapLength > 0) {
-                        e.preventDefault();
+            const img = document.getElementById(imgId);
+            
+            if (input && previewDiv && img) {
+                input.addEventListener('change', async function(e) {
+                    console.log(`${type} 파일 선택됨:`, e.target.files[0]);
+                    const file = e.target.files[0];
+                    
+                    if (!file) {
+                        console.log(`${type} 파일이 선택되지 않음`);
                         return;
                     }
-                    lastTap = currentTime;
+
+                    try {
+                        // 파일 타입 검증
+                        if (!file.type.startsWith('image/')) {
+                            showNotification('이미지 파일만 업로드 가능합니다.', 'error');
+                            return;
+                        }
+
+                        // 파일 크기 검증 (5MB)
+                        if (file.size > 5 * 1024 * 1024) {
+                            showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
+                            return;
+                        }
+
+                        console.log(`${type} 이미지 처리 시작`);
+                        
+                        // 로딩 표시
+                        previewDiv.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100px; color:#007bff;"><i class="fas fa-spinner fa-spin" style="font-size:2em; margin-right:10px;"></i> 처리중...</div>';
+                        
+                        // 이미지 리사이즈
+                        const resizedImage = await resizeImage(file);
+                        console.log(`${type} 이미지 리사이즈 완료`);
+                        
+                        // 미리보기 표시
+                        const reader = new FileReader();
+                        reader.onload = function(ev) {
+                            img.src = ev.target.result;
+                            img.style.display = 'block';
+                            
+                            // placeholder 숨기기
+                            const placeholder = previewDiv.querySelector('.photo-placeholder');
+                            if (placeholder) {
+                                placeholder.style.display = 'none';
+                            }
+                            
+                            // 제거 버튼 추가
+                            const removeBtn = document.createElement('button');
+                            removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                            removeBtn.style.cssText = `
+                                position: absolute;
+                                top: 5px;
+                                right: 5px;
+                                background: rgba(255,0,0,0.8);
+                                color: white;
+                                border: none;
+                                border-radius: 50%;
+                                width: 30px;
+                                height: 30px;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 12px;
+                                z-index: 10;
+                            `;
+                            
+                            removeBtn.onclick = (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log(`${type} 사진 제거 버튼 클릭`);
+                                
+                                // 미리보기 초기화
+                                img.src = '';
+                                img.style.display = 'none';
+                                input.value = '';
+                                uploadedPhotos[type] = null;
+                                
+                                // placeholder 다시 표시
+                                const placeholder = previewDiv.querySelector('.photo-placeholder');
+                                if (placeholder) {
+                                    placeholder.style.display = 'flex';
+                                }
+                                
+                                // 제거 버튼 제거
+                                removeBtn.remove();
+                                
+                                console.log(`${type} 사진 제거됨`);
+                            };
+                            
+                            previewDiv.appendChild(removeBtn);
+                        };
+                        
+                        reader.readAsDataURL(resizedImage);
+                        
+                        // 업로드된 사진 저장
+                        uploadedPhotos[type] = resizedImage;
+                        console.log(`${type} 사진 업로드 완료, 미리보기 표시됨`);
+                        showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
+                        
+                    } catch (err) {
+                        console.error(`${type} 사진 처리 중 오류:`, err);
+                        showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
+                        
+                        // 에러 시 초기화
+                        img.src = '';
+                        img.style.display = 'none';
+                        input.value = '';
+                        uploadedPhotos[type] = null;
+                        
+                        const placeholder = previewDiv.querySelector('.photo-placeholder');
+                        if (placeholder) {
+                            placeholder.style.display = 'flex';
+                        }
+                    }
                 });
             }
-            input.addEventListener('change', async function(e) {
-                console.log(`${type} 파일 선택됨:`, e.target.files[0]);
-                const file = e.target.files[0];
-                if (!file) {
-                    console.log(`${type} 파일이 선택되지 않음`);
-                    return;
-                }
-                try {
-                    if (!file.type.startsWith('image/')) {
-                        showNotification('이미지 파일만 업로드 가능합니다.', 'error');
-                        return;
-                    }
-                    if (file.size > 5 * 1024 * 1024) {
-                        showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
-                        return;
-                    }
-                    console.log(`${type} 이미지 처리 시작`);
-                    previewDiv.innerHTML = '<div class="loading-spinner" style="display: flex; align-items: center; justify-content: center; height: 100px; color: #007bff;"><i class="fas fa-spinner fa-spin" style="font-size: 2em; margin-right: 10px;"></i> 처리중...</div>';
-                    const resizedImage = await resizeImage(file);
-                    console.log(`${type} 이미지 리사이즈 완료:`, resizedImage);
-                    previewDiv.innerHTML = '';
-                    const previewContainer = document.createElement('div');
-                    previewContainer.className = 'preview-container';
-                    previewContainer.style.cssText = `
-                        position: relative;
-                        width: 100%;
-                        height: 100%;
-                        border-radius: 8px;
-                        overflow: hidden;
-                        background: #fff;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                    `;
-                    const img = document.createElement('img');
-                    img.style.cssText = `
-                        width: 100%;
-                        height: 100%;
-                        object-fit: cover;
-                        border-radius: 8px;
-                    `;
-                    const blobUrl = URL.createObjectURL(resizedImage);
-                    img.src = blobUrl;
-                    img.alt = `${type} 사진 미리보기`;
-                    img.onload = () => {
-                        console.log(`${type} 이미지 로드 완료`);
-                        URL.revokeObjectURL(blobUrl);
-                    };
-                    img.onerror = () => {
-                        console.error(`${type} 이미지 로드 실패`);
-                        URL.revokeObjectURL(blobUrl);
-                    };
-                    previewContainer.appendChild(img);
-                    const removeBtn = document.createElement('button');
-                    removeBtn.className = 'remove-photo';
-                    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                    removeBtn.style.cssText = `
-                        position: absolute;
-                        top: 5px;
-                        right: 5px;
-                        background: rgba(255,0,0,0.8);
-                        color: white;
-                        border: none;
-                        border-radius: 50%;
-                        width: 30px;
-                        height: 30px;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 12px;
-                        z-index: 10;
-                    `;
-                    removeBtn.onclick = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log(`${type} 사진 제거 버튼 클릭`);
-                        previewContainer.remove();
-                        uploadedPhotos[type] = null;
-                        input.value = '';
-                        previewDiv.innerHTML = `
-                            <div class="photo-placeholder">
-                                <i class="fas fa-camera"></i>
-                                <span>사진 추가</span>
-                            </div>
-                        `;
-                        console.log(`${type} 사진 제거됨`);
-                    };
-                    previewContainer.appendChild(removeBtn);
-                    previewDiv.appendChild(previewContainer);
-                    uploadedPhotos[type] = resizedImage;
-                    console.log(`${type} 사진 업로드 완료, 미리보기 표시됨`);
-                    showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
-                } catch (err) {
-                    console.error(`${type} 사진 처리 중 오류:`, err);
-                    showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
-                    previewDiv.innerHTML = `
-                        <div class="photo-placeholder">
-                            <i class="fas fa-camera"></i>
-                            <span>사진 추가</span>
-                        </div>
-                    `;
-                }
-            });
-            input.addEventListener('click', (e) => {
-                console.log(`${type} input 직접 클릭됨`);
-            });
         });
-        // PC/모바일에 따라 capture 속성 동적 적용
-        setPhotoInputCapture();
+        
         console.log('사진 업로드 리스너 설정 완료');
     }
 
