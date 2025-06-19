@@ -604,7 +604,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // 모달 표시
         modal.classList.add('show');
         backdrop.classList.add('show');
-        history.pushState({ page: 'detail', modalId: 'maintenanceDetail' }, '');
     }
 
     // 사진 남은 시간 HTML 생성 함수
@@ -663,7 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 앱 시작 시 popstate 이벤트 리스너 추가
-    window.addEventListener('popstate', handlePopState);
+    // window.addEventListener('popstate', handlePopState);
+    // function handlePopState(event) { ... }
+    // history.pushState 등 관련 코드도 모두 제거
 
     // 사진 다운로드 함수 (Base64 지원)
     async function downloadImage(url, filename) {
@@ -1407,7 +1408,6 @@ window.showMaintenanceDetail = function(maintenance) {
     // 모달 표시
     modal.classList.add('show');
     backdrop.classList.add('show');
-    history.pushState({ page: 'detail', modalId: 'maintenanceDetail' }, '');
 }
 
 // 정비 타입 아이콘 가져오기 함수 수정
@@ -1710,35 +1710,4 @@ function convertToBase64(file) {
         reader.onerror = error => reject(error);
         reader.readAsDataURL(file);
     });
-}
-
-// popstate 이벤트 핸들러 (간단한 버전)
-function handlePopState(event) {
-    // 스크롤 위치를 맨 위로 고정
-    window.scrollTo(0, 0);
-    
-    // 모달이 열려있으면 닫기
-    const maintenanceDetailModal = document.getElementById('maintenanceDetailModal');
-    const maintenanceInputModal = document.getElementById('maintenanceInputModal');
-    const carNumberModal = document.getElementById('carNumberModal');
-    
-    if (maintenanceDetailModal && maintenanceDetailModal.classList.contains('show')) {
-        closeMaintenanceDetailModal();
-        return;
-    }
-    
-    if (maintenanceInputModal && maintenanceInputModal.classList.contains('show')) {
-        closeMaintenanceInputModal();
-        return;
-    }
-    
-    if (carNumberModal && carNumberModal.classList.contains('show')) {
-        closeCarNumberModal();
-        return;
-    }
-    
-    // 모달이 닫혀있으면 앱 종료 확인
-    if (confirm('앱을 종료하시겠습니까?')) {
-        window.close();
-    }
 } 
