@@ -337,138 +337,62 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 사진 입력 이벤트 리스너 설정 함수 (간단하고 확실한 구조)
     function setupPhotoInputListeners() {
-        console.log('사진 업로드 리스너 설정 시작');
-        
-        // 각 사진 input에 change 이벤트 리스너 추가
         const photoInputs = [
             { id: 'beforePhoto', type: 'before', previewId: 'beforePhotoPreview', imgId: 'beforePhotoImg' },
             { id: 'duringPhoto', type: 'during', previewId: 'duringPhotoPreview', imgId: 'duringPhotoImg' },
             { id: 'afterPhoto', type: 'after', previewId: 'afterPhotoPreview', imgId: 'afterPhotoImg' }
         ];
-
         photoInputs.forEach(({ id, type, previewId, imgId }) => {
             const input = document.getElementById(id);
             const previewDiv = document.getElementById(previewId);
             const img = document.getElementById(imgId);
-            
             if (input && previewDiv && img) {
-                input.addEventListener('change', async function(e) {
-                    console.log(`${type} 파일 선택됨:`, e.target.files[0]);
+                input.addEventListener('change', function(e) {
                     const file = e.target.files[0];
-                    
-                    if (!file) {
-                        console.log(`${type} 파일이 선택되지 않음`);
-                        return;
-                    }
-
-                    try {
-                        // 파일 타입 검증
-                        if (!file.type.startsWith('image/')) {
-                            showNotification('이미지 파일만 업로드 가능합니다.', 'error');
-                            return;
-                        }
-
-                        // 파일 크기 검증 (5MB)
-                        if (file.size > 5 * 1024 * 1024) {
-                            showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
-                            return;
-                        }
-
-                        console.log(`${type} 이미지 처리 시작`);
-                        
-                        // 로딩 표시
-                        previewDiv.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100px; color:#007bff;"><i class="fas fa-spinner fa-spin" style="font-size:2em; margin-right:10px;"></i> 처리중...</div>';
-                        
-                        // 이미지 리사이즈
-                        const resizedImage = await resizeImage(file);
-                        console.log(`${type} 이미지 리사이즈 완료`);
-                        
-                        // 미리보기 표시
-                        const reader = new FileReader();
-                        reader.onload = function(ev) {
-                            img.src = ev.target.result;
-                            img.style.display = 'block';
-                            
-                            // placeholder 숨기기
-                            const placeholder = previewDiv.querySelector('.photo-placeholder');
-                            if (placeholder) {
-                                placeholder.style.display = 'none';
-                            }
-                            
-                            // 제거 버튼 추가
-                            const removeBtn = document.createElement('button');
-                            removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                            removeBtn.style.cssText = `
-                                position: absolute;
-                                top: 5px;
-                                right: 5px;
-                                background: rgba(255,0,0,0.8);
-                                color: white;
-                                border: none;
-                                border-radius: 50%;
-                                width: 30px;
-                                height: 30px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 12px;
-                                z-index: 10;
-                            `;
-                            
-                            removeBtn.onclick = (e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                console.log(`${type} 사진 제거 버튼 클릭`);
-                                
-                                // 미리보기 초기화
-                                img.src = '';
-                                img.style.display = 'none';
-                                input.value = '';
-                                uploadedPhotos[type] = null;
-                                
-                                // placeholder 다시 표시
-                                const placeholder = previewDiv.querySelector('.photo-placeholder');
-                                if (placeholder) {
-                                    placeholder.style.display = 'flex';
-                                }
-                                
-                                // 제거 버튼 제거
-                                removeBtn.remove();
-                                
-                                console.log(`${type} 사진 제거됨`);
-                            };
-                            
-                            previewDiv.appendChild(removeBtn);
-                        };
-                        
-                        reader.readAsDataURL(resizedImage);
-                        
-                        // 업로드된 사진 저장
-                        uploadedPhotos[type] = resizedImage;
-                        console.log(`${type} 사진 업로드 완료, 미리보기 표시됨`);
-                        showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
-                        
-                    } catch (err) {
-                        console.error(`${type} 사진 처리 중 오류:`, err);
-                        showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
-                        
-                        // 에러 시 초기화
-                        img.src = '';
-                        img.style.display = 'none';
-                        input.value = '';
-                        uploadedPhotos[type] = null;
-                        
+                    if (!file) return;
+                    // 미리보기: FileReader로 즉시 띄움
+                    const reader = new FileReader();
+                    reader.onload = function(ev) {
+                        img.src = ev.target.result;
+                        img.style.display = 'block';
+                        // placeholder, 버튼 모두 완전히 제거
                         const placeholder = previewDiv.querySelector('.photo-placeholder');
-                        if (placeholder) {
-                            placeholder.style.display = 'flex';
-                        }
-                    }
+                        if (placeholder) placeholder.remove();
+                        const btn = previewDiv.parentElement.querySelector('label[for="' + id + '"]');
+                        if (btn) btn.style.display = 'none';
+                        // 기존 제거 버튼 제거
+                        const oldBtn = previewDiv.querySelector('button');
+                        if (oldBtn) oldBtn.remove();
+                        // 제거 버튼 추가
+                        const removeBtn = document.createElement('button');
+                        removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                        removeBtn.style.cssText = `position:absolute;top:5px;right:5px;background:rgba(255,0,0,0.8);color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;z-index:10;`;
+                        removeBtn.onclick = (ev2) => {
+                            ev2.preventDefault();
+                            ev2.stopPropagation();
+                            img.src = '';
+                            img.style.display = 'none';
+                            input.value = '';
+                            uploadedPhotos[type] = null;
+                            // placeholder, 버튼 다시 보이게
+                            if (btn) btn.style.display = '';
+                            // placeholder 복원
+                            if (!previewDiv.querySelector('.photo-placeholder')) {
+                                const ph = document.createElement('div');
+                                ph.className = 'photo-placeholder';
+                                ph.innerHTML = '<i class="fas fa-camera"></i><span>사진 추가</span>';
+                                previewDiv.appendChild(ph);
+                            }
+                            removeBtn.remove();
+                        };
+                        previewDiv.appendChild(removeBtn);
+                    };
+                    reader.readAsDataURL(file);
+                    // 업로드용 파일 저장
+                    uploadedPhotos[type] = file;
                 });
             }
         });
-        
-        console.log('사진 업로드 리스너 설정 완료');
     }
 
     // 정비 폼 이벤트 리스너 설정 함수
@@ -1626,15 +1550,13 @@ function updateUI() {
     if (searchBox) searchBox.style.display = 'block';
 }
 
-// 이미지 리사이즈 함수 (간단하고 확실한 버전)
+// 이미지 리사이즈 함수 (toBlob 실패 시 toDataURL로 fallback, PNG도 지원)
 async function resizeImage(file) {
     return new Promise((resolve, reject) => {
-        // 파일 크기가 1MB 이하면 리사이즈하지 않고 그대로 반환
         if (file.size <= 1024 * 1024) {
             resolve(file);
             return;
         }
-
         const reader = new FileReader();
         reader.onload = function(e) {
             const img = new Image();
@@ -1642,12 +1564,8 @@ async function resizeImage(file) {
                 try {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
-                    
-                    // 최대 크기 설정 (800x800)
                     const maxSize = 800;
                     let { width, height } = img;
-                    
-                    // 비율 유지하면서 크기 조정
                     if (width > height) {
                         if (width > maxSize) {
                             height = (height * maxSize) / width;
@@ -1659,49 +1577,57 @@ async function resizeImage(file) {
                             height = maxSize;
                         }
                     }
-                    
                     canvas.width = width;
                     canvas.height = height;
-                    
-                    // 이미지 그리기
                     ctx.drawImage(img, 0, 0, width, height);
-                    
-                    // Blob으로 변환
+
+                    let called = false;
                     canvas.toBlob((blob) => {
+                        if (called) return;
+                        called = true;
                         if (blob) {
-                            const resizedFile = new File([blob], file.name, {
+                            resolve(new File([blob], file.name, {
                                 type: 'image/jpeg',
                                 lastModified: Date.now()
-                            });
-                            resolve(resizedFile);
+                            }));
                         } else {
-                            // Blob 생성 실패 시 원본 파일 반환
-                            resolve(file);
+                            // fallback: Base64 PNG로 반환
+                            const dataUrl = canvas.toDataURL('image/png');
+                            fetch(dataUrl)
+                                .then(res => res.blob())
+                                .then(blob2 => {
+                                    resolve(new File([blob2], file.name, {
+                                        type: 'image/png',
+                                        lastModified: Date.now()
+                                    }));
+                                })
+                                .catch(() => resolve(file));
                         }
                     }, 'image/jpeg', 0.8);
-                    
+                    setTimeout(() => {
+                        if (!called) {
+                            called = true;
+                            // fallback: Base64 PNG로 반환
+                            const dataUrl = canvas.toDataURL('image/png');
+                            fetch(dataUrl)
+                                .then(res => res.blob())
+                                .then(blob2 => {
+                                    resolve(new File([blob2], file.name, {
+                                        type: 'image/png',
+                                        lastModified: Date.now()
+                                    }));
+                                })
+                                .catch(() => resolve(file));
+                        }
+                    }, 2000);
                 } catch (error) {
-                    console.error('이미지 리사이즈 실패:', error);
-                    // 에러 시 원본 파일 반환
                     resolve(file);
                 }
             };
-            
-            img.onerror = function() {
-                console.error('이미지 로드 실패');
-                // 이미지 로드 실패 시 원본 파일 반환
-                resolve(file);
-            };
-            
+            img.onerror = function() { resolve(file); };
             img.src = e.target.result;
         };
-        
-        reader.onerror = function() {
-            console.error('파일 읽기 실패');
-            // 파일 읽기 실패 시 원본 파일 반환
-            resolve(file);
-        };
-        
+        reader.onerror = function() { resolve(file); };
         reader.readAsDataURL(file);
     });
 }
@@ -1739,36 +1665,40 @@ function getImageOrientation(arrayBuffer) {
     return 1; // Default orientation
 }
 
-// 사진 업로드 함수 (간단한 버전)
+// ImgBB 업로드만 사용하는 함수로 고정
 async function uploadMaintenancePhotos(maintenanceId) {
     const photos = [];
-    
     for (const [type, file] of Object.entries(uploadedPhotos)) {
         if (file) {
             try {
-                console.log(`${type} 사진 업로드 시작`);
-                
-                // 파일을 Base64로 변환
+                // 이미지를 Base64로 변환
                 const base64Image = await convertToBase64(file);
-                
-                // Firestore에 직접 저장 (간단한 방법)
-                photos.push({
-                    type,
-                    url: base64Image, // Base64 데이터 직접 저장
-                    thumbnailUrl: base64Image, // 썸네일도 동일하게
-                    createdAt: new Date().toISOString(),
-                    filename: `${type}_${Date.now()}.jpg`
+                // ImgBB API 호출
+                const formData = new FormData();
+                formData.append('key', IMGBB_API_KEY);
+                formData.append('image', base64Image.split(',')[1]);
+                formData.append('name', `maintenance_${maintenanceId}_${type}_${Date.now()}`);
+                const response = await fetch('https://api.imgbb.com/1/upload', {
+                    method: 'POST',
+                    body: formData
                 });
-                
-                console.log(`${type} 사진 업로드 완료`);
-                
+                const result = await response.json();
+                if (result.success) {
+                    photos.push({
+                        type,
+                        url: result.data.url,
+                        thumbnailUrl: result.data.thumb ? result.data.thumb.url : result.data.url,
+                        createdAt: new Date().toISOString(),
+                        filename: `${type}_${Date.now()}.jpg`
+                    });
+                } else {
+                    throw new Error('이미지 업로드 실패');
+                }
             } catch (err) {
-                console.error(`${type} 사진 업로드 중 오류:`, err);
                 showNotification(`${type} 사진 업로드 실패: ${err.message}`, 'error');
             }
         }
     }
-    
     return photos;
 }
 
