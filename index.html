@@ -116,108 +116,106 @@
         </div>
         <!-- 정비 이력 입력 모달 -->
         <div id="maintenanceInputModal" class="maintenance-modal">
-            <div class="modal-header">
-                <h2 class="modal-title">
-                    <i class="fas fa-tools"></i>
-                    <span>새 정비 이력 입력</span>
-                </h2>
-                <button class="modal-close" onclick="closeMaintenanceInputModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <form id="newMaintenanceModalForm">
-                    <div class="mb-3">
-                        <label for="maintenanceCarNumberModal" class="form-label">오토바이 번호</label>
-                        <input type="text" class="form-control" id="maintenanceCarNumberModal" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="maintenanceDateModal" class="form-label">정비 날짜</label>
-                        <input type="date" class="form-control" id="maintenanceDateModal" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="maintenanceMileageModal" class="form-label">키로수</label>
-                        <input type="number" class="form-control" id="maintenanceMileageModal" placeholder="현재 주행거리 (km)" min="0" step="1" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="maintenanceTypeModal" class="form-label">정비 종류</label>
-                        <select class="form-control" id="maintenanceTypeModal" required>
-                            <option value="">선택하세요</option>
-                            <option value="일반점검">일반점검</option>
-                            <option value="엔진오일교체">엔진오일교체</option>
-                            <option value="타이어교체">타이어교체</option>
-                            <option value="브레이크정비">브레이크정비</option>
-                            <option value="기타">기타</option>
-                        </select>
-                    </div>
-
-                    <!-- 사진 업로드 섹션 -->
-                    <div class="form-group mt-4">
-                        <label class="form-label">정비 사진</label>
-                        <div class="photo-upload-container">
-                            <!-- 정비 전 사진 -->
-                            <div class="photo-upload-group">
-                                <label class="photo-label">정비 전</label>
-                                <div class="photo-preview" id="beforePhotoPreview">
-                                    <img id="beforePhotoImg" src="" alt="정비 전 미리보기" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:8px;">
-                                    <div class="photo-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>사진 추가</span>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <i class="fas fa-tools"></i>
+                        <span>새 정비 이력 입력</span>
+                    </h2>
+                    <button class="modal-close" onclick="closeMaintenanceInputModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="newMaintenanceModalForm">
+                        <div class="mb-3">
+                            <label for="maintenanceCarNumberModal" class="form-label">오토바이 번호</label>
+                            <input type="text" class="form-control" id="maintenanceCarNumberModal" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="maintenanceDateModal" class="form-label">정비 날짜</label>
+                            <input type="date" class="form-control" id="maintenanceDateModal" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="maintenanceMileageModal" class="form-label">키로수</label>
+                            <input type="number" class="form-control" id="maintenanceMileageModal" placeholder="현재 주행거리 (km)" min="0" step="1" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="maintenanceTypeModal" class="form-label">정비 종류</label>
+                            <select class="form-control" id="maintenanceTypeModal" required>
+                                <option value="">선택하세요</option>
+                                <option value="일반점검">일반점검</option>
+                                <option value="엔진오일교체">엔진오일교체</option>
+                                <option value="타이어교체">타이어교체</option>
+                                <option value="브레이크정비">브레이크정비</option>
+                                <option value="기타">기타</option>
+                            </select>
+                        </div>
+                        <!-- 사진 업로드 섹션 -->
+                        <div class="form-group mt-4">
+                            <label class="form-label">정비 사진</label>
+                            <div class="photo-upload-container">
+                                <!-- 정비 전 사진 -->
+                                <div class="photo-upload-group">
+                                    <label class="photo-label">정비 전</label>
+                                    <div class="photo-preview" id="beforePhotoPreview">
+                                        <img id="beforePhotoImg" src="" alt="정비 전 미리보기" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:8px;">
+                                        <div class="photo-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>사진 추가</span>
+                                        </div>
                                     </div>
+                                    <label for="beforePhoto" class="btn btn-outline-primary btn-sm mt-2" style="width:100%; cursor:pointer;">
+                                        <i class="fas fa-upload me-1"></i>사진 선택
+                                    </label>
+                                    <input type="file" id="beforePhoto" accept="image/*" data-type="before" style="display:none;">
                                 </div>
-                                <label for="beforePhoto" class="btn btn-outline-primary btn-sm mt-2" style="width:100%; cursor:pointer;">
-                                    <i class="fas fa-upload me-1"></i>사진 선택
-                                </label>
-                                <input type="file" id="beforePhoto" accept="image/*" data-type="before" style="display:none;">
-                            </div>
-                            
-                            <!-- 정비 중 사진 -->
-                            <div class="photo-upload-group">
-                                <label class="photo-label">정비 중</label>
-                                <div class="photo-preview" id="duringPhotoPreview">
-                                    <img id="duringPhotoImg" src="" alt="정비 중 미리보기" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:8px;">
-                                    <div class="photo-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>사진 추가</span>
+                                <!-- 정비 중 사진 -->
+                                <div class="photo-upload-group">
+                                    <label class="photo-label">정비 중</label>
+                                    <div class="photo-preview" id="duringPhotoPreview">
+                                        <img id="duringPhotoImg" src="" alt="정비 중 미리보기" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:8px;">
+                                        <div class="photo-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>사진 추가</span>
+                                        </div>
                                     </div>
+                                    <label for="duringPhoto" class="btn btn-outline-primary btn-sm mt-2" style="width:100%; cursor:pointer;">
+                                        <i class="fas fa-upload me-1"></i>사진 선택
+                                    </label>
+                                    <input type="file" id="duringPhoto" accept="image/*" data-type="during" style="display:none;">
                                 </div>
-                                <label for="duringPhoto" class="btn btn-outline-primary btn-sm mt-2" style="width:100%; cursor:pointer;">
-                                    <i class="fas fa-upload me-1"></i>사진 선택
-                                </label>
-                                <input type="file" id="duringPhoto" accept="image/*" data-type="during" style="display:none;">
-                            </div>
-                            
-                            <!-- 정비 후 사진 -->
-                            <div class="photo-upload-group">
-                                <label class="photo-label">정비 후</label>
-                                <div class="photo-preview" id="afterPhotoPreview">
-                                    <img id="afterPhotoImg" src="" alt="정비 후 미리보기" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:8px;">
-                                    <div class="photo-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>사진 추가</span>
+                                <!-- 정비 후 사진 -->
+                                <div class="photo-upload-group">
+                                    <label class="photo-label">정비 후</label>
+                                    <div class="photo-preview" id="afterPhotoPreview">
+                                        <img id="afterPhotoImg" src="" alt="정비 후 미리보기" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:8px;">
+                                        <div class="photo-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>사진 추가</span>
+                                        </div>
                                     </div>
+                                    <label for="afterPhoto" class="btn btn-outline-primary btn-sm mt-2" style="width:100%; cursor:pointer;">
+                                        <i class="fas fa-upload me-1"></i>사진 선택
+                                    </label>
+                                    <input type="file" id="afterPhoto" accept="image/*" data-type="after" style="display:none;">
                                 </div>
-                                <label for="afterPhoto" class="btn btn-outline-primary btn-sm mt-2" style="width:100%; cursor:pointer;">
-                                    <i class="fas fa-upload me-1"></i>사진 선택
-                                </label>
-                                <input type="file" id="afterPhoto" accept="image/*" data-type="after" style="display:none;">
                             </div>
                         </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="descriptionModal" class="form-label">상세 설명</label>
-                        <textarea class="form-control" id="descriptionModal" rows="3" required></textarea>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer maintenance-footer-fixed">
-                <button type="submit" class="btn btn-primary" form="newMaintenanceModalForm">
-                    <i class="fas fa-save me-1"></i>저장
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="closeMaintenanceInputModal()">
-                    <i class="fas fa-times me-1"></i>취소
-                </button>
+                        <div class="mb-3">
+                            <label for="descriptionModal" class="form-label">상세 설명</label>
+                            <textarea class="form-control" id="descriptionModal" rows="3" required></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer maintenance-footer-fixed">
+                    <button type="submit" class="btn btn-primary" form="newMaintenanceModalForm">
+                        <i class="fas fa-save me-1"></i>저장
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeMaintenanceInputModal()">
+                        <i class="fas fa-times me-1"></i>취소
+                    </button>
+                </div>
             </div>
         </div>
         <!-- 검색 입력창 -->
