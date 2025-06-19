@@ -365,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 사진 입력 이벤트 리스너 설정 함수
+    // 사진 입력 이벤트 리스너 설정 함수 (모바일 대응)
     function setupPhotoInputListeners() {
         document.querySelectorAll('.photo-input').forEach(input => {
             const type = input.dataset.type;
@@ -373,7 +373,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const previewDiv = document.getElementById(previewId);
 
             if (previewDiv) {
-                previewDiv.addEventListener('click', () => {
+                // 모바일에서 클릭 이벤트가 안 될 수 있으므로 여러 이벤트 추가
+                previewDiv.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    input.click();
+                });
+                
+                // 터치 이벤트도 추가 (모바일 대응)
+                previewDiv.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    input.click();
+                });
+                
+                // 포커스 이벤트도 추가
+                previewDiv.addEventListener('focus', () => {
                     input.click();
                 });
             }
@@ -421,6 +436,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     previewDiv.appendChild(previewContainer);
                     uploadedPhotos[type] = resizedImage;
+                    
+                    showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
                     
                 } catch (err) {
                     console.error('사진 처리 중 오류:', err);
@@ -488,7 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="modal-content">
                 <div class="modal-header">
                     <h2><i class="fas fa-tools"></i> 정비 이력 상세</h2>
-                    <button class="close-btn" onclick="closeMaintenanceDetailModal()">
+                    <button class="close-btn" onclick="closeMaintenanceDetailModal()" aria-label="닫기">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -542,7 +559,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <div class="photo-actions">
                                             ${getPhotoTimeLeftHtml(photo)}
                                             <button class="download-btn" 
-                                                    onclick="event.stopPropagation(); downloadPhoto('${photo.url}', '${photo.type}')">
+                                                    onclick="event.stopPropagation(); downloadImage('${photo.url}', '${photo.type}_${new Date().toISOString().split('T')[0]}')">
                                                 <i class="fas fa-download"></i> 다운로드
                                             </button>
                                         </div>
@@ -1326,7 +1343,7 @@ window.showMaintenanceDetail = function(maintenance) {
         <div class="modal-content">
             <div class="modal-header">
                 <h2><i class="fas fa-tools"></i> 정비 이력 상세</h2>
-                <button class="close-btn" onclick="closeMaintenanceDetailModal()">
+                <button class="close-btn" onclick="closeMaintenanceDetailModal()" aria-label="닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -1380,7 +1397,7 @@ window.showMaintenanceDetail = function(maintenance) {
                                     <div class="photo-actions">
                                         ${getPhotoTimeLeftHtml(photo)}
                                         <button class="download-btn" 
-                                                onclick="event.stopPropagation(); downloadPhoto('${photo.url}', '${photo.type}')">
+                                                onclick="event.stopPropagation(); downloadImage('${photo.url}', '${photo.type}_${new Date().toISOString().split('T')[0]}')">
                                             <i class="fas fa-download"></i> 다운로드
                                         </button>
                                     </div>
@@ -1810,19 +1827,30 @@ function handlePopState(event) {
 // 앱 시작 시 popstate 이벤트 리스너 추가
 window.addEventListener('popstate', handlePopState);
 
-// 사진 다운로드 함수 추가
+// 사진 다운로드 함수 추가 (모바일 대응)
 async function downloadImage(url, filename) {
     try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(downloadUrl);
-        document.body.removeChild(a);
+        // 모바일 기기 감지
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            // 모바일에서는 새 창에서 이미지 열기 (사용자가 직접 저장 가능)
+            window.open(url, '_blank');
+            showNotification('모바일에서는 새 창에서 이미지가 열립니다. 이미지를 길게 눌러 저장하세요.', 'info');
+        } else {
+            // 데스크톱에서는 기존 다운로드 방식 사용
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(downloadUrl);
+            document.body.removeChild(a);
+            showNotification('이미지가 다운로드되었습니다.', 'success');
+        }
     } catch (error) {
         console.error('이미지 다운로드 중 오류:', error);
         showNotification('이미지 다운로드에 실패했습니다.', 'error');

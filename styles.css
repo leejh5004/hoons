@@ -712,6 +712,7 @@ html, body {
     z-index: 1050;
     overflow-y: auto;
     padding: 20px;
+    background: transparent !important;
 }
 
 .maintenance-modal.show {
@@ -932,6 +933,23 @@ html, body {
     .photo-preview {
         padding-top: 100%; /* 1:1 비율로 변경 */
     }
+    
+    /* 모바일에서 사진 업로드 input 클릭 가능하도록 */
+    .photo-input {
+        opacity: 0 !important;
+        position: absolute !important;
+        width: 100% !important;
+        height: 100% !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 2 !important;
+        cursor: pointer !important;
+    }
+    
+    .photo-preview {
+        position: relative !important;
+        cursor: pointer !important;
+    }
 }
 
 /* 이스터에그 스타일 */
@@ -986,4 +1004,61 @@ html, body {
 
 .show-easter-egg #easterEggThanks {
     animation: shake 0.5s ease-in-out;
+}
+
+/* 정비사진 사진추가(카메라) 아이콘 비율 개선 */
+.photo-upload-label,
+.photos-title {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    line-height: 1.2 !important;
+}
+
+.photo-upload-label i,
+.photos-title i {
+    font-size: 1.4em !important;
+    min-width: 1.4em !important;
+    min-height: 1.4em !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    vertical-align: middle !important;
+}
+
+/* 닫기 버튼 스타일 */
+.close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 1.6em;
+    cursor: pointer;
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    z-index: 10;
+    padding: 0;
+    transition: color 0.2s;
+}
+.close-btn:hover {
+    color: #e74c3c;
+}
+
+/* 사진 업로드 관련 스타일 */
+.photo-input {
+    opacity: 0;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    cursor: pointer;
+}
+
+.photo-preview {
+    position: relative;
+    cursor: pointer;
 } 
