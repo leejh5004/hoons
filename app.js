@@ -230,52 +230,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 정비 이력 입력 모달 열기/닫기 함수
+    // 정비 이력 입력 모달 열기 함수
     window.openMaintenanceInputModal = function() {
+        if (!isAdmin) {
+            showNotification('관리자만 정비 이력을 추가할 수 있습니다.', 'error');
+            return;
+        }
+
         const modal = document.getElementById('maintenanceInputModal');
         const backdrop = document.getElementById('modalBackdrop');
+        
         if (modal && backdrop) {
-            // 모달 내용 동적 생성
+            console.log('정비 이력 입력 모달 열기 시작');
+            
+            // 모달 내용 업데이트
             modal.innerHTML = `
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h2><i class="fas fa-tools"></i> 새 정비 이력 입력</h2>
-                        <button class="close-btn" onclick="closeMaintenanceInputModal()">
+                        <h2 class="modal-title">
+                            <i class="fas fa-tools"></i>
+                            <span>새 정비 이력 입력</span>
+                        </h2>
+                        <button class="modal-close" onclick="closeMaintenanceInputModal()">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                     <div class="modal-body">
                         <form id="newMaintenanceModalForm">
-                            <div class="input-group">
-                                <div class="input-label">
-                                    <i class="fas fa-motorcycle"></i>
-                                    <label for="maintenanceCarNumberModal">오토바이 번호</label>
-                                </div>
-                                <input type="text" id="maintenanceCarNumberModal" required>
+                            <div class="mb-3">
+                                <label for="maintenanceCarNumberModal" class="form-label">오토바이 번호</label>
+                                <input type="text" class="form-control" id="maintenanceCarNumberModal" required>
                             </div>
-                            
-                            <div class="input-group">
-                                <div class="input-label">
-                                    <i class="fas fa-calendar"></i>
-                                    <label for="maintenanceDateModal">정비 날짜</label>
-                                </div>
-                                <input type="date" id="maintenanceDateModal" required>
+                            <div class="mb-3">
+                                <label for="maintenanceDateModal" class="form-label">정비 날짜</label>
+                                <input type="date" class="form-control" id="maintenanceDateModal" required>
                             </div>
-                            
-                            <div class="input-group">
-                                <div class="input-label">
-                                    <i class="fas fa-tachometer-alt"></i>
-                                    <label for="maintenanceMileageModal">키로수 (km)</label>
-                                </div>
-                                <input type="number" id="maintenanceMileageModal" required>
+                            <div class="mb-3">
+                                <label for="maintenanceMileageModal" class="form-label">키로수</label>
+                                <input type="number" class="form-control" id="maintenanceMileageModal" placeholder="현재 주행거리 (km)" min="0" step="1" required>
                             </div>
-                            
-                            <div class="input-group">
-                                <div class="input-label">
-                                    <i class="fas fa-wrench"></i>
-                                    <label for="maintenanceTypeModal">정비 종류</label>
-                                </div>
-                                <select id="maintenanceTypeModal" required>
+                            <div class="mb-3">
+                                <label for="maintenanceTypeModal" class="form-label">정비 종류</label>
+                                <select class="form-control" id="maintenanceTypeModal" required>
                                     <option value="">선택하세요</option>
                                     <option value="일반점검">일반점검</option>
                                     <option value="엔진오일교체">엔진오일교체</option>
@@ -284,63 +280,73 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <option value="기타">기타</option>
                                 </select>
                             </div>
-                            
-                            <div class="input-group">
-                                <div class="input-label">
-                                    <i class="fas fa-comment"></i>
-                                    <label for="descriptionModal">정비 내용</label>
+
+                            <!-- 사진 업로드 섹션 -->
+                            <div class="form-group mt-4">
+                                <label class="form-label">정비 사진</label>
+                                <div class="photo-upload-container">
+                                    <div class="photo-upload-group">
+                                        <label class="photo-label">정비 전</label>
+                                        <div class="photo-preview" id="beforePhotoPreview">
+                                            <input type="file" class="photo-input" id="beforePhoto" accept="image/*" data-type="before" capture="environment">
+                                            <div class="photo-placeholder">
+                                                <i class="fas fa-camera"></i>
+                                                <span>사진 추가</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="photo-upload-group">
+                                        <label class="photo-label">정비 중</label>
+                                        <div class="photo-preview" id="duringPhotoPreview">
+                                            <input type="file" class="photo-input" id="duringPhoto" accept="image/*" data-type="during" capture="environment">
+                                            <div class="photo-placeholder">
+                                                <i class="fas fa-camera"></i>
+                                                <span>사진 추가</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="photo-upload-group">
+                                        <label class="photo-label">정비 후</label>
+                                        <div class="photo-preview" id="afterPhotoPreview">
+                                            <input type="file" class="photo-input" id="afterPhoto" accept="image/*" data-type="after" capture="environment">
+                                            <div class="photo-placeholder">
+                                                <i class="fas fa-camera"></i>
+                                                <span>사진 추가</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <textarea id="descriptionModal" rows="4" required></textarea>
                             </div>
-                            
-                            ${isAdmin ? `
-                            <div class="photos-section">
-                                <div class="photos-title">
-                                    <i class="fas fa-camera"></i>
-                                    정비 사진 (관리자만 추가 가능)
-                                </div>
-                                <div class="photos-grid">
-                                    <div class="photo-item">
-                                        <input type="file" class="photo-input" data-type="before" accept="image/*">
-                                        <div id="beforePhotoPreview" class="photo-preview" title="정비 전 사진">
-                                            <i class="fas fa-camera"></i>
-                                        </div>
-                                    </div>
-                                    <div class="photo-item">
-                                        <input type="file" class="photo-input" data-type="during" accept="image/*">
-                                        <div id="duringPhotoPreview" class="photo-preview" title="정비 중 사진">
-                                            <i class="fas fa-camera"></i>
-                                        </div>
-                                    </div>
-                                    <div class="photo-item">
-                                        <input type="file" class="photo-input" data-type="after" accept="image/*">
-                                        <div id="afterPhotoPreview" class="photo-preview" title="정비 후 사진">
-                                            <i class="fas fa-camera"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            ` : ''}
-                            
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" onclick="closeMaintenanceInputModal()">
-                                    <i class="fas fa-times"></i> 취소
-                                </button>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-save"></i> 저장
-                                </button>
+
+                            <div class="mb-3">
+                                <label for="descriptionModal" class="form-label">상세 설명</label>
+                                <textarea class="form-control" id="descriptionModal" rows="3" required></textarea>
                             </div>
                         </form>
                     </div>
+                    <div class="modal-footer maintenance-footer-fixed">
+                        <button type="submit" class="btn btn-primary" form="newMaintenanceModalForm">
+                            <i class="fas fa-save me-1"></i>저장
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="closeMaintenanceInputModal()">
+                            <i class="fas fa-times me-1"></i>취소
+                        </button>
+                    </div>
                 </div>
             `;
+            
+            console.log('모달 HTML 설정 완료, 이벤트 리스너 설정 시작');
             
             // 이벤트 리스너 다시 연결
             setupPhotoInputListeners();
             setupMaintenanceFormListener();
             
+            console.log('이벤트 리스너 설정 완료, 모달 표시');
+            
             modal.classList.add('show');
             backdrop.classList.add('show');
+            
+            console.log('정비 이력 입력 모달 열기 완료');
         }
     }
 
@@ -365,18 +371,61 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 사진 입력 이벤트 리스너 설정 함수 (label 구조 대응)
+    // PC/모바일에 따라 사진 입력 input의 capture 속성을 동적으로 설정
+    function setPhotoInputCapture() {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        document.querySelectorAll('.photo-input').forEach(input => {
+            if (isMobile) {
+                input.setAttribute('capture', 'environment');
+            } else {
+                input.removeAttribute('capture');
+            }
+        });
+    }
+
+    // 사진 입력 이벤트 리스너 설정 함수 (강화된 클릭 처리)
     function setupPhotoInputListeners() {
         console.log('사진 업로드 리스너 설정 시작');
-        
+        // 기존 이벤트 리스너 제거 (중복 방지)
+        document.querySelectorAll('.photo-preview').forEach(preview => {
+            const newPreview = preview.cloneNode(true);
+            preview.parentNode.replaceChild(newPreview, preview);
+        });
         document.querySelectorAll('.photo-input').forEach((input, index) => {
             const type = input.dataset.type;
             const previewId = `${type}PhotoPreview`;
             const previewDiv = document.getElementById(previewId);
-            
             console.log(`설정 중: ${type} (${index + 1}/3)`, { input, previewDiv });
-
-            // label 구조에서는 자동으로 연결되므로 change 이벤트만 처리
+            if (previewDiv) {
+                const clickHandler = (e) => {
+                    console.log(`${type} 클릭 이벤트 발생`);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                        input.click();
+                        console.log(`${type} input.click() 성공`);
+                    } catch (error) {
+                        console.error(`${type} input.click() 실패:`, error);
+                    }
+                };
+                previewDiv.addEventListener('click', clickHandler);
+                previewDiv.addEventListener('touchstart', clickHandler);
+                previewDiv.addEventListener('mousedown', clickHandler);
+                previewDiv.addEventListener('focus', () => {
+                    console.log(`${type} focus 이벤트 발생`);
+                    input.click();
+                });
+                let lastTap = 0;
+                previewDiv.addEventListener('touchend', (e) => {
+                    const currentTime = new Date().getTime();
+                    const tapLength = currentTime - lastTap;
+                    if (tapLength < 500 && tapLength > 0) {
+                        e.preventDefault();
+                        return;
+                    }
+                    lastTap = currentTime;
+                });
+            }
             input.addEventListener('change', async function(e) {
                 console.log(`${type} 파일 선택됨:`, e.target.files[0]);
                 const file = e.target.files[0];
@@ -384,29 +433,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log(`${type} 파일이 선택되지 않음`);
                     return;
                 }
-
                 try {
                     if (!file.type.startsWith('image/')) {
                         showNotification('이미지 파일만 업로드 가능합니다.', 'error');
                         return;
                     }
-
                     if (file.size > 5 * 1024 * 1024) {
                         showNotification('파일 크기는 5MB를 초과할 수 없습니다.', 'error');
                         return;
                     }
-
                     console.log(`${type} 이미지 처리 시작`);
-                    
-                    // 로딩 표시
                     previewDiv.innerHTML = '<div class="loading-spinner" style="display: flex; align-items: center; justify-content: center; height: 100px; color: #007bff;"><i class="fas fa-spinner fa-spin" style="font-size: 2em; margin-right: 10px;"></i> 처리중...</div>';
-
                     const resizedImage = await resizeImage(file);
                     console.log(`${type} 이미지 리사이즈 완료:`, resizedImage);
-                    
-                    // 미리보기 컨테이너 생성
                     previewDiv.innerHTML = '';
-                    
                     const previewContainer = document.createElement('div');
                     previewContainer.className = 'preview-container';
                     previewContainer.style.cssText = `
@@ -418,8 +458,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         background: #fff;
                         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                     `;
-                    
-                    // 이미지 생성
                     const img = document.createElement('img');
                     img.style.cssText = `
                         width: 100%;
@@ -427,25 +465,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         object-fit: cover;
                         border-radius: 8px;
                     `;
-                    
-                    // Blob URL 생성 및 이미지 로드
                     const blobUrl = URL.createObjectURL(resizedImage);
                     img.src = blobUrl;
                     img.alt = `${type} 사진 미리보기`;
-                    
                     img.onload = () => {
                         console.log(`${type} 이미지 로드 완료`);
                         URL.revokeObjectURL(blobUrl);
                     };
-                    
                     img.onerror = () => {
                         console.error(`${type} 이미지 로드 실패`);
                         URL.revokeObjectURL(blobUrl);
                     };
-                    
                     previewContainer.appendChild(img);
-                    
-                    // 제거 버튼 생성
                     const removeBtn = document.createElement('button');
                     removeBtn.className = 'remove-photo';
                     removeBtn.innerHTML = '<i class="fas fa-times"></i>';
@@ -466,7 +497,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         font-size: 12px;
                         z-index: 10;
                     `;
-                    
                     removeBtn.onclick = (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -474,8 +504,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         previewContainer.remove();
                         uploadedPhotos[type] = null;
                         input.value = '';
-                        
-                        // 원래 placeholder로 복원
                         previewDiv.innerHTML = `
                             <div class="photo-placeholder">
                                 <i class="fas fa-camera"></i>
@@ -484,19 +512,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         `;
                         console.log(`${type} 사진 제거됨`);
                     };
-                    
                     previewContainer.appendChild(removeBtn);
                     previewDiv.appendChild(previewContainer);
                     uploadedPhotos[type] = resizedImage;
-                    
                     console.log(`${type} 사진 업로드 완료, 미리보기 표시됨`);
                     showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
-                    
                 } catch (err) {
                     console.error(`${type} 사진 처리 중 오류:`, err);
                     showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
-                    
-                    // 오류 시 원래 placeholder로 복원
                     previewDiv.innerHTML = `
                         <div class="photo-placeholder">
                             <i class="fas fa-camera"></i>
@@ -505,13 +528,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 }
             });
-            
-            // input에 직접 이벤트도 추가 (디버깅용)
             input.addEventListener('click', (e) => {
                 console.log(`${type} input 직접 클릭됨`);
             });
         });
-        
+        // PC/모바일에 따라 capture 속성 동적 적용
+        setPhotoInputCapture();
         console.log('사진 업로드 리스너 설정 완료');
     }
 
