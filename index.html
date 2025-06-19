@@ -157,33 +157,33 @@
                         <div class="photo-upload-container">
                             <div class="photo-upload-group">
                                 <label class="photo-label">정비 전</label>
-                                <div class="photo-preview" id="beforePhotoPreview">
+                                <label for="beforePhoto" class="photo-preview" id="beforePhotoPreview">
                                     <input type="file" class="photo-input" id="beforePhoto" accept="image/*" data-type="before" capture="environment">
                                     <div class="photo-placeholder">
                                         <i class="fas fa-camera"></i>
                                         <span>사진 추가</span>
                                     </div>
-                                </div>
+                                </label>
                             </div>
                             <div class="photo-upload-group">
                                 <label class="photo-label">정비 중</label>
-                                <div class="photo-preview" id="duringPhotoPreview">
+                                <label for="duringPhoto" class="photo-preview" id="duringPhotoPreview">
                                     <input type="file" class="photo-input" id="duringPhoto" accept="image/*" data-type="during" capture="environment">
                                     <div class="photo-placeholder">
                                         <i class="fas fa-camera"></i>
                                         <span>사진 추가</span>
                                     </div>
-                                </div>
+                                </label>
                             </div>
                             <div class="photo-upload-group">
                                 <label class="photo-label">정비 후</label>
-                                <div class="photo-preview" id="afterPhotoPreview">
+                                <label for="afterPhoto" class="photo-preview" id="afterPhotoPreview">
                                     <input type="file" class="photo-input" id="afterPhoto" accept="image/*" data-type="after" capture="environment">
                                     <div class="photo-placeholder">
                                         <i class="fas fa-camera"></i>
                                         <span>사진 추가</span>
                                     </div>
-                                </div>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -332,6 +332,32 @@
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeMaintenanceDetailModal()">
                 <i class="fas fa-times me-1"></i>닫기
+            </button>
+        </div>
+    </div>
+
+    <!-- 정비 이력 입력 미리보기(프리뷰) 모달 -->
+    <div id="maintenancePreviewModal" class="maintenance-modal">
+        <div class="modal-header">
+            <h2 class="modal-title">
+                <i class="fas fa-eye"></i>
+                <span>정비 이력 미리보기</span>
+            </h2>
+            <button class="modal-close" onclick="closeMaintenancePreviewModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="preview-content">
+                <!-- JS로 동적 채움 -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="submitMaintenancePreview()">
+                <i class="fas fa-check me-1"></i>최종 저장
+            </button>
+            <button class="btn btn-secondary" onclick="closeMaintenancePreviewModal()">
+                <i class="fas fa-edit me-1"></i>수정
             </button>
         </div>
     </div>

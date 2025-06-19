@@ -1046,7 +1046,7 @@ html, body {
     color: #e74c3c;
 }
 
-/* 사진 업로드 관련 스타일 (모바일 대응 강화) */
+/* 사진 업로드 관련 스타일 (label 구조 대응) */
 .photo-input {
     opacity: 0 !important;
     position: absolute !important;
@@ -1072,6 +1072,9 @@ html, body {
     border-radius: 8px !important;
     transition: all 0.3s ease !important;
     overflow: hidden !important;
+    /* label로 변경되었으므로 추가 스타일 */
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 .photo-preview:hover {

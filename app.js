@@ -365,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 사진 입력 이벤트 리스너 설정 함수 (모바일 대응 강화)
+    // 사진 입력 이벤트 리스너 설정 함수 (label 구조 대응)
     function setupPhotoInputListeners() {
         console.log('사진 업로드 리스너 설정 시작');
         
@@ -376,45 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             console.log(`설정 중: ${type} (${index + 1}/3)`, { input, previewDiv });
 
-            if (previewDiv) {
-                // 모든 가능한 이벤트 추가
-                const events = ['click', 'touchstart', 'touchend', 'mousedown'];
-                
-                events.forEach(eventType => {
-                    previewDiv.addEventListener(eventType, (e) => {
-                        console.log(`${type} ${eventType} 이벤트 발생`);
-                        e.preventDefault();
-                        e.stopPropagation();
-                        
-                        // input 클릭 시도
-                        try {
-                            input.click();
-                            console.log(`${type} input.click() 성공`);
-                        } catch (error) {
-                            console.error(`${type} input.click() 실패:`, error);
-                        }
-                    }, { passive: false });
-                });
-                
-                // 포커스 이벤트도 추가
-                previewDiv.addEventListener('focus', () => {
-                    console.log(`${type} focus 이벤트 발생`);
-                    input.click();
-                });
-                
-                // 모바일에서 더블탭 방지
-                let lastTap = 0;
-                previewDiv.addEventListener('touchend', (e) => {
-                    const currentTime = new Date().getTime();
-                    const tapLength = currentTime - lastTap;
-                    if (tapLength < 500 && tapLength > 0) {
-                        e.preventDefault();
-                        return;
-                    }
-                    lastTap = currentTime;
-                });
-            }
-
+            // label 구조에서는 자동으로 연결되므로 change 이벤트만 처리
             input.addEventListener('change', async function(e) {
                 console.log(`${type} 파일 선택됨:`, e.target.files[0]);
                 const file = e.target.files[0];
@@ -435,47 +397,116 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     console.log(`${type} 이미지 처리 시작`);
-                    previewDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 처리중...</div>';
+                    
+                    // 로딩 표시
+                    previewDiv.innerHTML = '<div class="loading-spinner" style="display: flex; align-items: center; justify-content: center; height: 100px; color: #007bff;"><i class="fas fa-spinner fa-spin" style="font-size: 2em; margin-right: 10px;"></i> 처리중...</div>';
 
                     const resizedImage = await resizeImage(file);
+                    console.log(`${type} 이미지 리사이즈 완료:`, resizedImage);
+                    
+                    // 미리보기 컨테이너 생성
                     previewDiv.innerHTML = '';
                     
                     const previewContainer = document.createElement('div');
                     previewContainer.className = 'preview-container';
+                    previewContainer.style.cssText = `
+                        position: relative;
+                        width: 100%;
+                        height: 100%;
+                        border-radius: 8px;
+                        overflow: hidden;
+                        background: #fff;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    `;
                     
+                    // 이미지 생성
                     const img = document.createElement('img');
-                    img.src = URL.createObjectURL(resizedImage);
-                    img.onload = () => URL.revokeObjectURL(img.src);
+                    img.style.cssText = `
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                        border-radius: 8px;
+                    `;
+                    
+                    // Blob URL 생성 및 이미지 로드
+                    const blobUrl = URL.createObjectURL(resizedImage);
+                    img.src = blobUrl;
+                    img.alt = `${type} 사진 미리보기`;
+                    
+                    img.onload = () => {
+                        console.log(`${type} 이미지 로드 완료`);
+                        URL.revokeObjectURL(blobUrl);
+                    };
+                    
+                    img.onerror = () => {
+                        console.error(`${type} 이미지 로드 실패`);
+                        URL.revokeObjectURL(blobUrl);
+                    };
+                    
                     previewContainer.appendChild(img);
                     
+                    // 제거 버튼 생성
                     const removeBtn = document.createElement('button');
                     removeBtn.className = 'remove-photo';
                     removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    removeBtn.style.cssText = `
+                        position: absolute;
+                        top: 5px;
+                        right: 5px;
+                        background: rgba(255,0,0,0.8);
+                        color: white;
+                        border: none;
+                        border-radius: 50%;
+                        width: 30px;
+                        height: 30px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 12px;
+                        z-index: 10;
+                    `;
+                    
                     removeBtn.onclick = (e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        console.log(`${type} 사진 제거 버튼 클릭`);
                         previewContainer.remove();
                         uploadedPhotos[type] = null;
                         input.value = '';
-                        previewDiv.innerHTML = '';
+                        
+                        // 원래 placeholder로 복원
+                        previewDiv.innerHTML = `
+                            <div class="photo-placeholder">
+                                <i class="fas fa-camera"></i>
+                                <span>사진 추가</span>
+                            </div>
+                        `;
                         console.log(`${type} 사진 제거됨`);
                     };
-                    previewContainer.appendChild(removeBtn);
                     
+                    previewContainer.appendChild(removeBtn);
                     previewDiv.appendChild(previewContainer);
                     uploadedPhotos[type] = resizedImage;
                     
-                    console.log(`${type} 사진 업로드 완료`);
+                    console.log(`${type} 사진 업로드 완료, 미리보기 표시됨`);
                     showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
                     
                 } catch (err) {
                     console.error(`${type} 사진 처리 중 오류:`, err);
                     showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
-                    previewDiv.innerHTML = '';
+                    
+                    // 오류 시 원래 placeholder로 복원
+                    previewDiv.innerHTML = `
+                        <div class="photo-placeholder">
+                            <i class="fas fa-camera"></i>
+                            <span>사진 추가</span>
+                        </div>
+                    `;
                 }
             });
             
-            // input에 직접 이벤트도 추가
+            // input에 직접 이벤트도 추가 (디버깅용)
             input.addEventListener('click', (e) => {
                 console.log(`${type} input 직접 클릭됨`);
             });
@@ -795,7 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // 로딩 표시
-                previewDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 처리중...</div>';
+                previewDiv.innerHTML = '<div class="loading-spinner" style="display: flex; align-items: center; justify-content: center; height: 100px; color: #007bff;"><i class="fas fa-spinner fa-spin" style="font-size: 2em; margin-right: 10px;"></i> 처리중...</div>';
 
                 // 이미지 리사이징
                 const resizedImage = await resizeImage(file);
@@ -806,38 +837,100 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 새 미리보기 컨테이너 생성
                 const previewContainer = document.createElement('div');
                 previewContainer.className = 'preview-container';
+                previewContainer.style.cssText = `
+                    position: relative;
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    background: #fff;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                `;
                 
-                // 이미지 미리보기 생성
+                // 이미지 생성
                 const img = document.createElement('img');
-                img.src = URL.createObjectURL(resizedImage);
-                img.onload = () => URL.revokeObjectURL(img.src); // 메모리 해제
+                img.style.cssText = `
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    border-radius: 8px;
+                `;
+                
+                // Blob URL 생성 및 이미지 로드
+                const blobUrl = URL.createObjectURL(resizedImage);
+                img.src = blobUrl;
+                img.alt = `${type} 사진 미리보기`;
+                
+                img.onload = () => {
+                    console.log(`${type} 이미지 로드 완료`);
+                    URL.revokeObjectURL(blobUrl);
+                };
+                
+                img.onerror = () => {
+                    console.error(`${type} 이미지 로드 실패`);
+                    URL.revokeObjectURL(blobUrl);
+                };
+                
                 previewContainer.appendChild(img);
                 
-                // 삭제 버튼 추가
+                // 제거 버튼 생성
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'remove-photo';
                 removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                removeBtn.style.cssText = `
+                    position: absolute;
+                    top: 5px;
+                    right: 5px;
+                    background: rgba(255,0,0,0.8);
+                    color: white;
+                    border: none;
+                    border-radius: 50%;
+                    width: 30px;
+                    height: 30px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    z-index: 10;
+                `;
+                
                 removeBtn.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    console.log(`${type} 사진 제거 버튼 클릭`);
                     previewContainer.remove();
                     uploadedPhotos[type] = null;
                     input.value = '';
-                    // 미리보기 영역 초기화 (카메라 아이콘 표시)
-                    previewDiv.innerHTML = '';
+                    
+                    // 원래 placeholder로 복원
+                    previewDiv.innerHTML = `
+                        <div class="photo-placeholder">
+                            <i class="fas fa-camera"></i>
+                            <span>사진 추가</span>
+                        </div>
+                    `;
+                    console.log(`${type} 사진 제거됨`);
                 };
+                
                 previewContainer.appendChild(removeBtn);
-                
-                // 미리보기 추가
                 previewDiv.appendChild(previewContainer);
-                
-                // 업로드된 파일 저장
                 uploadedPhotos[type] = resizedImage;
                 
+                console.log(`${type} 사진 업로드 완료, 미리보기 표시됨`);
+                showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
+                
             } catch (err) {
-                console.error('사진 처리 중 오류:', err);
+                console.error(`${type} 사진 처리 중 오류:`, err);
                 showNotification('사진 처리 중 문제가 발생했습니다.', 'error');
-                previewDiv.innerHTML = ''; // 에러 시 미리보기 초기화
+                
+                // 오류 시 원래 placeholder로 복원
+                previewDiv.innerHTML = `
+                    <div class="photo-placeholder">
+                        <i class="fas fa-camera"></i>
+                        <span>사진 추가</span>
+                    </div>
+                `;
             }
         });
     });
@@ -1863,54 +1956,53 @@ function handlePopState(event) {
 // 앱 시작 시 popstate 이벤트 리스너 추가
 window.addEventListener('popstate', handlePopState);
 
-// 사진 다운로드 함수 추가 (모바일 대응 강화)
+// 사진 다운로드 함수 (바로 다운로드)
 async function downloadImage(url, filename) {
     try {
-        // 모바일 기기 감지
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        console.log('다운로드 시작:', url, filename);
         
-        if (isMobile) {
-            // 모바일에서는 직접 다운로드 링크 생성
+        // 모든 기기에서 직접 다운로드 시도
+        const response = await fetch(url);
+        const blob = await response.blob();
+        
+        // Blob URL 생성
+        const blobUrl = window.URL.createObjectURL(blob);
+        
+        // 다운로드 링크 생성
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        a.style.display = 'none';
+        
+        // DOM에 추가하고 클릭
+        document.body.appendChild(a);
+        a.click();
+        
+        // 정리
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(blobUrl);
+        }, 100);
+        
+        showNotification('다운로드가 시작되었습니다.', 'success');
+        
+    } catch (error) {
+        console.error('다운로드 실패:', error);
+        
+        // 실패 시 직접 링크로 다운로드 시도
+        try {
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
             a.target = '_blank';
             a.style.display = 'none';
-            
-            // iOS Safari 대응
-            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                // iOS에서는 새 창에서 열기
-                window.open(url, '_blank');
-                showNotification('iOS에서는 새 창에서 이미지가 열립니다. 이미지를 길게 눌러 저장하세요.', 'info');
-            } else {
-                // Android에서는 직접 다운로드 시도
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                showNotification('다운로드가 시작되었습니다.', 'success');
-            }
-        } else {
-            // 데스크톱에서는 기존 다운로드 방식 사용
-            const response = await fetch(url);
-            const blob = await response.blob();
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = filename;
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(downloadUrl);
             document.body.removeChild(a);
-            showNotification('이미지가 다운로드되었습니다.', 'success');
-        }
-    } catch (error) {
-        console.error('이미지 다운로드 중 오류:', error);
-        // 오류 시에도 새 창에서 열기 시도
-        try {
-            window.open(url, '_blank');
-            showNotification('다운로드 실패. 새 창에서 이미지가 열립니다.', 'info');
+            showNotification('다운로드 링크가 생성되었습니다.', 'info');
         } catch (fallbackError) {
-            showNotification('이미지 다운로드에 실패했습니다.', 'error');
+            console.error('폴백 다운로드도 실패:', fallbackError);
+            showNotification('다운로드에 실패했습니다. 브라우저 설정을 확인해주세요.', 'error');
         }
     }
 } 
