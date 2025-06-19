@@ -695,22 +695,40 @@ html, body {
     }
 }
 
-/* 모달 기본 레이아웃 */
+/* 최적의 팝업(모달) 카드 스타일 - 리스트 카드와 통일, 반응형, 내부 조작 자연스럽게 */
 .maintenance-modal {
     display: none;
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0; width: 100vw; height: 100vh;
     z-index: 1050;
     overflow-y: auto;
-    padding: 20px;
-    background: transparent !important;
+    background: rgba(0,0,0,0.18);
+    padding: 0;
+}
+.maintenance-modal.show { display: block; }
+
+.maintenance-modal .modal-content {
+    background: rgba(255,255,255,0.97);
+    border-radius: 18px;
+    box-shadow: 0 4px 24px rgba(0,113,197,0.10), 0 2px 8px rgba(0,0,0,0.08);
+    padding: 1.2rem;
+    max-width: 500px;
+    margin: 40px auto;
+    border: none;
+    transition: box-shadow 0.3s, border 0.3s;
+    position: relative;
+    width: 95vw;
+    overflow-y: auto;
+    max-height: 90vh;
 }
 
-.maintenance-modal.show {
-    display: block;
+@media (max-width: 576px) {
+    .maintenance-modal .modal-content {
+        max-width: 98vw;
+        margin: 10px 1vw;
+        padding: 1rem 0.5rem;
+        max-height: 92vh;
+    }
 }
 
 /* 모달 백드롭 */
@@ -727,48 +745,6 @@ html, body {
 
 .modal-backdrop.show {
     display: block;
-}
-
-/* 모달 컨텐츠 */
-.maintenance-modal .modal-content {
-    position: relative !important;
-    width: 100% !important;
-    max-width: 500px !important;
-    margin: 0 auto !important;
-    border-radius: 18px !important;
-    box-shadow: 0 4px 24px rgba(0,113,197,0.10), 0 2px 8px rgba(0,0,0,0.08) !important;
-    background: rgba(255,255,255,0.97) !important;
-    padding: 1.2rem !important;
-    overflow-y: auto !important;
-    max-height: 90vh !important;
-}
-
-/* 모달 헤더 */
-.maintenance-modal .modal-header {
-    padding: 1.5rem;
-    border-bottom: 1px solid #dee2e6;
-    border-radius: 18px 18px 0 0;
-    background: linear-gradient(90deg, #0071c5 0%, #181c20 100%);
-    color: #fff;
-}
-
-/* 모달 본문 */
-.maintenance-modal .modal-body {
-    padding: 1.5rem;
-    max-height: calc(100vh - 200px);
-    overflow-y: auto;
-    background: #fff;
-}
-
-/* 모달 푸터 */
-.maintenance-modal .modal-footer {
-    padding: 1rem 1.5rem;
-    border-top: 1px solid #dee2e6;
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    border-radius: 0 0 18px 18px;
-    background: #fff;
 }
 
 /* 정비 이력 상세 모달 스타일 */
