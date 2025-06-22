@@ -1,6 +1,6 @@
 # Twohoons Log - 오토바이 정비 관리 시스템
 
-고급스럽고 현대적인 UI를 가진 오토바이 정비 관리 시스템의 관리자용 대시보드입니다.
+Vite + React와 Firebase를 사용하여 제작된 오토바이 정비 관리 시스템입니다. 고객과 정비사는 작업을 등록하고 상태를 추적하며, 관련된 모든 정보를 관리할 수 있습니다.
 
 ## 🚀 기술 스택
 
@@ -219,17 +219,17 @@ body {
 
 ## 🚀 배포
 
-### Vercel 배포
-```bash
-npm run build
-vercel --prod
-```
+### GitHub Pages 배포
 
-### Netlify 배포
-```bash
-npm run build
-# dist 폴더를 Netlify에 업로드
-```
+1.  `package.json`의 `homepage` 주소를 자신의 배포 주소로 수정합니다.
+2.  `vite.config.js`의 `base` 경로를 자신의 저장소 이름으로 수정합니다.
+3.  아래 명령어를 실행하여 빌드 및 배포를 진행합니다.
+
+    ```bash
+    npm run deploy
+    ```
+
+    이 명령어는 `predeploy` 스크립트에 의해 자동으로 `npm run build`를 실행한 후, `gh-pages`를 사용하여 `dist` 폴더의 내용을 배포합니다.
 
 ## 📄 라이선스
 
