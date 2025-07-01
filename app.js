@@ -11,6 +11,7 @@ let uploadedPhotos = { before: null, during: null, after: null };
 let adminNameCache = {};
 let currentStep = 1;
 let currentTheme = 'light';
+let currentViewMode = 'card'; // 'card' or 'list'
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -32,6 +33,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeModals();
     initializeEventListeners();
     initializeSearchAndFilters();
+    loadViewMode();
     
     // Check authentication state
     firebase.auth().onAuthStateChanged(handleAuthStateChange);
@@ -181,17 +183,32 @@ async function handleAuthStateChange(user) {
             
             if (userDoc.exists) {
                 const userData = userDoc.data();
+                
+                // 관리자 이메일 체크
+                const adminEmails = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
+                const isAdminEmail = adminEmails.includes(user.email);
+                
                 currentUser = {
                     uid: user.uid,
                     email: user.email,
-                    name: userData.name,
-                    carNumber: userData.carNumber,
-                    role: userData.role || 'user'
+                    name: userData.name || (isAdminEmail ? '관리자' : '사용자'),
+                    carNumber: userData.carNumber || (isAdminEmail ? 'admin1' : ''),
+                    role: userData.role || (isAdminEmail ? 'admin' : 'user')
                 };
                 
-                // 관리자 이메일 체크로 관리자 권한 부여
-                const adminEmails = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
-                isAdmin = adminEmails.includes(user.email) || currentUser.role === 'admin';
+                // 관리자 권한 부여
+                isAdmin = isAdminEmail || currentUser.role === 'admin';
+                
+                // 관리자 계정이지만 이름이 없는 경우 자동으로 업데이트
+                if (isAdminEmail && !userData.name) {
+                    console.log('🔧 Updating admin user data...');
+                    await db.collection('users').doc(user.uid).update({
+                        name: '관리자',
+                        carNumber: userData.carNumber || 'admin1',
+                        role: 'admin',
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
                 
                 console.log('👤 User role:', currentUser.role);
                 console.log('🔧 Is admin (email check):', adminEmails.includes(user.email));
@@ -202,11 +219,47 @@ async function handleAuthStateChange(user) {
                 updateUI();
                 loadDashboardData();
                 
+                // Initialize notification system after user is loaded
+                initializeNotificationSystem();
+                
                 showNotification(`환영합니다, ${currentUser.name}님!`, 'success');
             } else {
-                console.error('❌ User document not found');
-                showNotification('사용자 정보를 찾을 수 없습니다.', 'error');
-                await firebase.auth().signOut();
+                console.log('📄 User document not found, creating new user...');
+                
+                // 관리자 이메일 체크
+                const adminEmails = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
+                const isAdminEmail = adminEmails.includes(user.email);
+                
+                if (isAdminEmail) {
+                    // 관리자 계정 생성
+                    const adminData = {
+                        name: '관리자',
+                        email: user.email,
+                        carNumber: 'admin1',
+                        role: 'admin',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    
+                    await db.collection('users').doc(user.uid).set(adminData);
+                    
+                    currentUser = {
+                        uid: user.uid,
+                        email: user.email,
+                        name: '관리자',
+                        carNumber: 'admin1',
+                        role: 'admin'
+                    };
+                    
+                    isAdmin = true;
+                    console.log('✅ Admin user document created');
+                    
+                } else {
+                    // 일반 사용자는 문서가 없으면 로그아웃
+                    console.error('❌ User document not found');
+                    showNotification('사용자 정보를 찾을 수 없습니다.', 'error');
+                    await firebase.auth().signOut();
+                    return;
+                }
             }
             
         } catch (error) {
@@ -347,7 +400,11 @@ function showCarNumberModal() {
     // 기존 모달 제거
     const existingModal = document.getElementById('carNumberModal');
     if (existingModal) {
-        existingModal.remove();
+        try {
+            existingModal.remove();
+        } catch (error) {
+            console.log('Modal already removed:', error);
+        }
     }
     
     const currentCarNumber = currentUser?.carNumber || '';
@@ -408,7 +465,11 @@ function showCarNumberModal() {
 function closeCarNumberModal() {
     const modal = document.getElementById('carNumberModal');
     if (modal) {
-        modal.remove();
+        try {
+            modal.remove();
+        } catch (error) {
+            console.log('Modal already removed:', error);
+        }
     }
 }
 
@@ -438,6 +499,288 @@ async function handleCarNumberUpdate() {
 window.showCarNumberModal = showCarNumberModal;
 window.closeCarNumberModal = closeCarNumberModal;
 window.handleCarNumberUpdate = handleCarNumberUpdate;
+
+// =============================================
+// 알림 시스템
+// =============================================
+
+// 알림 데이터 저장
+let notifications = [];
+let unreadCount = 0;
+
+// 알림 초기화 함수
+function initializeNotificationSystem() {
+    console.log('🔔 Initializing notification system...');
+    
+    const notificationBtn = document.getElementById('notificationBtn');
+    if (notificationBtn) {
+        notificationBtn.addEventListener('click', showNotificationPanel);
+    }
+    
+    // 기존 알림 로딩
+    loadNotifications();
+}
+
+// 알림 패널 표시
+function showNotificationPanel() {
+    console.log('🔔 Showing notification panel...');
+    
+    // 기존 패널 제거
+    const existingPanel = document.getElementById('notificationPanel');
+    if (existingPanel) {
+        try {
+            existingPanel.remove();
+        } catch (error) {
+            console.log('Panel already removed:', error);
+        }
+        return; // 토글 효과
+    }
+    
+    const panelHTML = `
+        <div id="notificationPanel" class="notification-panel">
+            <div class="notification-panel-header">
+                <h3><i class="fas fa-bell"></i> 알림</h3>
+                <button class="clear-all-btn" onclick="clearAllNotifications()">
+                    <i class="fas fa-check-double"></i> 모두 읽음
+                </button>
+            </div>
+            <div class="notification-panel-body" id="notificationPanelBody">
+                ${notifications.length > 0 ? 
+                    notifications.map(notification => createNotificationItem(notification)).join('') :
+                    '<div class="no-notifications"><i class="fas fa-inbox"></i><p>새로운 알림이 없습니다</p></div>'
+                }
+            </div>
+        </div>
+        <div class="notification-panel-backdrop" onclick="closeNotificationPanel()"></div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', panelHTML);
+    
+    // 모든 알림을 읽음으로 표시
+    markAllAsRead();
+}
+
+// 알림 패널 닫기
+function closeNotificationPanel() {
+    const panel = document.getElementById('notificationPanel');
+    const backdrop = document.querySelector('.notification-panel-backdrop');
+    
+    try {
+        if (panel) panel.remove();
+        if (backdrop) backdrop.remove();
+    } catch (error) {
+        console.log('Panel/backdrop already removed:', error);
+    }
+}
+
+// 알림 아이템 생성
+function createNotificationItem(notification) {
+    const timeAgo = getTimeAgo(notification.createdAt);
+    const iconClass = getNotificationIcon(notification.type);
+    const statusColor = getNotificationColor(notification.type);
+    
+    return `
+        <div class="notification-item ${notification.read ? 'read' : 'unread'}" data-id="${notification.id}">
+            <div class="notification-icon" style="background: ${statusColor}">
+                <i class="${iconClass}"></i>
+            </div>
+            <div class="notification-content">
+                <h4 class="notification-title">${notification.title}</h4>
+                <p class="notification-message">${notification.message}</p>
+                <span class="notification-time">${timeAgo}</span>
+            </div>
+            ${!notification.read ? '<div class="unread-indicator"></div>' : ''}
+        </div>
+    `;
+}
+
+// 알림 색상 가져오기
+function getNotificationColor(type) {
+    const colors = {
+        'success': 'linear-gradient(135deg, #10b981, #059669)',
+        'error': 'linear-gradient(135deg, #ef4444, #dc2626)',
+        'warning': 'linear-gradient(135deg, #f59e0b, #d97706)',
+        'info': 'linear-gradient(135deg, #06b6d4, #0891b2)',
+        'maintenance': 'linear-gradient(135deg, #3b82f6, #2563eb)'
+    };
+    return colors[type] || colors['info'];
+}
+
+// 시간 경과 표시
+function getTimeAgo(timestamp) {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffInSeconds = Math.floor((now - time) / 1000);
+    
+    if (diffInSeconds < 60) return '방금 전';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}분 전`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}시간 전`;
+    
+    return time.toLocaleDateString('ko-KR');
+}
+
+// 새 알림 추가
+function addNotification(title, message, type = 'info') {
+    const notification = {
+        id: Date.now().toString(),
+        title,
+        message,
+        type,
+        read: false,
+        createdAt: new Date().toISOString()
+    };
+    
+    notifications.unshift(notification);
+    unreadCount++;
+    
+    // Firebase에 저장
+    saveNotificationToFirebase(notification);
+    
+    // UI 업데이트
+    updateNotificationBadge();
+    
+    // 토스트 알림도 표시
+    showNotification(`${title}: ${message}`, type);
+    
+    console.log('🔔 New notification added:', notification);
+}
+
+// Firebase에 알림 저장
+async function saveNotificationToFirebase(notification) {
+    if (!currentUser) return;
+    
+    try {
+        await db.collection('notifications').add({
+            ...notification,
+            userId: currentUser.uid,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        console.log('✅ Notification saved to Firebase');
+    } catch (error) {
+        console.error('❌ Error saving notification:', error);
+    }
+}
+
+// Firebase에서 알림 로딩
+async function loadNotifications() {
+    if (!currentUser) return;
+    
+    try {
+        const snapshot = await db.collection('notifications')
+            .where('userId', '==', currentUser.uid)
+            .orderBy('createdAt', 'desc')
+            .limit(50)
+            .get();
+        
+        notifications = [];
+        unreadCount = 0;
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const notification = {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+            };
+            
+            notifications.push(notification);
+            if (!notification.read) {
+                unreadCount++;
+            }
+        });
+        
+        updateNotificationBadge();
+        console.log('📱 Loaded notifications:', notifications.length);
+        
+    } catch (error) {
+        console.error('❌ Error loading notifications:', error);
+    }
+}
+
+// 모든 알림을 읽음으로 표시
+async function markAllAsRead() {
+    if (unreadCount === 0) return;
+    
+    try {
+        const batch = db.batch();
+        
+        notifications.forEach(notification => {
+            if (!notification.read) {
+                notification.read = true;
+                const notificationRef = db.collection('notifications').doc(notification.id);
+                batch.update(notificationRef, { read: true });
+            }
+        });
+        
+        await batch.commit();
+        unreadCount = 0;
+        updateNotificationBadge();
+        
+        console.log('✅ All notifications marked as read');
+        
+    } catch (error) {
+        console.error('❌ Error marking notifications as read:', error);
+    }
+}
+
+// 모든 알림 지우기
+async function clearAllNotifications() {
+    try {
+        const batch = db.batch();
+        
+        notifications.forEach(notification => {
+            const notificationRef = db.collection('notifications').doc(notification.id);
+            batch.delete(notificationRef);
+        });
+        
+        await batch.commit();
+        
+        notifications = [];
+        unreadCount = 0;
+        updateNotificationBadge();
+        
+        closeNotificationPanel();
+        showNotification('모든 알림이 삭제되었습니다.', 'success');
+        
+        console.log('🗑️ All notifications cleared');
+        
+    } catch (error) {
+        console.error('❌ Error clearing notifications:', error);
+        showNotification('알림 삭제 실패', 'error');
+    }
+}
+
+// 정비 상태 변경 시 알림 생성
+function createMaintenanceNotification(maintenanceId, status, maintenanceType = '정비') {
+    let title, message, type;
+    
+    switch (status) {
+        case 'approved':
+            title = '정비 승인됨';
+            message = `${maintenanceType} 정비가 승인되었습니다.`;
+            type = 'success';
+            break;
+        case 'rejected':
+            title = '정비 거절됨';
+            message = `${maintenanceType} 정비가 거절되었습니다.`;
+            type = 'error';
+            break;
+        case 'completed':
+            title = '정비 완료';
+            message = `${maintenanceType} 정비가 완료되었습니다.`;
+            type = 'success';
+            break;
+        default:
+            return;
+    }
+    
+    addNotification(title, message, type);
+}
+
+// 전역 함수로 등록
+window.showNotificationPanel = showNotificationPanel;
+window.closeNotificationPanel = closeNotificationPanel;
+window.clearAllNotifications = clearAllNotifications;
 
 function showContextMenu(options) {
     // Simple context menu implementation
@@ -476,7 +819,13 @@ function showContextMenu(options) {
         item.innerHTML = `<i class="${option.icon}"></i> ${option.text}`;
         item.addEventListener('click', () => {
             option.action();
-            document.body.removeChild(menu);
+            try {
+                if (menu.parentNode) {
+                    menu.remove();
+                }
+            } catch (error) {
+                console.log('Menu already removed:', error);
+            }
         });
         
         item.addEventListener('mouseenter', () => {
@@ -500,8 +849,16 @@ function showContextMenu(options) {
     `;
     
     overlay.addEventListener('click', () => {
-        document.body.removeChild(menu);
-        document.body.removeChild(overlay);
+        try {
+            if (menu.parentNode) {
+                menu.remove();
+            }
+            if (overlay.parentNode) {
+                overlay.remove();
+            }
+        } catch (error) {
+            console.log('Menu/overlay already removed:', error);
+        }
     });
     
     document.body.appendChild(overlay);
@@ -764,7 +1121,7 @@ async function loadMaintenanceTimeline(searchTerm = '') {
         }
         
         console.log('✅ About to render', filteredMaintenances.length, 'maintenances');
-        renderRealMaintenanceTimeline(filteredMaintenances);
+        await renderRealMaintenanceTimeline(filteredMaintenances);
         
         // 로딩 완료 후 스피너 숨기기
         showLoadingSpinner(false);
@@ -777,7 +1134,7 @@ async function loadMaintenanceTimeline(searchTerm = '') {
         showLoadingSpinner(false);
         
         // 오류 시 테스트 데이터라도 보여주기
-        renderRealMaintenanceTimeline([]);
+        await renderRealMaintenanceTimeline([]);
     }
 }
 
@@ -885,7 +1242,7 @@ function createMaintenanceCard(maintenance) {
     }
 }
 
-function renderRealMaintenanceTimeline(maintenances) {
+async function renderRealMaintenanceTimeline(maintenances) {
     console.log('🎯 Rendering REAL timeline with', maintenances.length, 'items');
     
     const container = document.getElementById('timelineContent');
@@ -907,9 +1264,26 @@ function renderRealMaintenanceTimeline(maintenances) {
         return;
     }
     
-    // 실제 데이터로 카드 생성
-    const cardsHtml = maintenances.map((maintenance, index) => {
-        console.log(`🏗️ Building real card ${index + 1}:`, maintenance.type, maintenance.carNumber);
+    // 비동기로 관리자 이름 가져오기
+    for (const maintenance of maintenances) {
+        if (!maintenance.adminName && maintenance.adminEmail) {
+            maintenance.adminName = await getAdminNameByEmail(maintenance.adminEmail);
+        }
+    }
+    
+    // 현재 보기 모드에 따라 렌더링
+    if (currentViewMode === 'list') {
+        container.innerHTML = renderListView(maintenances);
+    } else {
+        container.innerHTML = renderCardView(maintenances);
+    }
+    console.log('✅ Real timeline rendered successfully with', maintenances.length, 'cards');
+}
+
+// 카드 뷰 렌더링 함수
+function renderCardView(maintenances) {
+    return maintenances.map((maintenance, index) => {
+        console.log(`🏗️ Building card ${index + 1}:`, maintenance.type, maintenance.carNumber);
         
         // 상태별 색상
         const statusColors = {
@@ -943,7 +1317,7 @@ function renderRealMaintenanceTimeline(maintenances) {
         const gradient = gradients[index % gradients.length];
         
         return `
-            <div style="background: ${gradient}; color: white; padding: 25px; margin: 15px 0; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); cursor: pointer;" onclick="showMaintenanceDetail('${maintenance.id}')">
+            <div class="maintenance-card-view" style="background: ${gradient}; color: white; padding: 25px; margin: 15px 0; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); cursor: pointer;" onclick="showMaintenanceDetail('${maintenance.id}')">
                 <h3 style="margin: 0 0 15px 0; font-size: 20px;">
                     ${typeIcon} ${maintenance.type || '정비'}
                 </h3>
@@ -957,15 +1331,70 @@ function renderRealMaintenanceTimeline(maintenances) {
                     📋 상태: <span style="background: ${statusColor}; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: white;">${getStatusText(maintenance.status) || maintenance.status || '없음'}</span>
                 </p>
                 ${maintenance.mileage ? `<p style="margin: 5px 0; opacity: 0.9;">📏 주행거리: ${maintenance.mileage}km</p>` : ''}
+                ${(maintenance.status === 'approved' || maintenance.status === 'rejected') && maintenance.adminName ? `<p style="margin: 5px 0; opacity: 0.9;">👨‍💼 관리자: ${maintenance.adminName}</p>` : ''}
                 <p style="margin: 15px 0 0 0; line-height: 1.5;">
                     ${(maintenance.description || '설명이 없습니다.').substring(0, 100)}${(maintenance.description || '').length > 100 ? '...' : ''}
                 </p>
             </div>
         `;
     }).join('');
-    
-    container.innerHTML = cardsHtml;
-    console.log('✅ Real timeline rendered successfully with', maintenances.length, 'cards');
+}
+
+// 리스트 뷰 렌더링 함수
+function renderListView(maintenances) {
+    return `
+        <div class="maintenance-list-view">
+            <div class="list-header">
+                <div class="list-col-type">정비 종류</div>
+                <div class="list-col-date">날짜</div>
+                <div class="list-col-car">차량번호</div>
+                <div class="list-col-status">상태</div>
+                <div class="list-col-admin">관리자</div>
+            </div>
+            ${maintenances.map((maintenance, index) => {
+                const statusColors = {
+                    'pending': '#ffc107',
+                    'approved': '#28a745', 
+                    'rejected': '#dc3545',
+                    'completed': '#17a2b8'
+                };
+                
+                const typeIcons = {
+                    '엔진오일교체': '🛢️',
+                    '타이어교체': '🛞',
+                    '브레이크정비': '🔧',
+                    '일반점검': '🔍',
+                    '기타': '⚙️'
+                };
+                
+                const statusColor = statusColors[maintenance.status] || '#6c757d';
+                const typeIcon = typeIcons[maintenance.type] || '🔧';
+                
+                return `
+                    <div class="list-row ${index % 2 === 0 ? 'even' : 'odd'}" onclick="showMaintenanceDetail('${maintenance.id}')">
+                        <div class="list-col-type">
+                            <span class="type-icon">${typeIcon}</span>
+                            ${maintenance.type || '정비'}
+                        </div>
+                        <div class="list-col-date">
+                            ${maintenance.date || '날짜 없음'}
+                        </div>
+                        <div class="list-col-car">
+                            ${maintenance.carNumber || '없음'}
+                        </div>
+                        <div class="list-col-status">
+                            <span class="status-badge" style="background: ${statusColor};">
+                                ${getStatusText(maintenance.status) || maintenance.status || '없음'}
+                            </span>
+                        </div>
+                        <div class="list-col-admin">
+                            ${(maintenance.status === 'approved' || maintenance.status === 'rejected') && maintenance.adminName ? maintenance.adminName : '-'}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
 }
 
 // =============================================
@@ -1145,7 +1574,7 @@ async function handleMaintenanceSubmit(e) {
             mileage: document.getElementById('mileage')?.value || '',
             description: document.getElementById('description').value.trim(),
             adminEmail: currentUser.email,
-            adminName: currentUser.name,
+            adminName: currentUser.name || '관리자',
             status: 'pending',
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             photos: []
@@ -1498,22 +1927,62 @@ async function loadMaintenanceHistory(search = '') {
 }
 
 // 정비 상태 업데이트 함수 추가
-function updateMaintenanceStatus(maintenanceId, newStatus) {
+async function updateMaintenanceStatus(maintenanceId, newStatus) {
     if (!currentUser) return;
     
-    db.collection('maintenance').doc(maintenanceId)
-        .update({
+    try {
+        console.log('🔄 Updating maintenance status:', maintenanceId, newStatus);
+        
+        // 정비 이력 정보 가져오기
+        const maintenanceDoc = await db.collection('maintenance').doc(maintenanceId).get();
+        const maintenanceData = maintenanceDoc.data();
+        
+        // 상태 업데이트 (관리자 이름도 함께 저장)
+        await db.collection('maintenance').doc(maintenanceId).update({
             status: newStatus,
+            adminName: currentUser.name || '관리자',
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        })
-        .then(() => {
-            showNotification(`정비 이력이 ${newStatus === 'approved' ? '승인' : '거절'}되었습니다.`, 'success');
-            loadMaintenanceHistory();
-        })
-        .catch(error => {
-            console.error('Error updating maintenance status:', error);
-            showNotification('상태 업데이트 실패: ' + error.message, 'error');
         });
+        
+        console.log('✅ Status updated successfully');
+        showNotification(`정비 이력이 ${newStatus === 'approved' ? '승인' : '거절'}되었습니다.`, 'success');
+        
+        // 정비 요청자에게 알림 생성 (관리자가 아닌 경우에만)
+        if (isAdmin && maintenanceData && maintenanceData.carNumber) {
+            // 해당 차량번호의 사용자 찾기
+            const userSnapshot = await db.collection('users')
+                .where('carNumber', '==', maintenanceData.carNumber)
+                .get();
+                
+            if (!userSnapshot.empty) {
+                const userData = userSnapshot.docs[0].data();
+                const userId = userSnapshot.docs[0].id;
+                
+                // 사용자에게 알림 추가
+                const notification = {
+                    title: newStatus === 'approved' ? '정비 승인됨' : 
+                           newStatus === 'rejected' ? '정비 거절됨' : '정비 상태 변경',
+                    message: `${maintenanceData.type || '정비'} ${newStatus === 'approved' ? '승인' : 
+                             newStatus === 'rejected' ? '거절' : '상태 변경'}되었습니다.`,
+                    type: newStatus === 'approved' ? 'success' : 
+                          newStatus === 'rejected' ? 'error' : 'info',
+                    read: false,
+                    userId: userId,
+                    maintenanceId: maintenanceId,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                await db.collection('notifications').add(notification);
+                console.log('🔔 Notification sent to user:', userData.name);
+            }
+        }
+        
+        loadDashboardData(); // Refresh dashboard
+        
+    } catch (error) {
+        console.error('❌ Error updating status:', error);
+        showNotification('상태 업데이트 실패: ' + error.message, 'error');
+    }
 }
 
 // 알림 표시
@@ -1535,15 +2004,19 @@ function showNotification(message, type = 'info') {
     // Show notification
     setTimeout(() => notification.classList.add('show'), 100);
     
-    // Auto hide after 5 seconds
+    // Auto hide after 1.5 seconds
     setTimeout(() => {
         notification.classList.remove('show');
         setTimeout(() => {
-            if (container.contains(notification)) {
-                container.removeChild(notification);
+            try {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            } catch (error) {
+                console.log('Notification already removed:', error);
             }
         }, 300);
-    }, 5000);
+    }, 1500);
 }
 
 function getNotificationIcon(type) {
@@ -1579,9 +2052,13 @@ function updateUI() {
 function updateNotificationBadge() {
     const badge = document.getElementById('notificationBadge');
     if (badge) {
-        // This would be connected to real notification count
-        badge.textContent = '0';
-        badge.style.display = 'none';
+        badge.textContent = unreadCount;
+        badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+        
+        // 9 이상이면 "9+" 표시
+        if (unreadCount > 9) {
+            badge.textContent = '9+';
+        }
     }
 }
 
@@ -1642,6 +2119,12 @@ function loadDashboardData() {
 function initializeEventListeners() {
     console.log('🎯 Initializing event listeners...');
     
+    // 보기 전환 버튼 이벤트 리스너
+    const viewToggle = document.getElementById('viewToggle');
+    if (viewToggle) {
+        viewToggle.addEventListener('click', toggleViewMode);
+    }
+    
     // 페이지 새로고침 시 로그인 화면 표시
     window.addEventListener('beforeunload', () => {
         showScreen('loginScreen');
@@ -1654,6 +2137,70 @@ function initializeEventListeners() {
             closeMaintenanceModal();
         }
     });
+}
+
+// 보기 모드 전환 함수
+function toggleViewMode() {
+    console.log('🔄 Toggling view mode from:', currentViewMode);
+    
+    const viewToggle = document.getElementById('viewToggle');
+    const timelineContainer = document.getElementById('timelineContainer');
+    
+    if (!viewToggle || !timelineContainer) return;
+    
+    // 현재 보기 모드 전환
+    currentViewMode = currentViewMode === 'card' ? 'list' : 'card';
+    
+    // 아이콘 업데이트
+    const icon = viewToggle.querySelector('i');
+    if (currentViewMode === 'card') {
+        icon.className = 'fas fa-th-large'; // 카드 뷰 (그리드)
+        viewToggle.title = '리스트 뷰로 전환';
+        timelineContainer.classList.remove('list-view');
+        timelineContainer.classList.add('card-view');
+    } else {
+        icon.className = 'fas fa-list'; // 리스트 뷰
+        viewToggle.title = '카드 뷰로 전환';
+        timelineContainer.classList.remove('card-view');
+        timelineContainer.classList.add('list-view');
+    }
+    
+    console.log('✅ View mode changed to:', currentViewMode);
+    
+    // 현재 검색어로 다시 렌더링
+    const searchTerm = document.getElementById('quickSearch')?.value || '';
+    loadMaintenanceTimeline(searchTerm);
+    
+    // 선택 사항 저장
+    localStorage.setItem('viewMode', currentViewMode);
+    
+    showNotification(`${currentViewMode === 'card' ? '카드' : '리스트'} 뷰로 전환되었습니다`, 'info');
+}
+
+// 저장된 보기 모드 불러오기
+function loadViewMode() {
+    const savedViewMode = localStorage.getItem('viewMode');
+    if (savedViewMode && ['card', 'list'].includes(savedViewMode)) {
+        currentViewMode = savedViewMode;
+        
+        const viewToggle = document.getElementById('viewToggle');
+        const timelineContainer = document.getElementById('timelineContainer');
+        
+        if (viewToggle && timelineContainer) {
+            const icon = viewToggle.querySelector('i');
+            if (currentViewMode === 'card') {
+                icon.className = 'fas fa-th-large';
+                viewToggle.title = '리스트 뷰로 전환';
+                timelineContainer.classList.remove('list-view');
+                timelineContainer.classList.add('card-view');
+            } else {
+                icon.className = 'fas fa-list';
+                viewToggle.title = '카드 뷰로 전환';
+                timelineContainer.classList.remove('card-view');
+                timelineContainer.classList.add('list-view');
+            }
+        }
+    }
 }
 
 // 정비 타입별 아이콘과 색상 가져오기 함수
@@ -1991,7 +2538,11 @@ function showMaintenanceDetailModal(maintenance) {
     // 기존 모달 제거
     const existingModal = document.getElementById('maintenanceDetailModal');
     if (existingModal) {
-        existingModal.remove();
+        try {
+            existingModal.remove();
+        } catch (error) {
+            console.log('Modal already removed:', error);
+        }
     }
     
     // 상태별 정보
@@ -2059,7 +2610,7 @@ function showMaintenanceDetailModal(maintenance) {
                         <h4 style="margin: 0 0 15px 0; color: #333;">ℹ️ 추가 정보</h4>
                         <p style="margin: 5px 0; color: #666;">🆔 ID: ${maintenance.id}</p>
                         <p style="margin: 5px 0; color: #666;">📅 등록일: ${maintenance.createdAt ? new Date(maintenance.createdAt.toDate()).toLocaleString('ko-KR') : '없음'}</p>
-                        ${maintenance.adminEmail ? `<p style="margin: 5px 0; color: #666;">👨‍💼 관리자: ${maintenance.adminEmail}</p>` : ''}
+                        ${maintenance.adminName ? `<p style="margin: 5px 0; color: #666;">👨‍💼 관리자: ${maintenance.adminName}</p>` : ''}
                     </div>
                 </div>
                 
@@ -2089,7 +2640,11 @@ function showMaintenanceDetailModal(maintenance) {
 function closeMaintenanceDetailModal() {
     const modal = document.getElementById('maintenanceDetailModal');
     if (modal) {
-        modal.remove();
+        try {
+            modal.remove();
+        } catch (error) {
+            console.log('Modal already removed:', error);
+        }
     }
 }
 
@@ -2112,7 +2667,11 @@ function showPhotoModal(photoUrl) {
 function closePhotoModal() {
     const modal = document.getElementById('photoModal');
     if (modal) {
-        modal.remove();
+        try {
+            modal.remove();
+        } catch (error) {
+            console.log('Modal already removed:', error);
+        }
     }
 }
 

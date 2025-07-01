@@ -1047,7 +1047,7 @@ body {
 
 .form-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: var(--space-md);
 }
 
@@ -1339,6 +1339,170 @@ body {
     border-left-color: var(--warning);
 }
 
+/* 알림 패널 */
+.notification-panel-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: var(--z-modal-backdrop);
+}
+
+.notification-panel {
+    position: fixed;
+    top: var(--header-height);
+    right: var(--space-md);
+    width: 380px;
+    max-width: calc(100vw - var(--space-md) * 2);
+    max-height: calc(100vh - var(--header-height) - var(--space-md) * 2);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    z-index: var(--z-modal);
+    overflow: hidden;
+    animation: slideInFromRight 0.2s ease-out;
+}
+
+@keyframes slideInFromRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.notification-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--secondary-200);
+    background: var(--bg-secondary);
+}
+
+.notification-panel-header h3 {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.clear-all-btn {
+    background: none;
+    border: none;
+    color: var(--primary-600);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.clear-all-btn:hover {
+    background: var(--primary-50);
+    color: var(--primary-700);
+}
+
+.notification-panel-body {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--secondary-100);
+    position: relative;
+    transition: all var(--transition-fast);
+}
+
+.notification-item:hover {
+    background: var(--bg-secondary);
+}
+
+.notification-item.unread {
+    background: var(--primary-25, #f8faff);
+}
+
+.notification-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: var(--font-size-lg);
+    flex-shrink: 0;
+}
+
+.notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.notification-title {
+    margin: 0 0 var(--space-xs) 0;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.notification-message {
+    margin: 0 0 var(--space-sm) 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.notification-time {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+.unread-indicator {
+    position: absolute;
+    top: var(--space-lg);
+    right: var(--space-lg);
+    width: 8px;
+    height: 8px;
+    background: var(--primary-600);
+    border-radius: var(--radius-full);
+}
+
+.no-notifications {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-3xl);
+    color: var(--text-tertiary);
+    text-align: center;
+}
+
+.no-notifications i {
+    font-size: var(--font-size-3xl);
+    margin-bottom: var(--space-md);
+    opacity: 0.5;
+}
+
+.no-notifications p {
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
 /* ==============================================
    Responsive Design
    ============================================== */
@@ -1429,4 +1593,132 @@ body {
 ::selection {
     background: var(--primary-200);
     color: var(--primary-900);
+}
+
+/* ==============================================
+   View Mode Styles
+   ============================================== */
+
+/* List View Styles */
+.maintenance-list-view {
+    background: var(--bg-primary);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin: 10px 0;
+}
+
+.list-header {
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+    color: white;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.2fr 1fr 1fr;
+    gap: 16px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.list-row {
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.2fr 1fr 1fr;
+    gap: 16px;
+    align-items: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-bottom: 1px solid var(--secondary-200);
+}
+
+.list-row:hover {
+    background: var(--bg-secondary);
+    transform: translateX(4px);
+}
+
+.list-row.even {
+    background: var(--bg-primary);
+}
+
+.list-row.odd {
+    background: var(--bg-secondary);
+}
+
+.list-row:last-child {
+    border-bottom: none;
+}
+
+.list-col-type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.list-col-type .type-icon {
+    font-size: 16px;
+}
+
+.list-col-date {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.list-col-car {
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    color: var(--primary-600);
+}
+
+.list-col-status .status-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: white;
+    text-align: center;
+    display: inline-block;
+    min-width: 60px;
+}
+
+.list-col-admin {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* Timeline Container View Classes */
+.timeline-container.list-view .maintenance-card-view {
+    display: none;
+}
+
+.timeline-container.card-view .maintenance-list-view {
+    display: none;
+}
+
+/* Default to card view if no specific class */
+.timeline-container:not(.list-view):not(.card-view) .maintenance-list-view {
+    display: none;
+}
+
+/* Responsive List View */
+@media (max-width: 768px) {
+    .list-header,
+    .list-row {
+        grid-template-columns: 1.5fr 1fr 1fr;
+        gap: 8px;
+    }
+    
+    .list-col-car,
+    .list-col-admin {
+        display: none;
+    }
+    
+    .list-header .list-col-car,
+    .list-header .list-col-admin {
+        display: none;
+    }
+    
+    .list-header,
+    .list-row {
+        padding: 12px;
+    }
 } 
