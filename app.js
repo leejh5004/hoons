@@ -1410,12 +1410,6 @@ window.showMaintenanceDetail = function(maintenance) {
     backdrop.classList.add('show');
 }
 
-// 정비 타입 아이콘 가져오기 함수 수정
-function getTypeIcon(type) {
-    const typeInfo = getTypeIconAndColor(type);
-    return `<i class="fas ${typeInfo.icon}"></i>`;
-}
-
 // 아이콘 가져오기 함수들
 function getTypeIcon(type) {
     const icons = {
