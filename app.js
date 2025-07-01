@@ -1,783 +1,1257 @@
-// 관리자 이메일 목록
-const ADMIN_EMAILS = ['admin1@admin.com', 'admin2@admin.com', 'admin3@admin.com'];
+/*
+ * TWOHOONS GARAGE - Mobile First Management System
+ * Modern motorcycle maintenance management app
+ */
 
-// 관리자 이메일 → 이름 변환 캐시
-const adminNameCache = {};
-
-// 전역 변수
+// Global variables
 let currentUser = null;
 let isAdmin = false;
+let db = null;
+let uploadedPhotos = { before: null, during: null, after: null };
+let adminNameCache = {};
+let currentStep = 1;
+let currentTheme = 'light';
 
-// 사진 업로드 관련 변수
-let uploadedPhotos = {
-    before: null,
-    during: null,
-    after: null
-};
+// Initialize app when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 TWOHOONS GARAGE - Starting application...');
+    
+    // Initialize Firebase
+    if (typeof firebase !== 'undefined') {
+        db = firebase.firestore();
+        console.log('✅ Firebase initialized');
+    } else {
+        console.error('❌ Firebase not loaded');
+        return;
+    }
+    
+    // Initialize app components
+    initializeAuthSystem();
+    initializeThemeSystem();
+    initializeNavigation();
+    initializeModals();
+    initializeEventListeners();
+    initializeSearchAndFilters();
+    
+    // Check authentication state
+    firebase.auth().onAuthStateChanged(handleAuthStateChange);
+    
+    console.log('✅ Application initialized successfully');
+});
 
-// DOM이 로드된 후 실행
-document.addEventListener('DOMContentLoaded', () => {
-    // DOM 요소
+// =============================================
+// Authentication System
+// =============================================
+
+function initializeAuthSystem() {
+    const authTabs = document.querySelectorAll('.auth-tab');
+    const authForms = document.querySelectorAll('.auth-form');
+    
+    // Tab switching
+    authTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const targetTab = tab.dataset.tab;
+            
+            // Update active tab
+            authTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            // Update active form
+            authForms.forEach(form => {
+                form.classList.remove('active');
+                if (form.id === `${targetTab}Form`) {
+                    form.classList.add('active');
+                }
+            });
+        });
+    });
+    
+    // Login form
     const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    }
+    
+    // Register form
     const registerForm = document.getElementById('registerForm');
-    const maintenanceList = document.getElementById('maintenanceList');
-    const maintenanceForm = document.getElementById('maintenanceForm');
-    const maintenanceItems = document.getElementById('maintenanceItems');
-    const addMaintenanceBtn = document.getElementById('addMaintenanceBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const userName = document.getElementById('userName');
-    const searchBox = document.getElementById('searchBox');
-    const searchInput = document.getElementById('searchInput');
-    const addBtnBox = document.getElementById('addBtnBox');
-    const showRegister = document.getElementById('showRegister');
-    const showLogin = document.getElementById('showLogin');
+    if (registerForm) {
+        registerForm.addEventListener('submit', handleRegister);
+    }
+}
 
-    // 폼 전환
-    if (showRegister) {
-        showRegister.addEventListener('click', e => {
-            e.preventDefault();
-            loginForm.style.display = 'none';
-            registerForm.style.display = 'block';
+async function handleLogin(e) {
+    e.preventDefault();
+    
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    
+    if (!email || !password) {
+        showNotification('이메일과 비밀번호를 입력해주세요.', 'error');
+        return;
+    }
+    
+    try {
+        showNotification('로그인 중...', 'info');
+        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+        console.log('✅ Login successful');
+    } catch (error) {
+        console.error('❌ Login error:', error);
+        let errorMessage = '로그인에 실패했습니다.';
+        
+        switch (error.code) {
+            case 'auth/user-not-found':
+                errorMessage = '등록되지 않은 이메일입니다.';
+                break;
+            case 'auth/wrong-password':
+                errorMessage = '비밀번호가 틀렸습니다.';
+                break;
+            case 'auth/invalid-email':
+                errorMessage = '올바른 이메일 형식을 입력해주세요.';
+                break;
+        }
+        
+        showNotification(errorMessage, 'error');
+    }
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('registerName').value.trim();
+    const email = document.getElementById('registerEmail').value.trim();
+    const password = document.getElementById('registerPassword').value;
+    const carNumber = document.getElementById('registerCarNumber').value.trim().toLowerCase().replace(/\s+/g, '');
+    
+    if (!name || !email || !password || !carNumber) {
+        showNotification('모든 필드를 입력해주세요.', 'error');
+        return;
+    }
+    
+    if (password.length < 6) {
+        showNotification('비밀번호는 6자 이상이어야 합니다.', 'error');
+        return;
+    }
+    
+    try {
+        showNotification('회원가입 중...', 'info');
+        
+        // Create user account
+        const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        
+        // Save user data to Firestore
+        await db.collection('users').doc(user.uid).set({
+            name: name,
+            email: email,
+            carNumber: carNumber,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            role: 'user'
+        });
+        
+        console.log('✅ Registration successful');
+        showNotification('회원가입이 완료되었습니다!', 'success');
+        
+    } catch (error) {
+        console.error('❌ Registration error:', error);
+        let errorMessage = '회원가입에 실패했습니다.';
+        
+        switch (error.code) {
+            case 'auth/email-already-in-use':
+                errorMessage = '이미 사용 중인 이메일입니다.';
+                break;
+            case 'auth/invalid-email':
+                errorMessage = '올바른 이메일 형식을 입력해주세요.';
+                break;
+            case 'auth/weak-password':
+                errorMessage = '비밀번호가 너무 약합니다.';
+                break;
+        }
+        
+        showNotification(errorMessage, 'error');
+    }
+}
+
+async function handleAuthStateChange(user) {
+    if (user) {
+        console.log('✅ User authenticated:', user.email);
+        
+        try {
+            // Get user data from Firestore
+            const userDoc = await db.collection('users').doc(user.uid).get();
+            
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                currentUser = {
+                    uid: user.uid,
+                    email: user.email,
+                    name: userData.name,
+                    carNumber: userData.carNumber,
+                    role: userData.role || 'user'
+                };
+                
+                // 관리자 이메일 체크로 관리자 권한 부여
+                const adminEmails = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
+                isAdmin = adminEmails.includes(user.email) || currentUser.role === 'admin';
+                
+                console.log('👤 User role:', currentUser.role);
+                console.log('🔧 Is admin (email check):', adminEmails.includes(user.email));
+                console.log('🔧 Is admin (final):', isAdmin);
+                
+                // Switch to dashboard
+                showScreen('dashboardScreen');
+                updateUI();
+                loadDashboardData();
+                
+                showNotification(`환영합니다, ${currentUser.name}님!`, 'success');
+            } else {
+                console.error('❌ User document not found');
+                showNotification('사용자 정보를 찾을 수 없습니다.', 'error');
+                await firebase.auth().signOut();
+            }
+            
+        } catch (error) {
+            console.error('❌ Error loading user data:', error);
+            showNotification('사용자 정보 로딩 실패', 'error');
+        }
+        
+    } else {
+        console.log('👋 User signed out');
+        currentUser = null;
+        isAdmin = false;
+        showScreen('loginScreen');
+    }
+}
+
+async function handleLogout() {
+    try {
+        await firebase.auth().signOut();
+        showNotification('로그아웃되었습니다.', 'info');
+    } catch (error) {
+        console.error('❌ Logout error:', error);
+        showNotification('로그아웃 실패', 'error');
+    }
+}
+
+// =============================================
+// Theme System
+// =============================================
+
+function initializeThemeSystem() {
+    const themeToggle = document.getElementById('themeToggle');
+    
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    setTheme(savedTheme);
+    
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+    }
+}
+
+function setTheme(theme) {
+    currentTheme = theme;
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        const icon = themeToggle.querySelector('i');
+        icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+}
+
+function toggleTheme() {
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    showNotification(`${newTheme === 'dark' ? '다크' : '라이트'} 모드로 변경되었습니다.`, 'info');
+}
+
+// =============================================
+// Navigation System
+// =============================================
+
+function initializeNavigation() {
+    const navItems = document.querySelectorAll('.nav-item');
+    const profileBtn = document.getElementById('profileBtn');
+    
+    // Bottom navigation
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            const screen = item.dataset.screen;
+            
+            // Update active nav item
+            navItems.forEach(nav => nav.classList.remove('active'));
+            item.classList.add('active');
+            
+            // Handle navigation
+            switch (screen) {
+                case 'dashboard':
+                    showScreen('dashboardScreen');
+                    loadDashboardData();
+                    break;
+                case 'add':
+                    openMaintenanceModal();
+                    break;
+                case 'search':
+                    focusSearchInput();
+                    break;
+                case 'profile':
+                    showProfileOptions();
+                    break;
+            }
+        });
+    });
+    
+    // Profile button
+    if (profileBtn) {
+        profileBtn.addEventListener('click', showProfileOptions);
+    }
+}
+
+function showScreen(screenId) {
+    const screens = document.querySelectorAll('.screen');
+    screens.forEach(screen => {
+        screen.classList.remove('active');
+        if (screen.id === screenId) {
+            screen.classList.add('active');
+        }
+    });
+}
+
+function focusSearchInput() {
+    const searchInput = document.getElementById('quickSearch');
+    if (searchInput) {
+        searchInput.focus();
+    }
+}
+
+function showProfileOptions() {
+    const options = [
+        { text: '로그아웃', action: handleLogout, icon: 'fas fa-sign-out-alt' }
+    ];
+    
+    if (!isAdmin) {
+        options.unshift({ 
+            text: '오토바이 번호 수정', 
+            action: () => showCarNumberModal(), 
+            icon: 'fas fa-motorcycle' 
         });
     }
     
-    if (showLogin) {
-        showLogin.addEventListener('click', e => {
-            e.preventDefault();
-            registerForm.style.display = 'none';
-            loginForm.style.display = 'block';
-        });
-    }
-
-    // 회원가입
-    if (registerForm) {
-        registerForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const email = document.getElementById('regEmail').value.trim().toLowerCase();
-            const password = document.getElementById('regPassword').value;
-            const carNumber = document.getElementById('regCarNumber').value.trim().toLowerCase().replace(/\\s+/g, '');
-            
-            if (!email || !password || !carNumber) {
-                showNotification('모든 정보를 입력하세요.', 'error');
-                return;
-            }
-            
-            auth.createUserWithEmailAndPassword(email, password)
-                .then((userCredential) => {
-                    const uid = userCredential.user.uid;
-                    return db.collection('users').doc(uid).set({ email, carNumber });
-                })
-                .then(() => {
-                    showNotification('회원가입이 완료되었습니다! 로그인 해주세요.', 'success');
-                    registerForm.style.display = 'none';
-                    loginForm.style.display = 'block';
-                })
-                .catch(err => showNotification('회원가입 실패: ' + err.message, 'error'));
-        });
-    }
-
-    // 로그인
-    if (loginForm) {
-        loginForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email').value.trim().toLowerCase();
-            const password = document.getElementById('password').value;
-            
-            if (!email || !password) {
-                showNotification('이메일과 비밀번호를 입력하세요.', 'error');
-                return;
-            }
-            
-            auth.signInWithEmailAndPassword(email, password)
-                .catch(err => showNotification('로그인 실패: ' + err.message, 'error'));
-        });
-    }
-
-    // 로그아웃
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            auth.signOut();
-        });
-    }
-
-    // 검색
-    if (searchInput) {
-        let searchTimeout;
-        searchInput.addEventListener('input', () => {
-            // 디바운스 처리
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                loadMaintenanceHistory(searchInput.value);
-            }, 300);
-        });
-    }
-
-    // 정비 이력 추가 (관리자만)
-    if (addMaintenanceBtn) {
-        addMaintenanceBtn.addEventListener('click', () => {
-            if (!isAdmin) {
-                showNotification('관리자만 정비 이력을 추가할 수 있습니다.', 'error');
-                return;
-            }
-            openMaintenanceInputModal();
-        });
-    }
-
-    // 오토바이 번호 수정 버튼 이벤트 추가
-    const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
-    if (updateCarNumberBtn) {
-        updateCarNumberBtn.addEventListener('click', () => {
-            showCarNumberUpdateModal();
-        });
-    }
-
-    // ESC 키로 모달 닫기만 유지
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            // 모든 모달 닫기
-            closeMaintenanceInputModal();
-            closeCarNumberModal();
-            closeMaintenanceDetailModal();
-        }
-    });
-
-    // 정비 이력 폼 취소
-    const cancelBtn = document.getElementById('cancelBtn');
-    if (cancelBtn && maintenanceForm) {
-        cancelBtn.addEventListener('click', () => {
-            maintenanceForm.style.display = 'none';
-        });
-    }
-
-    // 정비 이력 저장
-    const newMaintenanceForm = document.getElementById('newMaintenance');
-    if (newMaintenanceForm) {
-        newMaintenanceForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            if (!isAdmin) return;
-
-            const carNumber = document.getElementById('maintenanceCarNumber').value.trim().toLowerCase().replace(/\\s+/g, '');
-            const maintenanceData = {
-                carNumber,
-                date: document.getElementById('maintenanceDate').value,
-                mileage: document.getElementById('maintenanceMileage').value,
-                type: document.getElementById('maintenanceType').value,
-                description: document.getElementById('description').value,
-                status: 'pending',
-                adminEmail: currentUser.email,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-
-            db.collection('maintenance').add(maintenanceData)
-                .then(() => {
-                    maintenanceForm.style.display = 'none';
-                    newMaintenanceForm.reset();
-                    loadMaintenanceHistory();
-                    showNotification('정비 이력이 저장되었습니다.', 'success');
-                })
-                .catch(err => showNotification('정비 이력 저장 실패: ' + err.message, 'error'));
-        });
-    }
-
-    // 인증 상태 감지
-    auth.onAuthStateChanged(user => {
-        if (user) {
-            // users 컬렉션이 삭제된 상황을 처리
-            db.collection('users').doc(user.uid).get()
-                .then(doc => {
-                    if (!doc.exists) {
-                        // users 컬렉션이 없거나 문서가 없는 경우
-                        console.log('Users collection or document not found, attempting to recover...');
-                        
-                        // 현재 로그인된 사용자의 이메일로 users 컬렉션 재생성
-                        return db.collection('users').doc(user.uid).set({
-                            email: user.email,
-                            carNumber: user.email.split('@')[0], // 임시 오토바이 번호 (이메일 아이디 사용)
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            isRecovered: true // 복구된 계정 표시
-                        }).then(() => {
-                            showNotification('계정 정보가 복구되었습니다. 오토바이 번호를 수정해주세요.', 'info');
-                            return db.collection('users').doc(user.uid).get();
-                        });
-                    }
-                    return doc;
-                })
-                .then(doc => {
-                    if (doc.exists) {
-                        currentUser = {
-                            uid: user.uid,
-                            email: user.email,
-                            carNumber: doc.data().carNumber
-                        };
-                        isAdmin = ADMIN_EMAILS.includes(user.email);
-                        
-                        // UI 업데이트
-                        updateUI();
-                        
-                        // 정비 이력 로드
-                        loadMaintenanceHistory();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error handling user data:', error);
-                    showNotification('사용자 정보를 처리하는데 실패했습니다.', 'error');
-                    auth.signOut();
-                });
-        } else {
-            // 로그아웃 상태
-            currentUser = null;
-            isAdmin = false;
-            
-            // UI 초기화
-            if (loginForm) loginForm.style.display = 'block';
-            if (registerForm) registerForm.style.display = 'none';
-            if (maintenanceList) maintenanceList.style.display = 'none';
-            if (logoutBtn) logoutBtn.style.display = 'none';
-            if (addBtnBox) addBtnBox.style.display = 'none';
-            if (searchBox) searchBox.style.display = 'none';
-            if (maintenanceItems) maintenanceItems.innerHTML = '';
-            
-            const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
-            if (updateCarNumberBtn) {
-                updateCarNumberBtn.style.display = 'none';
-            }
-        }
-    });
-
-    // 정비 이력 입력 모달 열기 함수
-    window.openMaintenanceInputModal = function() {
-        if (!isAdmin) {
-            showNotification('관리자만 정비 이력을 추가할 수 있습니다.', 'error');
-            return;
-        }
-
-        const modal = document.getElementById('maintenanceInputModal');
-        const backdrop = document.getElementById('modalBackdrop');
-        
-        if (modal) {
-            console.log('정비 이력 입력 모달 열기 시작');
-            
-            // 폼 초기화
-            const form = document.getElementById('newMaintenanceModalForm');
-            if (form) {
-                form.reset();
-            }
-            
-            // 사진 미리보기 초기화
-            uploadedPhotos = { before: null, during: null, after: null };
-            
-            // 사진 미리보기 영역 초기화
-            const photoTypes = ['before', 'during', 'after'];
-            photoTypes.forEach(type => {
-                const previewDiv = document.getElementById(`${type}PhotoPreview`);
-                const img = document.getElementById(`${type}PhotoImg`);
-                if (previewDiv && img) {
-                    img.src = '';
-                    img.style.display = 'none';
-                    const placeholder = previewDiv.querySelector('.photo-placeholder');
-                    if (placeholder) {
-                        placeholder.style.display = 'flex';
-                    }
-                    // 기존 제거 버튼 제거
-                    const existingRemoveBtn = previewDiv.querySelector('button');
-                    if (existingRemoveBtn) {
-                        existingRemoveBtn.remove();
-                    }
-                }
-            });
-            
-            console.log('모달 초기화 완료, 이벤트 리스너 설정 시작');
-            
-            // 이벤트 리스너 설정
-            setupPhotoInputListeners();
-            setupMaintenanceFormListener();
-            
-            console.log('이벤트 리스너 설정 완료, 모달 표시');
-            
-            // 모달과 백드롭 표시
-            modal.classList.add('show');
-            if (backdrop) {
-                backdrop.style.display = 'block';
-            }
-            
-            // 모달 백드롭 클릭 이벤트 (중복 방지)
-            if (!modal.hasAttribute('data-backdrop-added')) {
-                modal.setAttribute('data-backdrop-added', 'true');
-                modal.addEventListener('click', function(e) {
-                    if (e.target === modal) {
-                        closeMaintenanceInputModal();
-                    }
-                });
-            }
-            
-            console.log('정비 이력 입력 모달 열기 완료');
-        }
-    }
-
-    // 정비 이력 입력 모달 닫기 함수
-    window.closeMaintenanceInputModal = function() {
-        const modal = document.getElementById('maintenanceInputModal');
-        const backdrop = document.getElementById('modalBackdrop');
-        
-        if (modal) {
-            modal.classList.remove('show');
-        }
-        
-        if (backdrop) {
-            backdrop.style.display = 'none';
-        }
-        
-        // 폼 초기화 및 리스너 속성 제거
-        const form = document.getElementById('newMaintenanceModalForm');
-        if (form) {
-            form.reset();
-            form.removeAttribute('data-listener-added');
-        }
-        
-        // 모달 백드롭 이벤트 속성 제거
-        const inputModal = document.getElementById('maintenanceInputModal');
-        if (inputModal) {
-            inputModal.removeAttribute('data-backdrop-added');
-        }
-        
-        // 사진 입력 리스너 속성 제거
-        const photoInputs = ['beforePhoto', 'duringPhoto', 'afterPhoto'];
-        photoInputs.forEach(id => {
-            const input = document.getElementById(id);
-            if (input) {
-                input.removeAttribute('data-listener-added');
-            }
-        });
-        
-        // 사진 미리보기 초기화
-        uploadedPhotos = { before: null, during: null, after: null };
-        
-        // 사진 미리보기 영역 초기화
-        const photoTypes = ['before', 'during', 'after'];
-        photoTypes.forEach(type => {
-            const previewDiv = document.getElementById(`${type}PhotoPreview`);
-            const img = document.getElementById(`${type}PhotoImg`);
-            if (previewDiv && img) {
-                img.src = '';
-                img.style.display = 'none';
-                const placeholder = previewDiv.querySelector('.photo-placeholder');
-                if (placeholder) {
-                    placeholder.style.display = 'flex';
-                }
-                // 기존 제거 버튼 제거
-                const existingRemoveBtn = previewDiv.querySelector('button');
-                if (existingRemoveBtn) {
-                    existingRemoveBtn.remove();
-                }
-            }
-        });
-    }
-
-    // PC/모바일에 따라 사진 입력 input의 capture 속성을 동적으로 설정
-    function setPhotoInputCapture() {
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        document.querySelectorAll('.photo-input').forEach(input => {
-            if (isMobile) {
-                input.setAttribute('capture', 'environment');
-            } else {
-                input.removeAttribute('capture');
-            }
-        });
-    }
-
-    // 사진 입력 이벤트 리스너 설정 함수 (중복 방지)
-    function setupPhotoInputListeners() {
-        const photoInputs = [
-            { id: 'beforePhoto', type: 'before', previewId: 'beforePhotoPreview', imgId: 'beforePhotoImg' },
-            { id: 'duringPhoto', type: 'during', previewId: 'duringPhotoPreview', imgId: 'duringPhotoImg' },
-            { id: 'afterPhoto', type: 'after', previewId: 'afterPhotoPreview', imgId: 'afterPhotoImg' }
-        ];
-        photoInputs.forEach(({ id, type, previewId, imgId }) => {
-            const input = document.getElementById(id);
-            const previewDiv = document.getElementById(previewId);
-            const img = document.getElementById(imgId);
-            if (input && previewDiv && img && !input.hasAttribute('data-listener-added')) {
-                input.setAttribute('data-listener-added', 'true');
-                
-                input.addEventListener('change', function(e) {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    // 미리보기: FileReader로 즉시 띄움
-                    const reader = new FileReader();
-                    reader.onload = function(ev) {
-                        img.src = ev.target.result;
-                        img.style.display = 'block';
-                        // placeholder, 버튼 모두 완전히 제거
-                        const placeholder = previewDiv.querySelector('.photo-placeholder');
-                        if (placeholder) placeholder.remove();
-                        const btn = previewDiv.parentElement.querySelector('label[for="' + id + '"]');
-                        if (btn) btn.style.display = 'none';
-                        // 기존 제거 버튼 제거
-                        const oldBtn = previewDiv.querySelector('button');
-                        if (oldBtn) oldBtn.remove();
-                        // 제거 버튼 추가
-                        const removeBtn = document.createElement('button');
-                        removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                        removeBtn.style.cssText = `position:absolute;top:5px;right:5px;background:rgba(255,0,0,0.8);color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;z-index:10;`;
-                        removeBtn.onclick = (ev2) => {
-                            ev2.preventDefault();
-                            ev2.stopPropagation();
-                            img.src = '';
-                            img.style.display = 'none';
-                            input.value = '';
-                            uploadedPhotos[type] = null;
-                            // placeholder, 버튼 다시 보이게
-                            if (btn) btn.style.display = '';
-                            // placeholder 복원
-                            if (!previewDiv.querySelector('.photo-placeholder')) {
-                                const ph = document.createElement('div');
-                                ph.className = 'photo-placeholder';
-                                ph.innerHTML = '<i class="fas fa-camera"></i><span>사진 추가</span>';
-                                previewDiv.appendChild(ph);
-                            }
-                            removeBtn.remove();
-                        };
-                        previewDiv.appendChild(removeBtn);
-                    };
-                    reader.readAsDataURL(file);
-                    // 업로드용 파일 저장
-                    uploadedPhotos[type] = file;
-                });
-            }
-        });
-    }
-
-    // 정비 폼 이벤트 리스너 설정 함수 (중복 방지)
-    function setupMaintenanceFormListener() {
-        const form = document.getElementById('newMaintenanceModalForm');
-        if (form && !form.hasAttribute('data-listener-added')) {
-            form.setAttribute('data-listener-added', 'true');
-            
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                if (!isAdmin) return;
-
-                try {
-                    const carNumber = document.getElementById('maintenanceCarNumberModal').value.trim().toLowerCase().replace(/\s+/g, '');
-                    const maintenanceData = {
-                        carNumber,
-                        date: document.getElementById('maintenanceDateModal').value,
-                        mileage: document.getElementById('maintenanceMileageModal').value,
-                        type: document.getElementById('maintenanceTypeModal').value,
-                        description: document.getElementById('descriptionModal').value,
-                        status: 'pending',
-                        adminEmail: currentUser.email,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    };
-
-                    const docRef = await db.collection('maintenance').add(maintenanceData);
-                    const photos = await uploadMaintenancePhotos(docRef.id);
-                    
-                    if (photos.length > 0) {
-                        await docRef.update({ photos });
-                    }
-
-                    closeMaintenanceInputModal();
-                    form.reset();
-                    uploadedPhotos = { before: null, during: null, after: null };
-                    loadMaintenanceHistory();
-                    showNotification('정비 이력이 저장되었습니다.', 'success');
-                    
-                } catch (err) {
-                    console.error('정비 이력 저장 중 오류:', err);
-                    showNotification('정비 이력 저장 실패: ' + err.message, 'error');
-                }
-            });
-        }
-    }
-
-    // 정비 이력 상세 보기 모달 열기
-    window.showMaintenanceDetail = function(maintenance) {
-        const modal = document.getElementById('maintenanceDetailModal');
-        if (!modal) return;
-
-        const typeInfo = getTypeIconAndColor(maintenance.type);
-        
-        // 모달 내용 업데이트
-        const modalContent = modal.querySelector('.modal-content');
-        if (modalContent) {
-            const modalBody = modalContent.querySelector('.modal-body');
-            if (modalBody) {
-                modalBody.innerHTML = `
-                    <div class="maintenance-detail-content">
-                        <div class="detail-header mb-3">
-                            <div class="detail-type h5 mb-2" style="color: ${typeInfo.color}">
-                                <i class="fas ${typeInfo.icon}"></i> ${maintenance.type || ''}
-                            </div>
-                            <div class="detail-date text-muted mb-1">${maintenance.date || ''}</div>
-                            <div class="detail-status mb-3">
-                                <span class="status-badge ${maintenance.status}">${getStatusText(maintenance.status)}</span>
-                            </div>
-                        </div>
-                        <div class="detail-info">
-                            <div class="detail-motorcycle-number mb-2">
-                                <i class="fas fa-motorcycle"></i> <strong>오토바이 번호:</strong> ${maintenance.carNumber}
-                            </div>
-                            ${maintenance.mileage ? `
-                                <div class="detail-mileage mb-2">
-                                    <i class="fas fa-tachometer-alt"></i> <strong>키로수:</strong> ${maintenance.mileage}km
-                                </div>
-                            ` : ''}
-                            <div class="detail-description mb-3">
-                                <strong>상세 설명:</strong><br>
-                                ${maintenance.description || '설명이 없습니다.'}
-                            </div>
-                        </div>
-                        <div class="detail-footer">
-                            ${maintenance.adminName ? `
-                                <div class="detail-admin text-muted">
-                                    <i class="fas fa-user-shield"></i> 관리자: ${maintenance.adminName}
-                                </div>
-                            ` : ''}
-                        </div>
-                        <div class="detail-photos mt-4">
-                            ${maintenance.photos && maintenance.photos.length > 0 ? `
-                                <h6><i class="fas fa-camera"></i> 정비 사진</h6>
-                                <div class="row g-2">
-                                    ${maintenance.photos.map(photo => `
-                                        <div class="col-md-4">
-                                            <div class="card">
-                                                <img src="${photo.thumbnailUrl || photo.url}" 
-                                                     class="card-img-top" 
-                                                     alt="${photo.type} 사진"
-                                                     style="height: 150px; object-fit: cover; cursor: pointer;"
-                                                     onclick="window.open('${photo.url}', '_blank')">
-                                                <div class="card-body p-2">
-                                                    <small class="text-muted">
-                                                        ${photo.type === 'before' ? '정비 전' : 
-                                                          photo.type === 'during' ? '정비 중' : '정비 후'}
-                                                    </small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-            }
-        }
-        
-        // 모달 표시
-        modal.classList.add('show');
-        
-        const backdrop = document.getElementById('modalBackdrop');
-        if (backdrop) {
-            backdrop.style.display = 'block';
-        }
-        
-        // 모달 백드롭 클릭 이벤트 (중복 방지)
-        if (!modal.hasAttribute('data-backdrop-added')) {
-            modal.setAttribute('data-backdrop-added', 'true');
-            modal.addEventListener('click', function(e) {
-                if (e.target === modal) {
-                    closeMaintenanceDetailModal();
-                }
-            });
-        }
+    // Create and show profile modal
+    showContextMenu(options);
 }
 
-    // 사진 남은 시간 HTML 생성 함수
-    function getPhotoTimeLeftHtml(photo) {
-        const createdAt = new Date(photo.createdAt);
+function showContextMenu(options) {
+    // Simple context menu implementation
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-xl);
+        padding: var(--space-sm);
+        z-index: var(--z-modal);
+        min-width: 200px;
+    `;
+    
+    options.forEach(option => {
+        const item = document.createElement('button');
+        item.className = 'context-menu-item';
+        item.style.cssText = `
+            width: 100%;
+            padding: var(--space-md);
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            transition: all var(--transition-fast);
+        `;
+        
+        item.innerHTML = `<i class="${option.icon}"></i> ${option.text}`;
+        item.addEventListener('click', () => {
+            option.action();
+            document.body.removeChild(menu);
+        });
+        
+        item.addEventListener('mouseenter', () => {
+            item.style.background = 'var(--bg-secondary)';
+        });
+        
+        item.addEventListener('mouseleave', () => {
+            item.style.background = 'transparent';
+        });
+        
+        menu.appendChild(item);
+    });
+    
+    // Close on outside click
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: var(--z-modal-backdrop);
+    `;
+    
+    overlay.addEventListener('click', () => {
+        document.body.removeChild(menu);
+        document.body.removeChild(overlay);
+    });
+    
+    document.body.appendChild(overlay);
+    document.body.appendChild(menu);
+}
+
+// =============================================
+// Dashboard System
+// =============================================
+
+async function loadDashboardData() {
+    console.log('📊 Loading dashboard data...');
+    
+    try {
+        // Show loading
+        showLoadingSpinner(true);
+        
+        // Load statistics
+        await Promise.all([
+            updateTodayStats(),
+            updatePendingStats(),
+            updateMonthStats(),
+            updateAverageStats(),
+            loadMaintenanceTimeline()
+        ]);
+        
+        showLoadingSpinner(false);
+        
+    } catch (error) {
+        console.error('❌ Error loading dashboard:', error);
+        showNotification('대시보드 로딩 실패', 'error');
+        showLoadingSpinner(false);
+    }
+}
+
+async function updateTodayStats() {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        let query = db.collection('maintenance').where('date', '==', today);
+        
+        if (isAdmin) {
+            query = query.where('adminEmail', '==', currentUser.email);
+        } else {
+            query = query.where('carNumber', '==', currentUser.carNumber);
+        }
+        
+        const snapshot = await query.get();
+        const count = snapshot.size;
+        
+        updateStatCard('todayCount', count);
+        
+    } catch (error) {
+        console.error('❌ Error updating today stats:', error);
+    }
+}
+
+async function updatePendingStats() {
+    try {
+        let query = db.collection('maintenance').where('status', '==', 'pending');
+        
+        if (isAdmin) {
+            query = query.where('adminEmail', '==', currentUser.email);
+        } else {
+            query = query.where('carNumber', '==', currentUser.carNumber);
+        }
+        
+        const snapshot = await query.get();
+        const count = snapshot.size;
+        
+        updateStatCard('pendingCount', count);
+        
+    } catch (error) {
+        console.error('❌ Error updating pending stats:', error);
+    }
+}
+
+async function updateMonthStats() {
+    try {
+        // 단순한 쿼리로 변경 - 인덱스 오류 방지
+        let query = db.collection('maintenance');
+        
+        if (!isAdmin && currentUser && currentUser.carNumber) {
+            query = query.where('carNumber', '==', currentUser.carNumber);
+        }
+        
+        const snapshot = await query.get();
+        
+        // 클라이언트 측에서 월간 필터링
         const now = new Date();
-        const expiryDate = new Date(createdAt);
-        expiryDate.setDate(expiryDate.getDate() + 30);
-        const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-        const timeLeftText = daysLeft > 0 ? `삭제까지 ${daysLeft}일 남음` : '곧 삭제됨';
-        const urgentClass = daysLeft <= 7 ? 'urgent' : '';
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
         
-        return `
-            <div class="countdown ${urgentClass}">
-                <i class="fas fa-clock"></i>
-                ${timeLeftText}
-            </div>
-        `;
-    }
-
-    // 정비 이력 상세 보기 모달 닫기
-    window.closeMaintenanceDetailModal = function() {
-        const modal = document.getElementById('maintenanceDetailModal');
-        const backdrop = document.getElementById('modalBackdrop');
-        
-        if (modal) {
-            modal.classList.remove('show');
-            modal.removeAttribute('data-backdrop-added');
-        }
-        
-        if (backdrop) {
-            backdrop.style.display = 'none';
-        }
-    }
-
-    // 사진 아이템 생성 함수
-    function createPhotoItem(label, photoData) {
-        if (!photoData || !photoData.url) return '';
-
-        // Base64 데이터인지 확인
-        const isBase64 = photoData.url.startsWith('data:image/');
-        
-        // 파일명 생성
-        const filename = photoData.filename || `${label}_${new Date().toISOString().split('T')[0]}.jpg`;
-
-        return `
-            <div class="photo-item">
-                <div class="photo-label">${label}</div>
-                <img src="${photoData.url}" alt="${label}" class="detail-photo" 
-                    onclick="downloadImage('${photoData.url}', '${filename}')">
-                <div class="photo-actions">
-                    <a href="#" class="download-btn" 
-                        onclick="downloadImage('${photoData.url}', '${filename}'); return false;">
-                        <i class="fas fa-download"></i>
-                        다운로드
-                    </a>
-                </div>
-            </div>
-        `;
-    }
-
-    // 전역 모달 함수들
-    window.showCarNumberUpdateModal = function() {
-        const modal = document.getElementById('carNumberModal');
-        const backdrop = document.getElementById('modalBackdrop');
-        const newCarNumberInput = document.getElementById('newCarNumber');
-        
-        if (modal && newCarNumberInput && currentUser) {
-            newCarNumberInput.value = currentUser.carNumber || '';
-            modal.classList.add('show');
-            
-            if (backdrop) {
-                backdrop.style.display = 'block';
-            }
-            
-            // 모달 백드롭 클릭 이벤트 (중복 방지)
-            if (!modal.hasAttribute('data-backdrop-added')) {
-                modal.setAttribute('data-backdrop-added', 'true');
-                modal.addEventListener('click', function(e) {
-                    if (e.target === modal) {
-                        closeCarNumberModal();
-                    }
-                });
-            }
-            
-            // 포커스 설정 (에러 방지)
-            setTimeout(() => {
-                try {
-                    newCarNumberInput.focus();
-                } catch (e) {
-                    console.log('Focus error ignored:', e);
+        let monthCount = 0;
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.date) {
+                const maintenanceDate = new Date(data.date);
+                if (maintenanceDate.getMonth() === currentMonth && 
+                    maintenanceDate.getFullYear() === currentYear) {
+                    monthCount++;
                 }
-            }, 100);
-        }
-    }
-
-    window.closeCarNumberModal = function() {
-        const modal = document.getElementById('carNumberModal');
-        const backdrop = document.getElementById('modalBackdrop');
+            }
+        });
         
-        if (modal) {
-            modal.classList.remove('show');
-            modal.removeAttribute('data-backdrop-added');
+        updateStatCard('monthCount', monthCount);
+        
+    } catch (error) {
+        console.error('❌ Error updating month stats:', error);
+        updateStatCard('monthCount', 0);
+    }
+}
+
+async function updateAverageStats() {
+    try {
+        // 단순한 쿼리로 변경 - 인덱스 오류 방지
+        let query = db.collection('maintenance');
+        
+        if (!isAdmin && currentUser && currentUser.carNumber) {
+            query = query.where('carNumber', '==', currentUser.carNumber);
         }
         
-        if (backdrop) {
-            backdrop.style.display = 'none';
+        const snapshot = await query.get();
+        
+        if (snapshot.size > 1) {
+            // 클라이언트 측에서 날짜순 정렬 및 계산
+            const dates = snapshot.docs
+                .map(doc => doc.data().date)
+                .filter(date => date)
+                .map(date => new Date(date))
+                .sort((a, b) => b - a) // 내림차순 정렬
+                .slice(0, 10); // 최근 10개만
+            
+            if (dates.length > 1) {
+                let totalDays = 0;
+                
+                for (let i = 0; i < dates.length - 1; i++) {
+                    const diff = (dates[i] - dates[i + 1]) / (1000 * 60 * 60 * 24);
+                    totalDays += diff;
+                }
+                
+                const averageDays = Math.round(totalDays / (dates.length - 1));
+                updateStatCard('averageDays', `${averageDays}일`);
+            } else {
+                updateStatCard('averageDays', '-');
+            }
+        } else {
+            updateStatCard('averageDays', '-');
         }
+        
+    } catch (error) {
+        console.error('❌ Error updating average stats:', error);
+        updateStatCard('averageDays', '-');
     }
+}
 
-    window.submitCarNumberUpdate = function() {
-        const newCarNumberInput = document.getElementById('newCarNumber');
-        if (!newCarNumberInput || !newCarNumberInput.value.trim()) {
-            showNotification('오토바이 번호를 입력해주세요.', 'error');
+function updateStatCard(elementId, value) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+function showLoadingSpinner(show) {
+    const spinner = document.getElementById('loadingSpinner');
+    const content = document.getElementById('timelineContent');
+    
+    if (spinner) {
+        spinner.style.display = show ? 'block' : 'none';
+    }
+    
+    if (content) {
+        content.style.display = show ? 'none' : 'block';
+    }
+}
+
+// =============================================
+// Maintenance Timeline
+// =============================================
+
+async function loadMaintenanceTimeline(searchTerm = '') {
+    console.log('📋 Loading maintenance timeline...');
+    console.log('👤 Current user:', currentUser);
+    console.log('🔧 Is admin:', isAdmin);
+    
+    // 로딩 스피너 표시
+    showLoadingSpinner(true);
+    
+    try {
+        // 간단한 쿼리로 시작 (orderBy 제거)
+        let query = db.collection('maintenance');
+        
+        console.log('🔍 Executing simple query...');
+        const snapshot = await query.get();
+        console.log('📊 Found documents:', snapshot.size);
+        
+        const maintenances = [];
+        
+        snapshot.docs.forEach((doc) => {
+            const data = doc.data();
+            const maintenance = { 
+                ...data, 
+                id: doc.id,
+                // 날짜 포맷 보정
+                date: data.date || data.createdAt?.toDate?.()?.toISOString()?.split('T')[0] || '2024-01-01'
+            };
+            
+            maintenances.push(maintenance);
+            console.log('📋 Added maintenance:', maintenance.id, maintenance.type, maintenance.carNumber);
+        });
+        
+        // 날짜순 정렬 (클라이언트에서)
+        maintenances.sort((a, b) => {
+            const dateA = new Date(a.date || '2024-01-01');
+            const dateB = new Date(b.date || '2024-01-01');
+            return dateB - dateA; // 최신순
+        });
+        
+        // 관리자가 아닌 경우 차량번호로 필터링
+        let filteredMaintenances = maintenances;
+        if (!isAdmin && currentUser && currentUser.carNumber) {
+            filteredMaintenances = maintenances.filter(m => 
+                m.carNumber === currentUser.carNumber
+            );
+            console.log('🚗 Filtered by car number:', currentUser.carNumber, filteredMaintenances.length);
+        } else if (isAdmin) {
+            console.log('👨‍💼 Admin user - showing all maintenance records');
+        }
+        
+        // 상태별 필터 적용
+        const currentFilter = window.currentFilter || 'all';
+        console.log('🔍 Current filter:', currentFilter);
+        
+        if (currentFilter !== 'all') {
+            const beforeFilterCount = filteredMaintenances.length;
+            filteredMaintenances = filteredMaintenances.filter(m => {
+                switch (currentFilter) {
+                    case 'pending':
+                        return m.status === 'pending';
+                    case 'approved':
+                        return m.status === 'approved';
+                    case 'rejected':
+                        return m.status === 'rejected';
+                    default:
+                        return true;
+                }
+            });
+            console.log(`🔍 Filtered by status "${currentFilter}": ${beforeFilterCount} → ${filteredMaintenances.length} items`);
+        }
+        
+        // 검색어 필터링
+        if (searchTerm) {
+            const searchLower = searchTerm.toLowerCase();
+            filteredMaintenances = filteredMaintenances.filter(m => 
+                (m.type || '').toLowerCase().includes(searchLower) ||
+                (m.description || '').toLowerCase().includes(searchLower) ||
+                (m.carNumber || '').toLowerCase().includes(searchLower) ||
+                (m.date || '').toLowerCase().includes(searchLower)
+            );
+            console.log('🔍 Filtered by search term:', filteredMaintenances.length);
+        }
+        
+        console.log('✅ About to render', filteredMaintenances.length, 'maintenances');
+        renderRealMaintenanceTimeline(filteredMaintenances);
+        
+        // 로딩 완료 후 스피너 숨기기
+        showLoadingSpinner(false);
+        
+    } catch (error) {
+        console.error('❌ Error loading timeline:', error);
+        showNotification('정비 이력 로딩 실패: ' + error.message, 'error');
+        
+        // 오류 발생 시에도 스피너 숨기기
+        showLoadingSpinner(false);
+        
+        // 오류 시 테스트 데이터라도 보여주기
+        renderRealMaintenanceTimeline([]);
+    }
+}
+
+function renderMaintenanceTimeline(maintenances) {
+    console.log('🎨 Rendering timeline with', maintenances.length, 'items');
+    
+    const container = document.getElementById('timelineContent');
+    const emptyState = document.getElementById('emptyState');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    
+    // 로딩 스피너 숨기기
+    if (loadingSpinner) {
+        loadingSpinner.style.display = 'none';
+    }
+    
+    if (!container) {
+        console.error('❌ Timeline container not found');
+        // 모든 요소들을 확인해보자
+        console.log('🔍 Available elements:', Object.keys(document.getElementById ? document : {}));
+        console.log('🔍 Body innerHTML preview:', document.body ? document.body.innerHTML.substring(0, 500) : 'No body');
+        return;
+    }
+    
+    console.log('📦 Container found:', container);
+    console.log('📦 Container parent:', container.parentElement);
+    console.log('📦 Container styles:', window.getComputedStyle(container));
+    
+    // 컨테이너를 확실히 보이게 만들자
+    container.style.display = 'block';
+    container.style.visibility = 'visible';
+    container.style.opacity = '1';
+    container.style.position = 'relative';
+    container.style.zIndex = '1000';
+    
+    if (maintenances.length === 0) {
+        container.innerHTML = '<div style="background: yellow; color: black; padding: 40px; text-align: center; font-size: 20px; margin: 20px; border-radius: 8px;">⚠️ 데이터가 없습니다 (0개 항목)</div>';
+        if (emptyState) {
+            emptyState.style.display = 'block';
+        }
+        console.log('📭 No maintenances to display');
+        return;
+    }
+    
+    if (emptyState) {
+        emptyState.style.display = 'none';
+    }
+    
+    console.log('🚀 Starting to generate cards immediately...');
+    
+    try {
+        const cardsHtml = maintenances.map((maintenance, index) => {
+            console.log(`🏗️ Building card ${index + 1}/${maintenances.length}:`, maintenance.type, maintenance.carNumber);
+            const cardHtml = createMaintenanceCard(maintenance);
+            console.log(`✅ Card ${index + 1} created, length:`, cardHtml.length);
+            return cardHtml;
+        }).join('');
+        
+        console.log('📝 All cards generated! Total HTML length:', cardsHtml.length);
+        console.log('🎨 HTML preview:', cardsHtml.substring(0, 300) + '...');
+        
+        if (cardsHtml.length === 0) {
+            console.error('❌ No HTML generated!');
+            container.innerHTML = '<div style="background: orange; color: white; padding: 20px; margin: 10px; font-size: 20px;">⚠️ 카드 HTML이 생성되지 않았습니다</div>';
             return;
         }
         
-        updateCarNumber(newCarNumberInput.value);
-        closeCarNumberModal();
+        container.innerHTML = cardsHtml;
+        
+        console.log('✅ Timeline rendered successfully!');
+        console.log('📐 Final container info:', {
+            width: container.offsetWidth,
+            height: container.offsetHeight,
+            display: getComputedStyle(container).display,
+            visibility: getComputedStyle(container).visibility,
+            childElementCount: container.childElementCount,
+            innerHTML: container.innerHTML.length + ' characters'
+        });
+        
+    } catch (error) {
+        console.error('❌ Error during rendering:', error);
+        container.innerHTML = '<div style="background: red; color: white; padding: 20px; margin: 10px; font-size: 20px;">🚨 렌더링 오류: ' + error.message + '</div>';
     }
+}
 
-    // UI 업데이트 함수
-    function updateUI() {
-        if (userName) {
-            userName.textContent = isAdmin ? 
-                `관리자 (${currentUser.email})` : 
-                `오토바이 번호: ${currentUser.carNumber}`;
+function createMaintenanceCard(maintenance) {
+    console.log('🎨 Creating card for:', maintenance.id, maintenance.type, maintenance);
+    
+    // 아주 간단한 카드로 테스트
+    try {
+        const cardHtml = `
+            <div style="background: blue; color: white; padding: 20px; margin: 10px; border-radius: 8px; font-size: 18px;">
+                <div>카드 #${maintenance.id}</div>
+                <div>타입: ${maintenance.type}</div>
+                <div>차량: ${maintenance.carNumber}</div>
+                <div>상태: ${maintenance.status}</div>
+            </div>
+        `;
+        
+        console.log('✅ Card HTML generated:', cardHtml.length, 'characters');
+        return cardHtml;
+        
+    } catch (error) {
+        console.error('❌ Error creating card:', error);
+        return `<div style="background: red; color: white; padding: 20px; margin: 10px;">오류 발생: ${error.message}</div>`;
+    }
+}
+
+function renderRealMaintenanceTimeline(maintenances) {
+    console.log('🎯 Rendering REAL timeline with', maintenances.length, 'items');
+    
+    const container = document.getElementById('timelineContent');
+    if (!container) {
+        console.error('❌ Timeline container not found');
+        return;
+    }
+    
+    // 컨테이너 스타일 설정
+    container.style.cssText = 'display: block !important; visibility: visible !important; background: #f8f9fa; padding: 20px; margin: 20px 0; min-height: 200px;';
+    
+    if (maintenances.length === 0) {
+        container.innerHTML = `
+            <div style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #8b4513; padding: 40px; text-align: center; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                <h3 style="margin: 0 0 15px 0; font-size: 24px;">📋 정비 이력이 없습니다</h3>
+                <p style="margin: 0; opacity: 0.8;">첫 번째 정비를 등록해보세요!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // 실제 데이터로 카드 생성
+    const cardsHtml = maintenances.map((maintenance, index) => {
+        console.log(`🏗️ Building real card ${index + 1}:`, maintenance.type, maintenance.carNumber);
+        
+        // 상태별 색상
+        const statusColors = {
+            'pending': '#ffc107',
+            'approved': '#28a745', 
+            'rejected': '#dc3545',
+            'completed': '#17a2b8'
+        };
+        
+        // 타입별 아이콘
+        const typeIcons = {
+            '엔진오일교체': '🛢️',
+            '타이어교체': '🛞',
+            '브레이크정비': '🔧',
+            '일반점검': '🔍',
+            '기타': '⚙️'
+        };
+        
+        const statusColor = statusColors[maintenance.status] || '#6c757d';
+        const typeIcon = typeIcons[maintenance.type] || '🔧';
+        
+        // 그라디언트 색상 배열
+        const gradients = [
+            'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', 
+            'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
+        ];
+        
+        const gradient = gradients[index % gradients.length];
+        
+        return `
+            <div style="background: ${gradient}; color: white; padding: 25px; margin: 15px 0; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); cursor: pointer;" onclick="showMaintenanceDetail('${maintenance.id}')">
+                <h3 style="margin: 0 0 15px 0; font-size: 20px;">
+                    ${typeIcon} ${maintenance.type || '정비'}
+                </h3>
+                <p style="margin: 5px 0; opacity: 0.9;">
+                    📅 ${maintenance.date || '날짜 없음'}
+                </p>
+                <p style="margin: 5px 0; opacity: 0.9;">
+                    🏍️ 차량번호: ${maintenance.carNumber || '없음'}
+                </p>
+                <p style="margin: 5px 0; opacity: 0.9;">
+                    📋 상태: <span style="background: ${statusColor}; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: white;">${getStatusText(maintenance.status) || maintenance.status || '없음'}</span>
+                </p>
+                ${maintenance.mileage ? `<p style="margin: 5px 0; opacity: 0.9;">📏 주행거리: ${maintenance.mileage}km</p>` : ''}
+                <p style="margin: 15px 0 0 0; line-height: 1.5;">
+                    ${(maintenance.description || '설명이 없습니다.').substring(0, 100)}${(maintenance.description || '').length > 100 ? '...' : ''}
+                </p>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = cardsHtml;
+    console.log('✅ Real timeline rendered successfully with', maintenances.length, 'cards');
+}
+
+// =============================================
+// Modal System
+// =============================================
+
+function initializeModals() {
+    initializeMaintenanceModal();
+    initializeSearchAndFilters();
+}
+
+function initializeMaintenanceModal() {
+    const fab = document.getElementById('addMaintenanceFab');
+    const prevBtn = document.getElementById('prevStep');
+    const nextBtn = document.getElementById('nextStep');
+    const submitBtn = document.getElementById('submitForm');
+    const form = document.getElementById('maintenanceForm');
+    
+    if (fab) {
+        fab.addEventListener('click', openMaintenanceModal);
+    }
+    
+    if (prevBtn) {
+        prevBtn.addEventListener('click', goToPreviousStep);
+    }
+    
+    if (nextBtn) {
+        nextBtn.addEventListener('click', goToNextStep);
+    }
+    
+    if (form) {
+        form.addEventListener('submit', handleMaintenanceSubmit);
+    }
+    
+    // Initialize type selector
+    initializeTypeSelector();
+    initializePhotoUpload();
+}
+
+function openMaintenanceModal() {
+    if (!isAdmin) {
+        showNotification('관리자만 정비 이력을 등록할 수 있습니다.', 'error');
+        return;
+    }
+    
+    const modal = document.getElementById('maintenanceModal');
+    if (modal) {
+        modal.classList.add('active');
+        resetMaintenanceForm();
+        showStep(1);
+    }
+}
+
+function closeMaintenanceModal() {
+    const modal = document.getElementById('maintenanceModal');
+    if (modal) {
+        modal.classList.remove('active');
+        resetMaintenanceForm();
+    }
+}
+
+function resetMaintenanceForm() {
+    currentStep = 1;
+    uploadedPhotos = { before: null, during: null, after: null };
+    
+    const form = document.getElementById('maintenanceForm');
+    if (form) {
+        form.reset();
+    }
+    
+    // Reset type selector
+    document.querySelectorAll('.type-option').forEach(option => {
+        option.classList.remove('selected');
+    });
+    
+    // Reset photo uploads
+    resetPhotoUploads();
+    
+    // Set default date
+    const dateInput = document.getElementById('maintenanceDate');
+    if (dateInput) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+}
+
+function showStep(step) {
+    currentStep = step;
+    
+    // Update step visibility
+    document.querySelectorAll('.form-step').forEach((stepEl, index) => {
+        stepEl.classList.toggle('active', index + 1 === step);
+    });
+    
+    // Update button visibility
+    const prevBtn = document.getElementById('prevStep');
+    const nextBtn = document.getElementById('nextStep');
+    const submitBtn = document.getElementById('submitForm');
+    
+    if (prevBtn) prevBtn.style.display = step > 1 ? 'inline-flex' : 'none';
+    if (nextBtn) nextBtn.style.display = step < 3 ? 'inline-flex' : 'none';
+    if (submitBtn) submitBtn.style.display = step === 3 ? 'inline-flex' : 'none';
+}
+
+function goToPreviousStep() {
+    if (currentStep > 1) {
+        showStep(currentStep - 1);
+    }
+}
+
+function goToNextStep() {
+    if (validateCurrentStep()) {
+        if (currentStep < 3) {
+            showStep(currentStep + 1);
+        }
+    }
+}
+
+function validateCurrentStep() {
+    switch (currentStep) {
+        case 1:
+            const carNumber = document.getElementById('carNumber').value.trim();
+            const date = document.getElementById('maintenanceDate').value;
+            const type = document.getElementById('maintenanceType').value;
+            
+            if (!carNumber) {
+                showNotification('오토바이 번호를 입력해주세요.', 'error');
+                return false;
+            }
+            
+            if (!date) {
+                showNotification('정비 날짜를 선택해주세요.', 'error');
+                return false;
+            }
+            
+            if (!type) {
+                showNotification('정비 종류를 선택해주세요.', 'error');
+                return false;
+            }
+            
+            return true;
+            
+        case 2:
+            // Photos are optional
+            return true;
+            
+        case 3:
+            const description = document.getElementById('description').value.trim();
+            
+            if (!description) {
+                showNotification('정비 내용을 입력해주세요.', 'error');
+                return false;
+            }
+            
+            return true;
+            
+        default:
+            return true;
+    }
+}
+
+// 정비 등록 처리 함수
+async function handleMaintenanceSubmit(e) {
+    e.preventDefault();
+    
+    if (!validateCurrentStep()) {
+        return;
+    }
+    
+    try {
+        showNotification('정비 이력을 등록하는 중...', 'info');
+        
+        // 폼 데이터 수집
+        const formData = {
+            carNumber: document.getElementById('carNumber').value.trim(),
+            date: document.getElementById('maintenanceDate').value,
+            type: document.getElementById('maintenanceType').value,
+            mileage: document.getElementById('mileage')?.value || '',
+            description: document.getElementById('description').value.trim(),
+            adminEmail: currentUser.email,
+            adminName: currentUser.name,
+            status: 'pending',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            photos: []
+        };
+        
+        // Firestore에 저장
+        const docRef = await db.collection('maintenance').add(formData);
+        console.log('✅ Maintenance added with ID:', docRef.id);
+        
+        // 사진 업로드 (있는 경우)
+        if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
+            await uploadMaintenancePhotos(docRef.id);
         }
         
-        const updateCarNumberBtn = document.getElementById('updateCarNumberBtn');
-        if (updateCarNumberBtn) {
-            updateCarNumberBtn.style.display = isAdmin ? 'none' : 'inline-block';
-        }
+        showNotification('정비 이력이 성공적으로 등록되었습니다!', 'success');
+        closeMaintenanceModal();
         
-        if (loginForm) loginForm.style.display = 'none';
-        if (registerForm) registerForm.style.display = 'none';
-        if (maintenanceList) maintenanceList.style.display = 'block';
-        if (logoutBtn) logoutBtn.style.display = 'block';
-        if (addBtnBox) addBtnBox.style.display = isAdmin ? 'block' : 'none';
-        if (searchBox) searchBox.style.display = 'block';
+        // 대시보드 데이터 새로고침
+        loadDashboardData();
+        
+    } catch (error) {
+        console.error('❌ Error submitting maintenance:', error);
+        showNotification('정비 이력 등록 실패: ' + error.message, 'error');
     }
+}
 
-    // 사진 다운로드 함수
-    async function downloadImage(url, filename) {
-        try {
-            console.log('다운로드 시작:', filename);
-            
-            let blob;
-            
-            // Base64 데이터인지 확인
-            if (url.startsWith('data:image/')) {
-                // Base64 데이터를 Blob으로 변환
-                const response = await fetch(url);
-                blob = await response.blob();
+// 타입 선택기 초기화 함수
+function initializeTypeSelector() {
+    const typeOptions = document.querySelectorAll('.type-option');
+    const typeInput = document.getElementById('maintenanceType');
+    
+    typeOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            // Remove selected from all options
+            typeOptions.forEach(opt => opt.classList.remove('selected'));
+            // Add selected to clicked option
+            option.classList.add('selected');
+            // Update hidden input value
+            if (typeInput) {
+                typeInput.value = option.dataset.type;
+            }
+        });
+    });
+}
+
+// 사진 업로드 초기화 함수
+function initializePhotoUpload() {
+    console.log('🖼️ Initializing photo upload...');
+    
+    // 사진 업로드 영역 클릭 이벤트
+    const photoAreas = document.querySelectorAll('.photo-upload-area');
+    console.log('📸 Found photo areas:', photoAreas.length);
+    
+    photoAreas.forEach((area, index) => {
+        const type = area.dataset.type;
+        console.log(`📸 Setting up area ${index + 1}:`, type);
+        
+        // 기존 이벤트 제거 후 새로 추가
+        area.replaceWith(area.cloneNode(true));
+        const newArea = document.querySelectorAll('.photo-upload-area')[index];
+        
+        newArea.addEventListener('click', () => {
+            console.log('📸 Photo area clicked:', type);
+            const fileInput = document.getElementById(`${type}Photo`);
+            if (fileInput) {
+                fileInput.click();
             } else {
-                // 일반 URL에서 다운로드
-                const response = await fetch(url);
-                blob = await response.blob();
+                console.error('❌ File input not found:', `${type}Photo`);
             }
+        });
+    });
+    
+    // 파일 입력 이벤트
+    const photoInputs = ['beforePhoto', 'duringPhoto', 'afterPhoto'];
+    
+    photoInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            console.log('📸 Setting up file input:', inputId);
             
-            // Blob URL 생성
-            const blobUrl = window.URL.createObjectURL(blob);
+            // 기존 이벤트 제거 후 새로 추가
+            input.replaceWith(input.cloneNode(true));
+            const newInput = document.getElementById(inputId);
             
-            // 다운로드 링크 생성
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = filename;
-            a.style.display = 'none';
+            newInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                console.log('📸 File selected:', file?.name);
+                
+                if (file) {
+                    const photoType = inputId.replace('Photo', '');
+                    console.log('📸 Processing photo type:', photoType);
+                    handlePhotoUpload(file, photoType);
+                }
+            });
+        } else {
+            console.error('❌ Photo input not found:', inputId);
+        }
+    });
+    
+    console.log('✅ Photo upload initialization complete');
+}
+
+// 사진 업로드 처리 함수
+async function handlePhotoUpload(file, type) {
+    try {
+        // 이미지 리사이즈
+        const resizedFile = await resizeImage(file);
+        
+        // Base64로 변환하여 임시 저장
+        const base64 = await convertToBase64(resizedFile);
+        uploadedPhotos[type] = base64;
+        
+        // 미리보기 표시
+        showPhotoPreview(base64, type);
+        
+        showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
+        
+    } catch (error) {
+        console.error('❌ Error uploading photo:', error);
+        showNotification('사진 업로드 실패: ' + error.message, 'error');
+    }
+}
+
+// 사진 미리보기 표시 함수
+function showPhotoPreview(base64, type) {
+    console.log('🖼️ Showing photo preview for:', type);
+    
+    // 업로드 영역 찾기
+    const uploadArea = document.querySelector(`[data-type="${type}"]`);
+    if (!uploadArea) {
+        console.error('❌ Upload area not found for:', type);
+        return;
+    }
+    
+    const placeholder = uploadArea.querySelector('.upload-placeholder');
+    const preview = uploadArea.querySelector('.photo-preview');
+    
+    if (placeholder && preview) {
+        // 플레이스홀더 숨기고 미리보기 표시
+        placeholder.style.display = 'none';
+        preview.style.display = 'block';
+        
+        const img = preview.querySelector('img');
+        if (img) {
+            img.src = base64;
+        }
+        
+        console.log('✅ Photo preview updated for:', type);
+    } else {
+        console.error('❌ Preview elements not found for:', type);
+    }
+}
+
+// 사진 제거 함수
+function removePhoto(type) {
+    console.log('🗑️ Removing photo:', type);
+    
+    uploadedPhotos[type] = null;
+    
+    // 업로드 영역 찾기
+    const uploadArea = document.querySelector(`[data-type="${type}"]`);
+    if (uploadArea) {
+        const placeholder = uploadArea.querySelector('.upload-placeholder');
+        const preview = uploadArea.querySelector('.photo-preview');
+        
+        if (placeholder && preview) {
+            // 미리보기 숨기고 플레이스홀더 표시
+            preview.style.display = 'none';
+            placeholder.style.display = 'flex';
             
-            // DOM에 추가하고 클릭
-            document.body.appendChild(a);
-            a.click();
-            
-            // 정리
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(blobUrl);
-            }, 100);
-            
-            showNotification('다운로드가 시작되었습니다.', 'success');
-            
-        } catch (error) {
-            console.error('다운로드 실패:', error);
-            
-            // 실패 시 새 창에서 열기
-            try {
-                window.open(url, '_blank');
-                showNotification('새 창에서 이미지가 열렸습니다.', 'info');
-            } catch (fallbackError) {
-                console.error('폴백 다운로드도 실패:', fallbackError);
-                showNotification('다운로드에 실패했습니다.', 'error');
-            }
+            console.log('✅ Photo preview hidden for:', type);
         }
     }
-});
+    
+    // 파일 입력 초기화
+    const input = document.getElementById(`${type}Photo`);
+    if (input) {
+        input.value = '';
+    }
+    
+    showNotification(`${type} 사진이 제거되었습니다.`, 'info');
+}
+
+// 전역 함수로 만들어서 HTML에서 호출 가능하게 함
+window.removePhoto = removePhoto;
+
+// 사진 업로드 리셋 함수
+function resetPhotoUploads() {
+    uploadedPhotos = { before: null, during: null, after: null };
+    
+    ['before', 'during', 'after'].forEach(type => {
+        const previewContainer = document.getElementById(`${type}Preview`);
+        if (previewContainer) {
+            previewContainer.innerHTML = '';
+        }
+        const input = document.getElementById(`${type}Photo`);
+        if (input) {
+            input.value = '';
+        }
+    });
+}
+
+// Continue with more functions...
 
 // 관리자 이메일로 이름 가져오기 (비동기)
 async function getAdminNameByEmail(email) {
@@ -815,7 +1289,7 @@ async function createMaintenanceCard(maintenance) {
         <div class="maintenance-card-header">
             <span class="maintenance-type-icon">${getTypeIcon(maintenance.type)}</span>
             <span class="maintenance-card-title">${maintenance.type || ''}</span>
-            <span class="maintenance-date">${maintenance.date || ''}</span>
+            <span class="maintenance-date text-muted mb-1">${maintenance.date || ''}</span>
             <span class="maintenance-status-badge ${maintenance.status}">${getStatusText(maintenance.status)}</span>
         </div>
         <div class="maintenance-card-body">
@@ -941,24 +1415,139 @@ function updateMaintenanceStatus(maintenanceId, newStatus) {
 
 // 알림 표시
 function showNotification(message, type = 'info') {
-    // 기존 알림 제거
-    const existingNotification = document.querySelector('.notification');
-    if (existingNotification) {
-        existingNotification.remove();
-    }
-
-    // 새 알림 생성
+    const container = document.getElementById('notificationContainer');
+    if (!container) return;
+    
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
-    notification.textContent = message;
-
-    // 알림 추가
-    document.body.appendChild(notification);
-
-    // 3초 후 자동 제거
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: var(--space-sm);">
+            <i class="fas fa-${getNotificationIcon(type)}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Show notification
+    setTimeout(() => notification.classList.add('show'), 100);
+    
+    // Auto hide after 5 seconds
     setTimeout(() => {
-        notification.remove();
-    }, 3000);
+        notification.classList.remove('show');
+        setTimeout(() => {
+            if (container.contains(notification)) {
+                container.removeChild(notification);
+            }
+        }, 300);
+    }, 5000);
+}
+
+function getNotificationIcon(type) {
+    switch (type) {
+        case 'success': return 'check-circle';
+        case 'error': return 'exclamation-circle';
+        case 'warning': return 'exclamation-triangle';
+        default: return 'info-circle';
+    }
+}
+
+function showScreen(screenId) {
+    const screens = document.querySelectorAll('.screen');
+    screens.forEach(screen => {
+        screen.classList.remove('active');
+        if (screen.id === screenId) {
+            screen.classList.add('active');
+        }
+    });
+}
+
+function updateUI() {
+    // Update FAB visibility
+    const fab = document.getElementById('addMaintenanceFab');
+    if (fab) {
+        fab.style.display = isAdmin ? 'flex' : 'none';
+    }
+    
+    // Update notification badge
+    updateNotificationBadge();
+}
+
+function updateNotificationBadge() {
+    const badge = document.getElementById('notificationBadge');
+    if (badge) {
+        // This would be connected to real notification count
+        badge.textContent = '0';
+        badge.style.display = 'none';
+    }
+}
+
+// 검색 및 필터 초기화 함수
+function initializeSearchAndFilters() {
+    const quickSearch = document.getElementById('quickSearch');
+    const filterChips = document.querySelectorAll('.filter-chip');
+    
+    if (quickSearch) {
+        quickSearch.addEventListener('input', (e) => {
+            const searchTerm = e.target.value;
+            loadMaintenanceTimeline(searchTerm);
+        });
+    }
+    
+    filterChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            // Remove active from all chips
+            filterChips.forEach(c => c.classList.remove('active'));
+            // Add active to clicked chip
+            chip.classList.add('active');
+            
+            const filter = chip.dataset.filter;
+            applyFilter(filter);
+        });
+    });
+}
+
+// 필터 적용 함수
+function applyFilter(filter) {
+    console.log('🔍 Applying filter:', filter);
+    
+    // 현재 활성화된 필터를 전역 변수로 저장
+    window.currentFilter = filter;
+    
+    const searchTerm = document.getElementById('quickSearch')?.value || '';
+    loadMaintenanceTimeline(searchTerm);
+}
+
+// 대시보드 데이터 로딩 함수 (완전 구현)
+function loadDashboardData() {
+    console.log('📊 Loading dashboard data...');
+    
+    // 통계 업데이트
+    updateTodayStats();
+    updatePendingStats(); 
+    updateMonthStats();
+    updateAverageStats();
+    
+    // 정비 이력 로딩
+    loadMaintenanceTimeline();
+}
+
+// 이벤트 리스너 초기화 함수
+function initializeEventListeners() {
+    console.log('🎯 Initializing event listeners...');
+    
+    // 페이지 새로고침 시 로그인 화면 표시
+    window.addEventListener('beforeunload', () => {
+        showScreen('loginScreen');
+    });
+    
+    // 키보드 단축키
+    document.addEventListener('keydown', (e) => {
+        // ESC 키로 모달 닫기
+        if (e.key === 'Escape') {
+            closeMaintenanceModal();
+        }
+    });
 }
 
 // 정비 타입별 아이콘과 색상 가져오기 함수
@@ -1003,6 +1592,46 @@ function getStatusText(status) {
         'pending': '대기중'
     };
     return statusTexts[status] || status;
+}
+
+// 정비 타입 정보 가져오기 함수 (createMaintenanceCard에서 사용)
+function getMaintenanceTypeInfo(type) {
+    const types = {
+        '일반점검': { icon: 'fas fa-tools', color: '#4bc0c0' },
+        '엔진오일교체': { icon: 'fas fa-oil-can', color: '#ff6347' },
+        '타이어교체': { icon: 'fas fa-circle-notch', color: '#d4ac0d' },
+        '브레이크정비': { icon: 'fas fa-car-brake', color: '#ff9f40' },
+        '기타': { icon: 'fas fa-wrench', color: '#666' }
+    };
+    return types[type] || types['기타'];
+}
+
+// 상태 정보 가져오기 함수 (createMaintenanceCard에서 사용)
+function getStatusInfo(status) {
+    const statusInfo = {
+        'approved': { icon: 'fas fa-check-double', text: '승인됨' },
+        'rejected': { icon: 'fas fa-times', text: '거절됨' },
+        'pending': { icon: 'fas fa-clock', text: '대기중' },
+        'in-progress': { icon: 'fas fa-cog fa-spin', text: '진행중' },
+        'completed': { icon: 'fas fa-check', text: '완료' }
+    };
+    return statusInfo[status] || statusInfo['pending'];
+}
+
+// 날짜 포맷팅 함수 (createMaintenanceCard에서 사용)
+function formatDate(dateString) {
+    if (!dateString) return '';
+    
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    } catch (error) {
+        return dateString;
+    }
 }
 
 // 차량번호 수정 함수 추가
@@ -1207,4 +1836,289 @@ function convertToBase64(file) {
         reader.onload = () => resolve(reader.result);
         reader.onerror = error => reject(error);
     });
-} 
+}
+
+// 정비 상세보기 함수
+function showMaintenanceDetail(maintenanceId) {
+    console.log('🔍 Showing maintenance detail for:', maintenanceId);
+    
+    // Firebase에서 해당 정비 이력 가져오기
+    db.collection('maintenance').doc(maintenanceId).get()
+        .then(doc => {
+            if (doc.exists) {
+                const maintenance = { ...doc.data(), id: doc.id };
+                showMaintenanceDetailModal(maintenance);
+            } else {
+                showNotification('정비 이력을 찾을 수 없습니다.', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error fetching maintenance:', error);
+            showNotification('정비 이력 로딩 실패', 'error');
+        });
+}
+
+function showMaintenanceDetailModal(maintenance) {
+    console.log('🔍 Creating detail modal for:', maintenance);
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('maintenanceDetailModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 상태별 정보
+    const statusInfo = getStatusInfo(maintenance.status);
+    const typeIcon = getTypeIcon(maintenance.type);
+    
+    // 모달 HTML 생성
+    const modalHTML = `
+        <div id="maintenanceDetailModal" class="modal-overlay active">
+            <div class="modal-container" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        ${typeIcon} ${maintenance.type || '정비'} 상세정보
+                    </h2>
+                    <button class="modal-close" onclick="closeMaintenanceDetailModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 10px 0; font-size: 20px;">${typeIcon} ${maintenance.type || '정비'}</h3>
+                        <p style="margin: 5px 0; opacity: 0.9;">📅 날짜: ${formatDate(maintenance.date) || '날짜 없음'}</p>
+                        <p style="margin: 5px 0; opacity: 0.9;">🏍️ 차량번호: ${maintenance.carNumber || '없음'}</p>
+                        <p style="margin: 5px 0; opacity: 0.9;">
+                            📋 상태: <span style="background: ${statusInfo.color}; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                ${statusInfo.text || maintenance.status || '없음'}
+                            </span>
+                        </p>
+                        ${maintenance.mileage ? `<p style="margin: 5px 0; opacity: 0.9;">📏 주행거리: ${maintenance.mileage}km</p>` : ''}
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 15px 0; color: #333;">📝 상세 설명</h4>
+                        <p style="line-height: 1.6; color: #555; white-space: pre-wrap;">${maintenance.description || '설명이 없습니다.'}</p>
+                    </div>
+                    
+                    ${maintenance.photos && maintenance.photos.length > 0 ? `
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                            <h4 style="margin: 0 0 15px 0; color: #333;">📸 사진 (${maintenance.photos.length}장)</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                                ${maintenance.photos.map(photo => `
+                                    <img src="${photo}" alt="정비 사진" style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: pointer;" onclick="showPhotoModal('${photo}')">
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+                        <h4 style="margin: 0 0 15px 0; color: #333;">ℹ️ 추가 정보</h4>
+                        <p style="margin: 5px 0; color: #666;">🆔 ID: ${maintenance.id}</p>
+                        <p style="margin: 5px 0; color: #666;">📅 등록일: ${maintenance.createdAt ? new Date(maintenance.createdAt.toDate()).toLocaleString('ko-KR') : '없음'}</p>
+                        ${maintenance.adminEmail ? `<p style="margin: 5px 0; color: #666;">👨‍💼 관리자: ${maintenance.adminEmail}</p>` : ''}
+                    </div>
+                </div>
+                
+                <div class="modal-footer" style="padding: 20px; border-top: 1px solid #e5e5e5;">
+                    <button class="btn btn-secondary" onclick="closeMaintenanceDetailModal()">
+                        <i class="fas fa-times"></i> 닫기
+                    </button>
+                    ${isAdmin && maintenance.status === 'pending' ? `
+                        <button class="btn btn-success" onclick="updateMaintenanceStatus('${maintenance.id}', 'approved'); closeMaintenanceDetailModal();">
+                            <i class="fas fa-check"></i> 승인
+                        </button>
+                        <button class="btn btn-danger" onclick="updateMaintenanceStatus('${maintenance.id}', 'rejected'); closeMaintenanceDetailModal();">
+                            <i class="fas fa-times"></i> 거절
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 모달을 body에 추가
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    console.log('✅ Detail modal created');
+}
+
+function closeMaintenanceDetailModal() {
+    const modal = document.getElementById('maintenanceDetailModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 사진 확대 모달
+function showPhotoModal(photoUrl) {
+    const photoModalHTML = `
+        <div id="photoModal" class="modal-overlay active" style="background: rgba(0,0,0,0.9);" onclick="closePhotoModal()">
+            <div class="modal-container" style="max-width: 90vw; max-height: 90vh; background: transparent; box-shadow: none;">
+                <img src="${photoUrl}" alt="정비 사진" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+                <button class="modal-close" onclick="closePhotoModal()" style="position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.5); color: white;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', photoModalHTML);
+}
+
+function closePhotoModal() {
+    const modal = document.getElementById('photoModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 전역 함수로 등록
+window.showMaintenanceDetail = showMaintenanceDetail;
+window.closeMaintenanceDetailModal = closeMaintenanceDetailModal;
+window.showPhotoModal = showPhotoModal;
+window.closePhotoModal = closePhotoModal;
+
+// 테스트 데이터 추가 함수 (관리자 전용)
+async function addTestData() {
+    if (!isAdmin) {
+        showNotification('관리자만 테스트 데이터를 추가할 수 있습니다.', 'error');
+        return;
+    }
+    
+    try {
+        showNotification('테스트 데이터를 추가하는 중...', 'info');
+        
+        const testMaintenances = [
+            {
+                carNumber: 'admin1',
+                date: '2024-01-15',
+                type: '일반점검',
+                mileage: '15000',
+                description: '정기 점검 및 기본 정비 작업 수행. 엔진 상태 양호, 브레이크 패드 교체 필요.',
+                adminEmail: 'admin@admin.com',
+                adminName: '관리자',
+                status: 'approved',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                photos: []
+            },
+            {
+                carNumber: 'admin1',
+                date: '2024-01-20',
+                type: '엔진오일교체',
+                mileage: '15200',
+                description: '엔진오일 및 오일필터 교체 완료. 다음 교체 예정일: 20,000km',
+                adminEmail: 'admin@admin.com',
+                adminName: '관리자',
+                status: 'approved',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                photos: []
+            },
+            {
+                carNumber: 'admin1',
+                date: '2024-01-25',
+                type: '브레이크정비',
+                mileage: '15300',
+                description: '앞뒤 브레이크 패드 교체 및 브레이크 오일 교체 완료.',
+                adminEmail: 'admin@admin.com',
+                adminName: '관리자',
+                status: 'pending',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                photos: []
+            }
+        ];
+        
+        for (const maintenance of testMaintenances) {
+            await db.collection('maintenance').add(maintenance);
+        }
+        
+        showNotification('테스트 데이터가 성공적으로 추가되었습니다!', 'success');
+        loadDashboardData(); // 데이터 새로고침
+        
+    } catch (error) {
+        console.error('❌ Error adding test data:', error);
+        showNotification('테스트 데이터 추가 실패: ' + error.message, 'error');
+    }
+}
+
+// 전역 함수로 브라우저 콘솔에서 호출 가능하게 만들기
+window.addTestData = addTestData;
+
+// 관리자 사용자 데이터 생성/수정 함수
+async function setupAdminUser() {
+    if (!currentUser) {
+        showNotification('로그인이 필요합니다.', 'error');
+        return;
+    }
+    
+    try {
+        const adminEmails = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
+        
+        if (adminEmails.includes(currentUser.email)) {
+            // 관리자 사용자 데이터 업데이트
+            await db.collection('users').doc(currentUser.uid).set({
+                name: '관리자',
+                email: currentUser.email,
+                carNumber: 'admin1',
+                role: 'admin',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            
+            showNotification('관리자 계정이 설정되었습니다.', 'success');
+            
+            // 현재 사용자 정보 업데이트
+            currentUser.role = 'admin';
+            currentUser.carNumber = 'admin1';
+            isAdmin = true;
+            
+            console.log('✅ Admin user setup complete');
+            loadDashboardData(); // 데이터 새로고침
+            
+        } else {
+            showNotification('관리자 이메일이 아닙니다.', 'error');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error setting up admin user:', error);
+        showNotification('관리자 설정 실패: ' + error.message, 'error');
+    }
+}
+
+// 전역 함수로 등록
+window.setupAdminUser = setupAdminUser;
+
+// 디버깅용 테스트 함수
+function testTimelineRender() {
+    const container = document.getElementById('timelineContent');
+    if (!container) {
+        console.error('❌ Container not found');
+        return;
+    }
+    
+    console.log('🧪 Testing timeline render...');
+    
+    // 간단한 테스트 HTML 삽입
+    const testHtml = `
+        <div style="background: #f0f0f0; padding: 20px; margin: 10px; border-radius: 8px;">
+            <h3>테스트 정비 카드</h3>
+            <p>이 카드가 보이면 렌더링이 정상 작동합니다.</p>
+        </div>
+        <div style="background: #e0e0e0; padding: 20px; margin: 10px; border-radius: 8px;">
+            <h3>두 번째 테스트 카드</h3>
+            <p>스타일링 없이 기본 HTML로 테스트</p>
+        </div>
+    `;
+    
+    container.innerHTML = testHtml;
+    console.log('✅ Test HTML inserted');
+    console.log('📐 Container after test:', {
+        width: container.offsetWidth,
+        height: container.offsetHeight,
+        childElementCount: container.childElementCount
+    });
+}
+
+// 전역 함수로 등록
+window.testTimelineRender = testTimelineRender; 

@@ -3,381 +3,459 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TWOHOONS 정비 관리 시스템</title>
+    <title>TWOHOONS GARAGE</title>
     
-    <!-- Modern CSS Framework & Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1e40af">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="TWOHOONS GARAGE">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Firebase SDK (compat mode) -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-    <script src="firebase-config.js"></script>
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <!-- Custom Styles -->
     <link rel="stylesheet" href="styles.css">
     
-    <!-- PWA & Meta -->
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="logo.png">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#3b82f6">
-    
-    <!-- Preload Critical Resources -->
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
+    <script src="firebase-config.js"></script>
 </head>
+
 <body>
-    <!-- Modern Navigation -->
-    <nav class="navbar navbar-expand-lg">
-        <div class="container">
-            <a class="navbar-brand" href="#">
-                <i class="fas fa-tools fa-lg"></i>
-                <span class="site-title">TWOHOONS 정비 관리</span>
-            </a>
-            <div id="userInfo" class="ms-auto d-flex align-items-center gap-3">
-                <span id="userName" class="text-light fw-medium"></span>
-                <button id="updateCarNumberBtn" class="btn btn-outline-light btn-sm" style="display: none;" onclick="showCarNumberUpdateModal()">
-                    <i class="fas fa-motorcycle me-1"></i>번호 수정
+    <!-- Top Header (Fixed) -->
+    <header class="top-header">
+        <div class="header-content">
+            <div class="header-left">
+                <img src="logo.png" alt="TWOHOONS" class="header-logo">
+                <span class="header-title">TWOHOONS</span>
+            </div>
+            <div class="header-right">
+                <button class="header-btn" id="themeToggle" title="다크모드 전환">
+                    <i class="fas fa-moon"></i>
                 </button>
-                <button id="logoutBtn" class="btn btn-outline-light btn-sm" style="display: none;">
-                    <i class="fas fa-sign-out-alt me-1"></i>로그아웃
+                <button class="header-btn notification-btn" id="notificationBtn" title="알림">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge" id="notificationBadge">0</span>
+                </button>
+                <button class="header-btn profile-btn" id="profileBtn" title="프로필">
+                    <i class="fas fa-user-circle"></i>
                 </button>
             </div>
         </div>
-    </nav>
+    </header>
 
-    <div class="container mt-4">
-        <!-- Premium Logo Section -->
-        <div class="logo-container">
-            <div class="logo-bg">
-                <img src="logo.png" alt="TWOHOONS GARAGE 로고" id="mainLogo" class="img-fluid" />
-            </div>
-        </div>
-
-        <!-- Login Form -->
-        <div id="loginForm" class="card mx-auto glass-card animate-in" style="max-width: 420px;">
-            <div class="card-header text-center">
-                <h3 class="card-title mb-0">
-                    <i class="fas fa-user-circle me-2"></i>로그인
-                </h3>
-            </div>
-            <div class="card-body p-4">
-                <form id="login">
-                    <div class="mb-3">
-                        <label for="email" class="form-label">이메일</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                            <input type="email" class="form-control" id="email" placeholder="your@email.com" required>
-                        </div>
+    <!-- Main App Container -->
+    <div class="app-container">
+        <!-- Login Screen -->
+        <div id="loginScreen" class="screen active">
+            <div class="auth-container">
+                <div class="auth-header">
+                    <img src="logo.png" alt="TWOHOONS GARAGE" class="auth-logo">
+                    <h1 class="auth-title">TWOHOONS GARAGE</h1>
+                    <p class="auth-subtitle">이륜차 정비 관리 시스템</p>
+                </div>
+                
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">로그인</button>
+                    <button class="auth-tab" data-tab="register">회원가입</button>
+                </div>
+                
+                <!-- Login Form -->
+                <form id="loginForm" class="auth-form active">
+                    <div class="input-group">
+                        <i class="fas fa-envelope input-icon"></i>
+                        <input type="email" id="loginEmail" placeholder="이메일" required>
                     </div>
-                    <div class="mb-4">
-                        <label for="password" class="form-label">비밀번호</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                            <input type="password" class="form-control" id="password" placeholder="••••••••" required>
-                        </div>
+                    <div class="input-group">
+                        <i class="fas fa-lock input-icon"></i>
+                        <input type="password" id="loginPassword" placeholder="비밀번호" required>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100 mb-3">
-                        <i class="fas fa-sign-in-alt me-2"></i>로그인
+                    <button type="submit" class="auth-btn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        로그인
                     </button>
                 </form>
-                <div class="text-center">
-                    <a href="#" id="showRegister" class="text-decoration-none fw-medium">
-                        <i class="fas fa-user-plus me-1"></i>회원가입
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Register Form -->
-        <div id="registerForm" class="card glass-card animate-in" style="max-width: 420px; margin: 0 auto; display:none;">
-            <div class="card-header text-center">
-                <h3 class="card-title mb-0">
-                    <i class="fas fa-user-plus me-2"></i>회원가입
-                </h3>
-            </div>
-            <div class="card-body p-4">
-                <form id="register">
-                    <div class="mb-3">
-                        <label for="regEmail" class="form-label">이메일</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                            <input type="email" class="form-control" id="regEmail" placeholder="your@email.com" required>
-                        </div>
+                
+                <!-- Register Form -->
+                <form id="registerForm" class="auth-form">
+                    <div class="input-group">
+                        <i class="fas fa-user input-icon"></i>
+                        <input type="text" id="registerName" placeholder="이름" required>
                     </div>
-                    <div class="mb-3">
-                        <label for="regPassword" class="form-label">비밀번호</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                            <input type="password" class="form-control" id="regPassword" placeholder="••••••••" required>
-                        </div>
+                    <div class="input-group">
+                        <i class="fas fa-envelope input-icon"></i>
+                        <input type="email" id="registerEmail" placeholder="이메일" required>
                     </div>
-                    <div class="mb-4">
-                        <label for="regCarNumber" class="form-label">오토바이 번호</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-motorcycle"></i></span>
-                            <input type="text" class="form-control" id="regCarNumber" 
-                                placeholder="12가3456" required>
-                        </div>
-                        <div class="form-text">
-                            <i class="fas fa-info-circle me-1"></i>띄어쓰기 없이 입력해주세요
-                        </div>
+                    <div class="input-group">
+                        <i class="fas fa-lock input-icon"></i>
+                        <input type="password" id="registerPassword" placeholder="비밀번호 (6자 이상)" required>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100 mb-3">
-                        <i class="fas fa-user-plus me-2"></i>회원가입
+                    <div class="input-group">
+                        <i class="fas fa-motorcycle input-icon"></i>
+                        <input type="text" id="registerCarNumber" placeholder="오토바이 번호 (예: 12가3456)" required>
+                    </div>
+                    <button type="submit" class="auth-btn">
+                        <i class="fas fa-user-plus"></i>
+                        회원가입
                     </button>
                 </form>
-                <div class="text-center">
-                    <a href="#" id="showLogin" class="text-decoration-none fw-medium">
-                        <i class="fas fa-sign-in-alt me-1"></i>로그인으로 돌아가기
-                    </a>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Screen -->
+        <div id="dashboardScreen" class="screen">
+            <!-- Dashboard Stats -->
+            <div class="dashboard-stats">
+                <div class="stat-card" data-stat="today">
+                    <div class="stat-icon today">
+                        <i class="fas fa-calendar-day"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 class="stat-number" id="todayCount">0</h3>
+                        <p class="stat-label">오늘 정비</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card" data-stat="pending">
+                    <div class="stat-icon pending">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 class="stat-number" id="pendingCount">0</h3>
+                        <p class="stat-label">승인 대기</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card" data-stat="month">
+                    <div class="stat-icon month">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 class="stat-number" id="monthCount">0</h3>
+                        <p class="stat-label">이번 달</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card" data-stat="average">
+                    <div class="stat-icon average">
+                        <i class="fas fa-tachometer-alt"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 class="stat-number" id="averageDays">0</h3>
+                        <p class="stat-label">평균 간격</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Add Maintenance Button -->
-        <div id="addBtnBox" class="text-center mb-4" style="display:none;">
-            <button id="addMaintenanceBtn" class="btn btn-primary btn-lg">
-                <i class="fas fa-plus-circle me-2"></i>새 정비 이력 추가
-            </button>
-        </div>
-
-        <!-- Search Box -->
-        <div id="searchBox" class="mb-4" style="display:none; max-width: 600px; margin: 0 auto;">
-            <div class="input-group input-group-lg">
-                <span class="input-group-text">
-                    <i class="fas fa-search"></i>
-                </span>
-                <input type="text" id="searchInput" class="form-control" 
-                    placeholder="정비종류, 오토바이 번호, 설명 등으로 검색...">
-            </div>
-        </div>
-
-        <!-- Maintenance History -->
-        <div id="maintenanceList" class="mt-4" style="display: none; max-width: 800px; margin: 0 auto;">
-            <div class="d-flex align-items-center justify-content-between mb-4">
-                <h3 class="mb-0 fw-bold">
-                    <i class="fas fa-history me-2"></i>정비 이력
-                </h3>
-                <div class="text-muted">
-                    <i class="fas fa-clock me-1"></i>최신순 정렬
+            <!-- Quick Search & Filters -->
+            <div class="search-section">
+                <div class="search-bar">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" id="quickSearch" placeholder="정비 이력 검색...">
+                    <button class="filter-toggle" id="filterToggle">
+                        <i class="fas fa-filter"></i>
+                    </button>
+                </div>
+                
+                <div class="filter-chips" id="filterChips">
+                    <div class="filter-chip active" data-filter="all">
+                        <i class="fas fa-list"></i>
+                        전체
+                    </div>
+                    <div class="filter-chip" data-filter="pending">
+                        <i class="fas fa-clock"></i>
+                        대기중
+                    </div>
+                    <div class="filter-chip" data-filter="approved">
+                        <i class="fas fa-check"></i>
+                        승인
+                    </div>
+                    <div class="filter-chip" data-filter="rejected">
+                        <i class="fas fa-times"></i>
+                        거절
+                    </div>
                 </div>
             </div>
-            <div id="maintenanceItems" class="maintenance-timeline"></div>
+
+            <!-- Maintenance Timeline -->
+            <div class="timeline-section">
+                <div class="timeline-header">
+                    <h2 class="timeline-title">
+                        <i class="fas fa-history"></i>
+                        정비 이력
+                    </h2>
+                    <div class="timeline-actions">
+                        <button class="view-toggle" id="viewToggle" title="보기 전환">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="timeline-container" id="timelineContainer">
+                    <div class="loading-spinner" id="loadingSpinner">
+                        <div class="spinner"></div>
+                        <p>정비 이력을 불러오는 중...</p>
+                    </div>
+                    
+                    <div class="timeline-content" id="timelineContent">
+                        <!-- Maintenance cards will be dynamically inserted here -->
+                    </div>
+                    
+                    <div class="empty-state" id="emptyState" style="display: none;">
+                        <i class="fas fa-inbox"></i>
+                        <h3>정비 이력이 없습니다</h3>
+                        <p>첫 번째 정비를 등록해보세요!</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
+    <!-- Floating Action Button -->
+    <button class="fab" id="addMaintenanceFab" title="새 정비 등록">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" data-screen="dashboard">
+            <i class="fas fa-home"></i>
+            <span>홈</span>
+        </button>
+        <button class="nav-item" data-screen="add">
+            <i class="fas fa-plus-circle"></i>
+            <span>등록</span>
+        </button>
+        <button class="nav-item" data-screen="search">
+            <i class="fas fa-search"></i>
+            <span>검색</span>
+        </button>
+        <button class="nav-item" data-screen="profile">
+            <i class="fas fa-user"></i>
+            <span>프로필</span>
+        </button>
+    </nav>
+
     <!-- Maintenance Input Modal -->
-    <div id="maintenanceInputModal" class="maintenance-modal">
-        <div class="modal-content" onclick="event.stopPropagation()">
+    <div id="maintenanceModal" class="modal-overlay">
+        <div class="modal-container">
             <div class="modal-header">
                 <h2 class="modal-title">
                     <i class="fas fa-tools"></i>
-                    <span>새 정비 이력 입력</span>
+                    새 정비 등록
                 </h2>
-                <button class="modal-close" onclick="closeMaintenanceInputModal()">
+                <button class="modal-close" onclick="closeMaintenanceModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+            
             <div class="modal-body">
-                <form id="newMaintenanceModalForm">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="maintenanceCarNumberModal" class="form-label">오토바이 번호</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-motorcycle"></i></span>
-                                <input type="text" class="form-control" id="maintenanceCarNumberModal" required>
+                <form id="maintenanceForm" class="maintenance-form">
+                    <!-- Step 1: Basic Info -->
+                    <div class="form-step active" data-step="1">
+                        <div class="step-header">
+                            <h3>기본 정보</h3>
+                            <span class="step-indicator">1/3</span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="carNumber">오토바이 번호</label>
+                            <div class="input-with-icon">
+                                <i class="fas fa-motorcycle"></i>
+                                <input type="text" id="carNumber" required>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label for="maintenanceDateModal" class="form-label">정비 날짜</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-calendar"></i></span>
-                                <input type="date" class="form-control" id="maintenanceDateModal" required>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="maintenanceDate">정비 날짜</label>
+                                <div class="input-with-icon">
+                                    <i class="fas fa-calendar"></i>
+                                    <input type="date" id="maintenanceDate" required>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="mileage">키로수</label>
+                                <div class="input-with-icon">
+                                    <i class="fas fa-tachometer-alt"></i>
+                                    <input type="number" id="mileage" placeholder="주행거리">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="maintenanceType">정비 종류</label>
+                            <div class="type-selector">
+                                <div class="type-option" data-type="일반점검">
+                                    <i class="fas fa-search"></i>
+                                    <span>일반점검</span>
+                                </div>
+                                <div class="type-option" data-type="엔진오일교체">
+                                    <i class="fas fa-oil-can"></i>
+                                    <span>엔진오일교체</span>
+                                </div>
+                                <div class="type-option" data-type="타이어교체">
+                                    <i class="fas fa-circle"></i>
+                                    <span>타이어교체</span>
+                                </div>
+                                <div class="type-option" data-type="브레이크정비">
+                                    <i class="fas fa-stop-circle"></i>
+                                    <span>브레이크정비</span>
+                                </div>
+                                <div class="type-option" data-type="기타">
+                                    <i class="fas fa-wrench"></i>
+                                    <span>기타</span>
+                                </div>
+                            </div>
+                            <input type="hidden" id="maintenanceType" required>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2: Photos -->
+                    <div class="form-step" data-step="2">
+                        <div class="step-header">
+                            <h3>정비 사진</h3>
+                            <span class="step-indicator">2/3</span>
+                        </div>
+                        
+                        <div class="photo-upload-section">
+                            <div class="photo-upload-item">
+                                <div class="photo-upload-area" data-type="before">
+                                    <input type="file" id="beforePhoto" accept="image/*" style="display: none;">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>정비 전</span>
+                                        <small>사진을 추가하세요</small>
+                                    </div>
+                                    <div class="photo-preview" style="display: none;">
+                                        <img src="" alt="정비 전">
+                                        <button type="button" class="remove-photo">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="photo-upload-item">
+                                <div class="photo-upload-area" data-type="during">
+                                    <input type="file" id="duringPhoto" accept="image/*" style="display: none;">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>정비 중</span>
+                                        <small>사진을 추가하세요</small>
+                                    </div>
+                                    <div class="photo-preview" style="display: none;">
+                                        <img src="" alt="정비 중">
+                                        <button type="button" class="remove-photo">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="photo-upload-item">
+                                <div class="photo-upload-area" data-type="after">
+                                    <input type="file" id="afterPhoto" accept="image/*" style="display: none;">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>정비 후</span>
+                                        <small>사진을 추가하세요</small>
+                                    </div>
+                                    <div class="photo-preview" style="display: none;">
+                                        <img src="" alt="정비 후">
+                                        <button type="button" class="remove-photo">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="row g-3 mt-2">
-                        <div class="col-md-6">
-                            <label for="maintenanceMileageModal" class="form-label">키로수</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-tachometer-alt"></i></span>
-                                <input type="number" class="form-control" id="maintenanceMileageModal" 
-                                    placeholder="주행거리 (km)" min="0" step="1" required>
+                    <!-- Step 3: Description -->
+                    <div class="form-step" data-step="3">
+                        <div class="step-header">
+                            <h3>상세 설명</h3>
+                            <span class="step-indicator">3/3</span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="description">정비 내용</label>
+                            <textarea id="description" rows="6" placeholder="정비 내용을 자세히 설명해주세요..." required></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="tags">태그 (선택사항)</label>
+                            <div class="input-with-icon">
+                                <i class="fas fa-hashtag"></i>
+                                <input type="text" id="tags" placeholder="예: #정기점검 #오일교체">
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label for="maintenanceTypeModal" class="form-label">정비 종류</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-wrench"></i></span>
-                                <select class="form-control" id="maintenanceTypeModal" required>
-                                    <option value="">선택하세요</option>
-                                    <option value="일반점검">일반점검</option>
-                                    <option value="엔진오일교체">엔진오일교체</option>
-                                    <option value="타이어교체">타이어교체</option>
-                                    <option value="브레이크정비">브레이크정비</option>
-                                    <option value="기타">기타</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Photo Upload Section -->
-                    <div class="mt-4">
-                        <label class="form-label fw-bold">정비 사진</label>
-                        <div class="photo-upload-container">
-                            <!-- Before Photo -->
-                            <div class="photo-upload-group">
-                                <label class="photo-label text-center fw-medium">정비 전</label>
-                                <div class="photo-preview" id="beforePhotoPreview">
-                                    <img id="beforePhotoImg" src="" alt="정비 전 미리보기" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:8px;">
-                                    <div class="photo-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>사진 추가</span>
-                                    </div>
-                                </div>
-                                <label for="beforePhoto" class="btn btn-outline-primary btn-sm mt-2 w-100">
-                                    <i class="fas fa-upload me-1"></i>사진 선택
-                                </label>
-                                <input type="file" id="beforePhoto" accept="image/*" data-type="before" style="display:none;">
-                            </div>
-                            
-                            <!-- During Photo -->
-                            <div class="photo-upload-group">
-                                <label class="photo-label text-center fw-medium">정비 중</label>
-                                <div class="photo-preview" id="duringPhotoPreview">
-                                    <img id="duringPhotoImg" src="" alt="정비 중 미리보기" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:8px;">
-                                    <div class="photo-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>사진 추가</span>
-                                    </div>
-                                </div>
-                                <label for="duringPhoto" class="btn btn-outline-primary btn-sm mt-2 w-100">
-                                    <i class="fas fa-upload me-1"></i>사진 선택
-                                </label>
-                                <input type="file" id="duringPhoto" accept="image/*" data-type="during" style="display:none;">
-                            </div>
-                            
-                            <!-- After Photo -->
-                            <div class="photo-upload-group">
-                                <label class="photo-label text-center fw-medium">정비 후</label>
-                                <div class="photo-preview" id="afterPhotoPreview">
-                                    <img id="afterPhotoImg" src="" alt="정비 후 미리보기" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:8px;">
-                                    <div class="photo-placeholder">
-                                        <i class="fas fa-camera"></i>
-                                        <span>사진 추가</span>
-                                    </div>
-                                </div>
-                                <label for="afterPhoto" class="btn btn-outline-primary btn-sm mt-2 w-100">
-                                    <i class="fas fa-upload me-1"></i>사진 선택
-                                </label>
-                                <input type="file" id="afterPhoto" accept="image/*" data-type="after" style="display:none;">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mt-3">
-                        <label for="descriptionModal" class="form-label">상세 설명</label>
-                        <textarea class="form-control" id="descriptionModal" rows="4" 
-                            placeholder="정비 내용에 대한 자세한 설명을 입력해주세요..." required></textarea>
                     </div>
                 </form>
             </div>
+            
             <div class="modal-footer">
-                <button type="submit" class="btn btn-primary" form="newMaintenanceModalForm">
-                    <i class="fas fa-save me-1"></i>저장
+                <button type="button" class="btn btn-secondary" id="prevStep" style="display: none;">
+                    <i class="fas fa-arrow-left"></i>
+                    이전
                 </button>
-                <button type="button" class="btn btn-secondary" onclick="closeMaintenanceInputModal()">
-                    <i class="fas fa-times me-1"></i>취소
+                <button type="button" class="btn btn-primary" id="nextStep">
+                    다음
+                    <i class="fas fa-arrow-right"></i>
                 </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Car Number Update Modal -->
-    <div id="carNumberModal" class="maintenance-modal">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h2 class="modal-title">
-                    <i class="fas fa-motorcycle"></i>
-                    <span>오토바이 번호 수정</span>
-                </h2>
-                <button class="modal-close" onclick="closeCarNumberModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="newCarNumber" class="form-label">새 오토바이 번호</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-motorcycle"></i></span>
-                        <input type="text" class="form-control" id="newCarNumber" 
-                            placeholder="12가3456" required>
-                    </div>
-                    <div class="form-text">
-                        <i class="fas fa-info-circle me-1"></i>띄어쓰기 없이 입력해주세요
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="submitCarNumberUpdate()">
-                    <i class="fas fa-save me-1"></i>저장
-                </button>
-                <button class="btn btn-secondary" onclick="closeCarNumberModal()">
-                    <i class="fas fa-times me-1"></i>취소
+                <button type="submit" class="btn btn-success" id="submitForm" style="display: none;" form="maintenanceForm">
+                    <i class="fas fa-save"></i>
+                    저장
                 </button>
             </div>
         </div>
     </div>
 
     <!-- Maintenance Detail Modal -->
-    <div id="maintenanceDetailModal" class="maintenance-modal">
-        <div class="modal-content" onclick="event.stopPropagation()">
+    <div id="detailModal" class="modal-overlay">
+        <div class="modal-container">
             <div class="modal-header">
                 <h2 class="modal-title">
-                    <i class="fas fa-tools"></i>
-                    <span>정비 이력 상세</span>
+                    <i class="fas fa-info-circle"></i>
+                    정비 상세
                 </h2>
-                <button class="modal-close" onclick="closeMaintenanceDetailModal()">
+                <button class="modal-close" onclick="closeDetailModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body">
-                <div class="maintenance-detail-content">
-                    <div class="detail-header mb-3">
-                        <div class="detail-type h5 mb-2"></div>
-                        <div class="detail-date text-muted mb-1"></div>
-                        <div class="detail-status mb-3"></div>
-                    </div>
-                    <div class="detail-info">
-                        <div class="detail-motorcycle-number mb-2"></div>
-                        <div class="detail-mileage mb-2"></div>
-                        <div class="detail-description mb-3"></div>
-                    </div>
-                    <div class="detail-footer">
-                        <div class="detail-admin text-muted"></div>
-                    </div>
-                    <div class="detail-photos mt-4"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeMaintenanceDetailModal()">
-                    <i class="fas fa-times me-1"></i>닫기
-                </button>
+            
+            <div class="modal-body" id="detailModalBody">
+                <!-- Detail content will be dynamically inserted -->
             </div>
         </div>
     </div>
 
     <!-- Notification Container -->
-    <div id="notificationContainer"></div>
+    <div id="notificationContainer" class="notification-container"></div>
 
-    <!-- Global Modal Backdrop -->
-    <div id="modalBackdrop" class="modal-backdrop" style="display: none;"></div>
-
-    <!-- Scripts -->
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JavaScript -->
     <script src="app.js"></script>
 </body>
 </html> 
