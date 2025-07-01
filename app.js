@@ -1549,6 +1549,9 @@ function closeMaintenanceModal() {
         modal.classList.remove('active');
         resetMaintenanceForm();
         
+        // 모달을 닫을 때만 사진 데이터 완전히 리셋
+        resetPhotoUploads();
+        
         // 수정 모드 플래그 제거
         if (window.editingMaintenanceId) {
             delete window.editingMaintenanceId;
@@ -1570,7 +1573,6 @@ function closeMaintenanceModal() {
 
 function resetMaintenanceForm() {
     currentStep = 1;
-    uploadedPhotos = { before: null, during: null, after: null };
     
     const form = document.getElementById('maintenanceForm');
     if (form) {
@@ -1582,8 +1584,8 @@ function resetMaintenanceForm() {
         option.classList.remove('selected');
     });
     
-    // Reset photo uploads
-    resetPhotoUploads();
+    // 사진 리셋은 모달을 완전히 닫을 때만 수행
+    // uploadedPhotos 초기화와 resetPhotoUploads() 제거
     
     // Set default date
     const dateInput = document.getElementById('maintenanceDate');
@@ -1731,13 +1733,21 @@ async function handleMaintenanceSubmit(e) {
             console.log('✅ Maintenance added with ID:', docRef.id);
             
             // 사진 업로드 (있는 경우)
+            console.log('📸 Checking uploaded photos:', uploadedPhotos);
+            console.log('📸 Before photo exists:', !!uploadedPhotos.before);
+            console.log('📸 During photo exists:', !!uploadedPhotos.during);  
+            console.log('📸 After photo exists:', !!uploadedPhotos.after);
+            
             if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
                 const photos = await uploadMaintenancePhotos(docRef.id);
+                console.log('📸 Photos returned from upload:', photos);
+                
                 if (photos.length > 0) {
                     await db.collection('maintenance').doc(docRef.id).update({
                         photos: photos
                     });
                     console.log('✅ Photos saved to maintenance record:', photos.length);
+                    console.log('✅ Photo details:', photos.map(p => ({ type: p.type, url: p.url })));
                 }
             }
             
@@ -1834,12 +1844,19 @@ function initializePhotoUpload() {
 // 사진 업로드 처리 함수
 async function handlePhotoUpload(file, type) {
     try {
+        console.log(`📸 Processing ${type} photo upload:`, file.name, file.size, 'bytes');
+        
         // 이미지 리사이즈
         const resizedFile = await resizeImage(file);
+        console.log(`📸 Resized ${type} photo:`, resizedFile.size, 'bytes');
         
         // Base64로 변환하여 임시 저장
         const base64 = await convertToBase64(resizedFile);
+        console.log(`📸 Converted ${type} to base64:`, base64.length, 'characters');
+        console.log(`📸 Base64 preview for ${type}:`, base64.substring(0, 50) + '...');
+        
         uploadedPhotos[type] = base64;
+        console.log(`📸 Saved ${type} to uploadedPhotos. Current keys:`, Object.keys(uploadedPhotos));
         
         // 미리보기 표시
         showPhotoPreview(base64, type);
@@ -1847,8 +1864,8 @@ async function handlePhotoUpload(file, type) {
         showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
         
     } catch (error) {
-        console.error('❌ Error uploading photo:', error);
-        showNotification('사진 업로드 실패: ' + error.message, 'error');
+        console.error(`❌ Error uploading ${type} photo:`, error);
+        showNotification(`${type} 사진 업로드 실패: ${error.message}`, 'error');
     }
 }
 
@@ -2662,14 +2679,32 @@ async function uploadMaintenancePhotos(maintenanceId) {
     const photos = [];
     console.log('📸 Uploading photos for maintenance:', maintenanceId);
     console.log('📸 Photos to upload:', uploadedPhotos);
+    console.log('📸 uploadedPhotos keys:', Object.keys(uploadedPhotos));
     
-    for (const [type, base64Data] of Object.entries(uploadedPhotos)) {
-        if (base64Data) {
+    // 각 타입별로 명시적으로 확인
+    const photoTypes = ['before', 'during', 'after'];
+    
+    for (const type of photoTypes) {
+        const base64Data = uploadedPhotos[type];
+        console.log(`📸 Checking ${type} photo:`, !!base64Data, base64Data ? 'length: ' + base64Data.length : 'no data');
+        
+        if (base64Data && base64Data.trim()) {
             try {
-                console.log(`📸 Uploading ${type} photo...`);
+                console.log(`📸 Starting upload for ${type} photo...`);
+                
+                // Base64 데이터 검증
+                if (!base64Data.includes('data:image')) {
+                    console.error(`❌ Invalid base64 format for ${type}:`, base64Data.substring(0, 50));
+                    continue;
+                }
                 
                 // Base64 데이터에서 data:image/... 부분 제거
                 const base64Image = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+                
+                if (!base64Image || base64Image.length < 100) {
+                    console.error(`❌ Invalid base64 content for ${type}:`, base64Image ? base64Image.length : 'empty');
+                    continue;
+                }
                 
                 // ImgBB API 호출
                 const formData = new FormData();
@@ -2677,12 +2712,18 @@ async function uploadMaintenancePhotos(maintenanceId) {
                 formData.append('image', base64Image);
                 formData.append('name', `maintenance_${maintenanceId}_${type}_${Date.now()}`);
                 
+                console.log(`📸 Calling ImgBB API for ${type}...`);
                 const response = await fetch('https://api.imgbb.com/1/upload', {
                     method: 'POST',
                     body: formData
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const result = await response.json();
+                console.log(`📸 ImgBB response for ${type}:`, result.success ? 'SUCCESS' : 'FAILED', result.error);
                 
                 if (result.success) {
                     const photoData = {
@@ -2697,16 +2738,19 @@ async function uploadMaintenancePhotos(maintenanceId) {
                     console.log(`✅ ${type} photo uploaded successfully:`, result.data.url);
                 } else {
                     console.error(`❌ ImgBB upload failed for ${type}:`, result);
-                    throw new Error(result.error?.message || '이미지 업로드 실패');
+                    showNotification(`${type} 사진 업로드 실패: ${result.error?.message || '알 수 없는 오류'}`, 'error');
                 }
             } catch (err) {
                 console.error(`❌ Error uploading ${type} photo:`, err);
                 showNotification(`${type} 사진 업로드 실패: ${err.message}`, 'error');
             }
+        } else {
+            console.log(`📸 No ${type} photo to upload`);
         }
     }
     
-    console.log('📸 All photos uploaded:', photos);
+    console.log('📸 Final uploaded photos count:', photos.length);
+    console.log('📸 Final uploaded photos:', photos.map(p => ({ type: p.type, url: p.url })));
     return photos;
 }
 
@@ -2743,6 +2787,20 @@ function showMaintenanceDetail(maintenanceId) {
 function showMaintenanceDetailModal(maintenance) {
     console.log('🔍 Creating detail modal for:', maintenance);
     console.log('📸 Photos in maintenance data:', maintenance.photos);
+    console.log('📸 Number of photos:', maintenance.photos ? maintenance.photos.length : 0);
+    
+    // 사진 정보 상세 로깅
+    if (maintenance.photos && maintenance.photos.length > 0) {
+        maintenance.photos.forEach((photo, index) => {
+            console.log(`📸 Photo ${index + 1}:`, {
+                type: photo.type,
+                url: photo.url,
+                hasUrl: !!photo.url,
+                hasThumbnail: !!photo.thumbnailUrl
+            });
+        });
+    }
+    
     console.log('👤 Current user info - isAdmin:', isAdmin, 'email:', currentUser?.email);
     
     // 기존 모달 제거
