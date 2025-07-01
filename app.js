@@ -278,7 +278,52 @@ async function handleAuthStateChange(user) {
 async function handleLogout() {
     try {
         await firebase.auth().signOut();
+        
+        // 🔒 모든 사용자 데이터 완전 초기화
+        currentUser = null;
+        isAdmin = false;
+        
+        // 🔔 알림 패널 닫기 및 완전 초기화
+        closeNotificationPanel();
+        const notificationList = document.getElementById('notificationList');
+        if (notificationList) {
+            notificationList.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">로그인 후 알림을 확인하세요</div>';
+        }
+        
+        // 🔴 알림 배지 완전 초기화
+        const badge = document.querySelector('.notification-badge');
+        if (badge) {
+            badge.style.display = 'none';
+            badge.textContent = '0';
+        }
+        
+        // 👤 프로필 메뉴 초기화
+        const profileDropdown = document.getElementById('profileDropdown');
+        if (profileDropdown) {
+            profileDropdown.style.display = 'none';
+        }
+        
+        // 🚫 모든 모달 강제 닫기
+        const modals = document.querySelectorAll('.modal-overlay');
+        modals.forEach(modal => {
+            try {
+                modal.remove();
+            } catch (error) {
+                console.log('Modal already removed:', error);
+            }
+        });
+        
+        // 📱 타임라인 초기화
+        const timelineContent = document.getElementById('timelineContent');
+        if (timelineContent) {
+            timelineContent.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">로그인 후 정비 이력을 확인하세요</div>';
+        }
+        
         showNotification('로그아웃되었습니다.', 'info');
+        
+        // 로그인 화면으로 강제 이동
+        showScreen('auth');
+        
     } catch (error) {
         console.error('❌ Logout error:', error);
         showNotification('로그아웃 실패', 'error');
@@ -397,6 +442,19 @@ function showProfileOptions() {
 
 // 오토바이 번호 수정 모달 표시
 function showCarNumberModal() {
+    // 🔒 로그인 상태 확인
+    if (!currentUser) {
+        showNotification('로그인이 필요합니다.', 'error');
+        showScreen('auth');
+        return;
+    }
+    
+    // 관리자는 오토바이 번호 수정 불가
+    if (isAdmin) {
+        showNotification('관리자는 오토바이 번호를 수정할 수 없습니다.', 'error');
+        return;
+    }
+    
     // 기존 모달 제거
     const existingModal = document.getElementById('carNumberModal');
     if (existingModal) {
@@ -475,6 +533,21 @@ function closeCarNumberModal() {
 
 // 오토바이 번호 업데이트 처리
 async function handleCarNumberUpdate() {
+    // 🔒 보안 검사: 로그인 상태 확인
+    if (!currentUser) {
+        showNotification('로그인이 필요합니다.', 'error');
+        closeCarNumberModal();
+        showScreen('auth');
+        return;
+    }
+    
+    // 🔒 보안 검사: 관리자 차단
+    if (isAdmin) {
+        showNotification('관리자는 오토바이 번호를 수정할 수 없습니다.', 'error');
+        closeCarNumberModal();
+        return;
+    }
+    
     const newCarNumber = document.getElementById('newCarNumber')?.value?.trim();
     
     if (!newCarNumber) {
@@ -524,6 +597,13 @@ function initializeNotificationSystem() {
 // 알림 패널 표시
 function showNotificationPanel() {
     console.log('🔔 Showing notification panel...');
+    
+    // 🔒 로그인 상태 확인
+    if (!currentUser) {
+        showNotification('로그인이 필요합니다.', 'error');
+        showScreen('auth');
+        return;
+    }
     
     // 기존 패널 제거
     const existingPanel = document.getElementById('notificationPanel');
@@ -940,8 +1020,11 @@ async function updateMonthStats() {
         // 단순한 쿼리로 변경 - 인덱스 오류 방지
         let query = db.collection('maintenance');
         
+        // 권한별 필터링
         if (!isAdmin && currentUser && currentUser.carNumber) {
             query = query.where('carNumber', '==', currentUser.carNumber);
+        } else if (isAdmin && currentUser) {
+            query = query.where('adminEmail', '==', currentUser.email);
         }
         
         const snapshot = await query.get();
@@ -976,8 +1059,11 @@ async function updateAverageStats() {
         // 단순한 쿼리로 변경 - 인덱스 오류 방지
         let query = db.collection('maintenance');
         
+        // 권한별 필터링
         if (!isAdmin && currentUser && currentUser.carNumber) {
             query = query.where('carNumber', '==', currentUser.carNumber);
+        } else if (isAdmin && currentUser) {
+            query = query.where('adminEmail', '==', currentUser.email);
         }
         
         const snapshot = await query.get();
@@ -1076,15 +1162,20 @@ async function loadMaintenanceTimeline(searchTerm = '') {
             return dateB - dateA; // 최신순
         });
         
-        // 관리자가 아닌 경우 차량번호로 필터링
+        // 권한별 필터링
         let filteredMaintenances = maintenances;
         if (!isAdmin && currentUser && currentUser.carNumber) {
+            // 일반 사용자: 자신의 차량번호만
             filteredMaintenances = maintenances.filter(m => 
                 m.carNumber === currentUser.carNumber
             );
-            console.log('🚗 Filtered by car number:', currentUser.carNumber, filteredMaintenances.length);
-        } else if (isAdmin) {
-            console.log('👨‍💼 Admin user - showing all maintenance records');
+            console.log('🚗 User filtered by car number:', currentUser.carNumber, filteredMaintenances.length);
+        } else if (isAdmin && currentUser) {
+            // 관리자: 자신이 작업한 정비만
+            filteredMaintenances = maintenances.filter(m => 
+                m.adminEmail === currentUser.email
+            );
+            console.log('👨‍💼 Admin filtered by email:', currentUser.email, filteredMaintenances.length);
         }
         
         // 상태별 필터 적용
@@ -1095,6 +1186,10 @@ async function loadMaintenanceTimeline(searchTerm = '') {
             const beforeFilterCount = filteredMaintenances.length;
             filteredMaintenances = filteredMaintenances.filter(m => {
                 switch (currentFilter) {
+                    case 'in-progress':
+                        return m.status === 'in-progress';
+                    case 'completed':
+                        return m.status === 'completed';
                     case 'pending':
                         return m.status === 'pending';
                     case 'approved':
@@ -1453,6 +1548,23 @@ function closeMaintenanceModal() {
     if (modal) {
         modal.classList.remove('active');
         resetMaintenanceForm();
+        
+        // 수정 모드 플래그 제거
+        if (window.editingMaintenanceId) {
+            delete window.editingMaintenanceId;
+            
+            // 제출 버튼 텍스트 원래대로
+            const submitBtn = document.querySelector('#maintenanceModal .btn-primary');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="fas fa-plus"></i> 등록하기';
+            }
+            
+            // 모달 제목 원래대로
+            const modalTitle = document.querySelector('#maintenanceModal .modal-title');
+            if (modalTitle) {
+                modalTitle.innerHTML = '<i class="fas fa-wrench"></i> 정비 이력 등록';
+            }
+        }
     }
 }
 
@@ -1575,27 +1687,63 @@ async function handleMaintenanceSubmit(e) {
             description: document.getElementById('description').value.trim(),
             adminEmail: currentUser.email,
             adminName: currentUser.name || '관리자',
-            status: 'pending',
+            status: 'in-progress', // 관리자가 등록하면 진행중 상태로 시작
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             photos: []
         };
         
-        // Firestore에 저장
-        const docRef = await db.collection('maintenance').add(formData);
-        console.log('✅ Maintenance added with ID:', docRef.id);
-        
-        // 사진 업로드 (있는 경우)
-        if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
-            const photos = await uploadMaintenancePhotos(docRef.id);
-            if (photos.length > 0) {
-                await db.collection('maintenance').doc(docRef.id).update({
-                    photos: photos
-                });
-                console.log('✅ Photos saved to maintenance record:', photos.length);
+        // 수정 모드인지 확인
+        if (window.editingMaintenanceId) {
+            // 수정 모드
+            console.log('📝 Updating existing maintenance:', window.editingMaintenanceId);
+            
+            // 수정 시에는 상태를 변경하지 않음 (진행중 유지)
+            delete formData.status;
+            delete formData.createdAt;
+            formData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+            
+            await db.collection('maintenance').doc(window.editingMaintenanceId).update(formData);
+            console.log('✅ Maintenance updated successfully');
+            
+            // 사진 업로드 (있는 경우)
+            if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
+                const photos = await uploadMaintenancePhotos(window.editingMaintenanceId);
+                if (photos.length > 0) {
+                    // 기존 사진에 새 사진 추가
+                    const currentDoc = await db.collection('maintenance').doc(window.editingMaintenanceId).get();
+                    const currentPhotos = currentDoc.data().photos || [];
+                    const allPhotos = [...currentPhotos, ...photos];
+                    
+                    await db.collection('maintenance').doc(window.editingMaintenanceId).update({
+                        photos: allPhotos
+                    });
+                    console.log('✅ Photos updated for maintenance record:', allPhotos.length);
+                }
             }
+            
+            showNotification('정비 이력이 성공적으로 수정되었습니다!', 'success');
+            
+            // 수정 모드 플래그 제거
+            delete window.editingMaintenanceId;
+        } else {
+            // 새 등록 모드
+            const docRef = await db.collection('maintenance').add(formData);
+            console.log('✅ Maintenance added with ID:', docRef.id);
+            
+            // 사진 업로드 (있는 경우)
+            if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
+                const photos = await uploadMaintenancePhotos(docRef.id);
+                if (photos.length > 0) {
+                    await db.collection('maintenance').doc(docRef.id).update({
+                        photos: photos
+                    });
+                    console.log('✅ Photos saved to maintenance record:', photos.length);
+                }
+            }
+            
+            showNotification('정비 이력이 성공적으로 등록되었습니다!', 'success');
         }
         
-        showNotification('정비 이력이 성공적으로 등록되었습니다!', 'success');
         closeMaintenanceModal();
         
         // 대시보드 데이터 새로고침
@@ -1926,7 +2074,65 @@ async function loadMaintenanceHistory(search = '') {
     }
 }
 
-// 정비 상태 업데이트 함수 추가
+// 정비 완료 처리 함수 (관리자용)
+async function completeMaintenanceWork(maintenanceId) {
+    if (!isAdmin) {
+        showNotification('관리자만 정비 완료 처리할 수 있습니다.', 'error');
+        return;
+    }
+    
+    try {
+        console.log('✅ Completing maintenance work:', maintenanceId);
+        
+        // 정비 이력 정보 가져오기
+        const maintenanceDoc = await db.collection('maintenance').doc(maintenanceId).get();
+        const maintenanceData = maintenanceDoc.data();
+        
+        // 상태를 "완료됨"으로 업데이트 (사용자 승인 대기)
+        await db.collection('maintenance').doc(maintenanceId).update({
+            status: 'completed',
+            completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            completedBy: currentUser.name || '관리자'
+        });
+        
+        console.log('✅ Maintenance marked as completed');
+        showNotification('정비 작업이 완료되었습니다. 사용자 승인을 기다립니다.', 'success');
+        
+        // 해당 차량번호의 사용자에게 알림
+        if (maintenanceData && maintenanceData.carNumber) {
+            const userSnapshot = await db.collection('users')
+                .where('carNumber', '==', maintenanceData.carNumber)
+                .get();
+                
+            if (!userSnapshot.empty) {
+                const userData = userSnapshot.docs[0].data();
+                const userId = userSnapshot.docs[0].id;
+                
+                // 사용자에게 정비 완료 알림
+                const notification = {
+                    title: '정비 작업 완료',
+                    message: `${maintenanceData.type || '정비'} 작업이 완료되었습니다. 승인/거절을 선택해주세요.`,
+                    type: 'info',
+                    read: false,
+                    userId: userId,
+                    maintenanceId: maintenanceId,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                await db.collection('notifications').add(notification);
+                console.log('🔔 Completion notification sent to user:', userData.name);
+            }
+        }
+        
+        loadDashboardData(); // Refresh dashboard
+        
+    } catch (error) {
+        console.error('❌ Error completing maintenance:', error);
+        showNotification('정비 완료 처리 실패: ' + error.message, 'error');
+    }
+}
+
+// 정비 상태 업데이트 함수 (사용자용 승인/거절)
 async function updateMaintenanceStatus(maintenanceId, newStatus) {
     if (!currentUser) return;
     
@@ -1937,44 +2143,45 @@ async function updateMaintenanceStatus(maintenanceId, newStatus) {
         const maintenanceDoc = await db.collection('maintenance').doc(maintenanceId).get();
         const maintenanceData = maintenanceDoc.data();
         
-        // 상태 업데이트 (관리자 이름도 함께 저장)
-        await db.collection('maintenance').doc(maintenanceId).update({
-            status: newStatus,
-            adminName: currentUser.name || '관리자',
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        console.log('✅ Status updated successfully');
-        showNotification(`정비 이력이 ${newStatus === 'approved' ? '승인' : '거절'}되었습니다.`, 'success');
-        
-        // 정비 요청자에게 알림 생성 (관리자가 아닌 경우에만)
-        if (isAdmin && maintenanceData && maintenanceData.carNumber) {
-            // 해당 차량번호의 사용자 찾기
-            const userSnapshot = await db.collection('users')
-                .where('carNumber', '==', maintenanceData.carNumber)
+        // 권한 체크: 관리자는 진행중 상태만 완료로 변경 가능, 사용자는 완료된 것만 승인/거절 가능
+        if (isAdmin && maintenanceData.status === 'in-progress' && newStatus === 'completed') {
+            await completeMaintenanceWork(maintenanceId);
+            return;
+        } else if (!isAdmin && maintenanceData.status === 'completed' && ['approved', 'rejected'].includes(newStatus)) {
+            // 사용자의 승인/거절 처리
+            await db.collection('maintenance').doc(maintenanceId).update({
+                status: newStatus,
+                finalizedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                finalizedBy: currentUser.name || '사용자'
+            });
+            
+            showNotification(`정비를 ${newStatus === 'approved' ? '승인' : '거절'}하였습니다.`, newStatus === 'approved' ? 'success' : 'warning');
+            
+            // 관리자에게 알림
+            const adminSnapshot = await db.collection('users')
+                .where('email', '==', maintenanceData.adminEmail)
                 .get();
                 
-            if (!userSnapshot.empty) {
-                const userData = userSnapshot.docs[0].data();
-                const userId = userSnapshot.docs[0].id;
+            if (!adminSnapshot.empty) {
+                const adminData = adminSnapshot.docs[0].data();
+                const adminId = adminSnapshot.docs[0].id;
                 
-                // 사용자에게 알림 추가
                 const notification = {
-                    title: newStatus === 'approved' ? '정비 승인됨' : 
-                           newStatus === 'rejected' ? '정비 거절됨' : '정비 상태 변경',
-                    message: `${maintenanceData.type || '정비'} ${newStatus === 'approved' ? '승인' : 
-                             newStatus === 'rejected' ? '거절' : '상태 변경'}되었습니다.`,
-                    type: newStatus === 'approved' ? 'success' : 
-                          newStatus === 'rejected' ? 'error' : 'info',
+                    title: newStatus === 'approved' ? '정비 승인됨' : '정비 거절됨',
+                    message: `${currentUser.name || '사용자'}가 ${maintenanceData.type || '정비'}를 ${newStatus === 'approved' ? '승인' : '거절'}했습니다.`,
+                    type: newStatus === 'approved' ? 'success' : 'warning',
                     read: false,
-                    userId: userId,
+                    userId: adminId,
                     maintenanceId: maintenanceId,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
                 
                 await db.collection('notifications').add(notification);
-                console.log('🔔 Notification sent to user:', userData.name);
+                console.log('🔔 Status notification sent to admin:', adminData.name);
             }
+        } else {
+            showNotification('권한이 없거나 잘못된 상태 변경입니다.', 'error');
+            return;
         }
         
         loadDashboardData(); // Refresh dashboard
@@ -2208,7 +2415,7 @@ function getTypeIconAndColor(type) {
     const types = {
         '일반점검': { icon: 'fa-tools', color: '#4bc0c0' },
         '엔진오일교체': { icon: 'fa-oil-can', color: '#ff6347' },
-        '타이어교체': { icon: 'fa-circle-notch', color: '#d4ac0d' },
+        '타이어교체': { icon: 'fa-circle', color: '#d4ac0d' },
         '브레이크정비': { icon: 'fa-brake', color: '#ff9f40' },
         '기타': { icon: 'fa-wrench', color: '#666' }
     };
@@ -2220,7 +2427,7 @@ function getTypeIcon(type) {
     const icons = {
         '일반점검': '<i class="fas fa-tools"></i>',
         '엔진오일교체': '<i class="fas fa-oil-can"></i>',
-        '타이어교체': '<i class="fas fa-circle-notch"></i>',
+        '타이어교체': '🛞',
         '브레이크정비': '<i class="fas fa-brake"></i>',
         '기타': '<i class="fas fa-wrench"></i>'
     };
@@ -2240,6 +2447,8 @@ function getStatusIcon(status) {
 
 function getStatusText(status) {
     const statusTexts = {
+        'in-progress': '진행중',
+        'completed': '완료됨',
         'approved': '승인됨',
         'rejected': '거절됨',
         'pending': '대기중'
@@ -2252,7 +2461,7 @@ function getMaintenanceTypeInfo(type) {
     const types = {
         '일반점검': { icon: 'fas fa-tools', color: '#4bc0c0' },
         '엔진오일교체': { icon: 'fas fa-oil-can', color: '#ff6347' },
-        '타이어교체': { icon: 'fas fa-circle-notch', color: '#d4ac0d' },
+        '타이어교체': { icon: '🛞', color: '#d4ac0d' },
         '브레이크정비': { icon: 'fas fa-car-brake', color: '#ff9f40' },
         '기타': { icon: 'fas fa-wrench', color: '#666' }
     };
@@ -2262,11 +2471,11 @@ function getMaintenanceTypeInfo(type) {
 // 상태 정보 가져오기 함수 (createMaintenanceCard에서 사용)
 function getStatusInfo(status) {
     const statusInfo = {
-        'approved': { icon: 'fas fa-check-double', text: '승인됨' },
-        'rejected': { icon: 'fas fa-times', text: '거절됨' },
-        'pending': { icon: 'fas fa-clock', text: '대기중' },
-        'in-progress': { icon: 'fas fa-cog fa-spin', text: '진행중' },
-        'completed': { icon: 'fas fa-check', text: '완료' }
+        'in-progress': { icon: 'fas fa-cog fa-spin', text: '진행중', class: 'primary', color: '#3498db' },
+        'completed': { icon: 'fas fa-check', text: '완료됨', class: 'info', color: '#17a2b8' },
+        'approved': { icon: 'fas fa-check-double', text: '승인됨', class: 'success', color: '#27ae60' },
+        'rejected': { icon: 'fas fa-times', text: '거절됨', class: 'danger', color: '#e74c3c' },
+        'pending': { icon: 'fas fa-clock', text: '대기중', class: 'warning', color: '#f39c12' }
     };
     return statusInfo[status] || statusInfo['pending'];
 }
@@ -2534,6 +2743,7 @@ function showMaintenanceDetail(maintenanceId) {
 function showMaintenanceDetailModal(maintenance) {
     console.log('🔍 Creating detail modal for:', maintenance);
     console.log('📸 Photos in maintenance data:', maintenance.photos);
+    console.log('👤 Current user info - isAdmin:', isAdmin, 'email:', currentUser?.email);
     
     // 기존 모달 제거
     const existingModal = document.getElementById('maintenanceDetailModal');
@@ -2618,14 +2828,47 @@ function showMaintenanceDetailModal(maintenance) {
                     <button class="btn btn-secondary" onclick="closeMaintenanceDetailModal()">
                         <i class="fas fa-times"></i> 닫기
                     </button>
-                    ${isAdmin && maintenance.status === 'pending' ? `
-                        <button class="btn btn-success" onclick="updateMaintenanceStatus('${maintenance.id}', 'approved'); closeMaintenanceDetailModal();">
-                            <i class="fas fa-check"></i> 승인
-                        </button>
-                        <button class="btn btn-danger" onclick="updateMaintenanceStatus('${maintenance.id}', 'rejected'); closeMaintenanceDetailModal();">
-                            <i class="fas fa-times"></i> 거절
-                        </button>
-                    ` : ''}
+                    ${(() => {
+                        console.log('🔍 Modal button logic - isAdmin:', isAdmin, 'status:', maintenance.status, 'id:', maintenance.id);
+                        
+                        if (isAdmin) {
+                            console.log('👨‍💼 Admin view detected');
+                            // 관리자 화면
+                            if (maintenance.status === 'in-progress') {
+                                console.log('⚙️ In-progress status - showing edit/complete buttons');
+                                // 진행중: 수정 + 완료 버튼
+                                return `
+                                    <button class="btn btn-primary" onclick="editMaintenance('${maintenance.id}')">
+                                        <i class="fas fa-edit"></i> 수정
+                                    </button>
+                                    <button class="btn btn-success" onclick="completeMaintenanceWork('${maintenance.id}'); closeMaintenanceDetailModal();">
+                                        <i class="fas fa-check-circle"></i> 정비완료
+                                    </button>
+                                `;
+                            } else {
+                                console.log('❌ Status not in-progress, no admin buttons shown. Current status:', maintenance.status);
+                            }
+                        } else {
+                            console.log('👤 User view detected');
+                            // 사용자 화면
+                            if (maintenance.status === 'completed') {
+                                console.log('✅ Completed status - showing approve/reject buttons');
+                                // 완료됨: 승인/거절 버튼
+                                return `
+                                    <button class="btn btn-success" onclick="updateMaintenanceStatus('${maintenance.id}', 'approved'); closeMaintenanceDetailModal();">
+                                        <i class="fas fa-thumbs-up"></i> 승인
+                                    </button>
+                                    <button class="btn btn-danger" onclick="updateMaintenanceStatus('${maintenance.id}', 'rejected'); closeMaintenanceDetailModal();">
+                                        <i class="fas fa-thumbs-down"></i> 거절
+                                    </button>
+                                `;
+                            } else {
+                                console.log('❌ Status not completed, no user buttons shown. Current status:', maintenance.status);
+                            }
+                        }
+                        console.log('🚫 No buttons to show');
+                        return '';
+                    })()}
                 </div>
             </div>
         </div>
@@ -2675,11 +2918,76 @@ function closePhotoModal() {
     }
 }
 
+// 정비 수정 함수
+async function editMaintenance(maintenanceId) {
+    if (!isAdmin) {
+        showNotification('관리자만 정비를 수정할 수 있습니다.', 'error');
+        return;
+    }
+    
+    try {
+        console.log('✏️ Editing maintenance:', maintenanceId);
+        
+        // 정비 정보 가져오기
+        const maintenanceDoc = await db.collection('maintenance').doc(maintenanceId).get();
+        if (!maintenanceDoc.exists) {
+            showNotification('정비 정보를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        
+        const maintenance = maintenanceDoc.data();
+        
+        // 진행중 상태만 수정 가능
+        if (maintenance.status !== 'in-progress') {
+            showNotification('진행중인 정비만 수정할 수 있습니다.', 'error');
+            return;
+        }
+        
+        // 상세 모달 닫기
+        closeMaintenanceDetailModal();
+        
+        // 정비 등록 모달 열고 기존 데이터로 채우기
+        openMaintenanceModal();
+        
+        // 데이터 채우기
+        setTimeout(() => {
+            document.getElementById('carNumber').value = maintenance.carNumber || '';
+            document.getElementById('maintenanceDate').value = maintenance.date || '';
+            document.getElementById('maintenanceType').value = maintenance.type || '';
+            document.getElementById('mileage').value = maintenance.mileage || '';
+            document.getElementById('description').value = maintenance.description || '';
+            
+            // 제출 버튼 텍스트 변경
+            const submitBtn = document.querySelector('#maintenanceModal .btn-primary');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="fas fa-save"></i> 수정완료';
+            }
+            
+            // 모달 제목 변경
+            const modalTitle = document.querySelector('#maintenanceModal .modal-title');
+            if (modalTitle) {
+                modalTitle.innerHTML = '<i class="fas fa-edit"></i> 정비 이력 수정';
+            }
+            
+            // 수정 모드 플래그 설정
+            window.editingMaintenanceId = maintenanceId;
+            
+            console.log('✅ Maintenance edit form populated');
+        }, 100);
+        
+    } catch (error) {
+        console.error('❌ Error editing maintenance:', error);
+        showNotification('정비 수정 중 오류가 발생했습니다: ' + error.message, 'error');
+    }
+}
+
 // 전역 함수로 등록
 window.showMaintenanceDetail = showMaintenanceDetail;
 window.closeMaintenanceDetailModal = closeMaintenanceDetailModal;
 window.showPhotoModal = showPhotoModal;
 window.closePhotoModal = closePhotoModal;
+window.editMaintenance = editMaintenance;
+window.completeMaintenanceWork = completeMaintenanceWork;
 
 // 테스트 데이터 추가 함수 (관리자 전용)
 async function addTestData() {
@@ -2700,7 +3008,7 @@ async function addTestData() {
                 description: '정기 점검 및 기본 정비 작업 수행. 엔진 상태 양호, 브레이크 패드 교체 필요.',
                 adminEmail: 'admin@admin.com',
                 adminName: '관리자',
-                status: 'approved',
+                status: 'in-progress', // 진행중 상태로 변경
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 photos: []
             },
@@ -2712,7 +3020,7 @@ async function addTestData() {
                 description: '엔진오일 및 오일필터 교체 완료. 다음 교체 예정일: 20,000km',
                 adminEmail: 'admin@admin.com',
                 adminName: '관리자',
-                status: 'approved',
+                status: 'completed', // 완료 상태로 변경
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 photos: []
             },
