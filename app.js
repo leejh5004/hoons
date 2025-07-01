@@ -342,6 +342,103 @@ function showProfileOptions() {
     showContextMenu(options);
 }
 
+// 오토바이 번호 수정 모달 표시
+function showCarNumberModal() {
+    // 기존 모달 제거
+    const existingModal = document.getElementById('carNumberModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const currentCarNumber = currentUser?.carNumber || '';
+    
+    const modalHTML = `
+        <div id="carNumberModal" class="modal-overlay active">
+            <div class="modal-container" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <i class="fas fa-motorcycle"></i> 오토바이 번호 수정
+                    </h2>
+                    <button class="modal-close" onclick="closeCarNumberModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <form id="carNumberForm">
+                        <div class="form-group">
+                            <label for="newCarNumber">새 오토바이 번호</label>
+                            <div class="input-with-icon">
+                                <i class="fas fa-motorcycle"></i>
+                                <input type="text" id="newCarNumber" value="${currentCarNumber}" 
+                                       placeholder="예: 12가3456" required>
+                            </div>
+                            <small style="color: #666; font-size: 12px; margin-top: 8px; display: block;">
+                                현재: ${currentCarNumber || '없음'}
+                            </small>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeCarNumberModal()">
+                        <i class="fas fa-times"></i> 취소
+                    </button>
+                    <button class="btn btn-primary" onclick="handleCarNumberUpdate()">
+                        <i class="fas fa-save"></i> 저장
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // 입력 필드에 포커스
+    setTimeout(() => {
+        const input = document.getElementById('newCarNumber');
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }, 100);
+}
+
+// 오토바이 번호 수정 모달 닫기
+function closeCarNumberModal() {
+    const modal = document.getElementById('carNumberModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 오토바이 번호 업데이트 처리
+async function handleCarNumberUpdate() {
+    const newCarNumber = document.getElementById('newCarNumber')?.value?.trim();
+    
+    if (!newCarNumber) {
+        showNotification('오토바이 번호를 입력해주세요.', 'error');
+        return;
+    }
+    
+    if (newCarNumber === currentUser?.carNumber) {
+        showNotification('현재 번호와 동일합니다.', 'info');
+        return;
+    }
+    
+    try {
+        await updateCarNumber(newCarNumber);
+        closeCarNumberModal();
+    } catch (error) {
+        console.error('❌ Error updating car number:', error);
+    }
+}
+
+// 전역 함수로 등록
+window.showCarNumberModal = showCarNumberModal;
+window.closeCarNumberModal = closeCarNumberModal;
+window.handleCarNumberUpdate = handleCarNumberUpdate;
+
 function showContextMenu(options) {
     // Simple context menu implementation
     const menu = document.createElement('div');
@@ -1060,7 +1157,13 @@ async function handleMaintenanceSubmit(e) {
         
         // 사진 업로드 (있는 경우)
         if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
-            await uploadMaintenancePhotos(docRef.id);
+            const photos = await uploadMaintenancePhotos(docRef.id);
+            if (photos.length > 0) {
+                await db.collection('maintenance').doc(docRef.id).update({
+                    photos: photos
+                });
+                console.log('✅ Photos saved to maintenance record:', photos.length);
+            }
         }
         
         showNotification('정비 이력이 성공적으로 등록되었습니다!', 'success');
@@ -1487,6 +1590,9 @@ function initializeSearchAndFilters() {
     const quickSearch = document.getElementById('quickSearch');
     const filterChips = document.querySelectorAll('.filter-chip');
     
+    // 초기 필터를 '전체'로 설정
+    window.currentFilter = 'all';
+    
     if (quickSearch) {
         quickSearch.addEventListener('input', (e) => {
             const searchTerm = e.target.value;
@@ -1665,10 +1771,14 @@ async function updateCarNumber(newCarNumber) {
             });
             
         currentUser.carNumber = trimmedCarNumber;
-        if (userName) {
-            userName.textContent = `오토바이 번호: ${currentUser.carNumber}`;
-        }
+        
+        // UI 업데이트 - 사용자 정보가 표시되는 곳이 있다면 업데이트
+        console.log('✅ Car number updated in currentUser:', currentUser.carNumber);
+        
         showNotification('오토바이 번호가 수정되었습니다.', 'success');
+        
+        // 대시보드 데이터 새로고침
+        loadDashboardData();
         
     } catch (error) {
         console.error('Error updating car number:', error);
@@ -1794,37 +1904,53 @@ function getImageOrientation(arrayBuffer) {
 // ImgBB 업로드만 사용하는 함수로 고정
 async function uploadMaintenancePhotos(maintenanceId) {
     const photos = [];
-    for (const [type, file] of Object.entries(uploadedPhotos)) {
-        if (file) {
+    console.log('📸 Uploading photos for maintenance:', maintenanceId);
+    console.log('📸 Photos to upload:', uploadedPhotos);
+    
+    for (const [type, base64Data] of Object.entries(uploadedPhotos)) {
+        if (base64Data) {
             try {
-                // 이미지를 Base64로 변환
-                const base64Image = await convertToBase64(file);
+                console.log(`📸 Uploading ${type} photo...`);
+                
+                // Base64 데이터에서 data:image/... 부분 제거
+                const base64Image = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+                
                 // ImgBB API 호출
                 const formData = new FormData();
                 formData.append('key', IMGBB_API_KEY);
-                formData.append('image', base64Image.split(',')[1]);
+                formData.append('image', base64Image);
                 formData.append('name', `maintenance_${maintenanceId}_${type}_${Date.now()}`);
+                
                 const response = await fetch('https://api.imgbb.com/1/upload', {
                     method: 'POST',
                     body: formData
                 });
+                
                 const result = await response.json();
+                
                 if (result.success) {
-                    photos.push({
+                    const photoData = {
                         type,
                         url: result.data.url,
                         thumbnailUrl: result.data.thumb ? result.data.thumb.url : result.data.url,
                         createdAt: new Date().toISOString(),
                         filename: `${type}_${Date.now()}.jpg`
-                    });
+                    };
+                    
+                    photos.push(photoData);
+                    console.log(`✅ ${type} photo uploaded successfully:`, result.data.url);
                 } else {
-                    throw new Error('이미지 업로드 실패');
+                    console.error(`❌ ImgBB upload failed for ${type}:`, result);
+                    throw new Error(result.error?.message || '이미지 업로드 실패');
                 }
             } catch (err) {
+                console.error(`❌ Error uploading ${type} photo:`, err);
                 showNotification(`${type} 사진 업로드 실패: ${err.message}`, 'error');
             }
         }
     }
+    
+    console.log('📸 All photos uploaded:', photos);
     return photos;
 }
 
@@ -1860,6 +1986,7 @@ function showMaintenanceDetail(maintenanceId) {
 
 function showMaintenanceDetailModal(maintenance) {
     console.log('🔍 Creating detail modal for:', maintenance);
+    console.log('📸 Photos in maintenance data:', maintenance.photos);
     
     // 기존 모달 제거
     const existingModal = document.getElementById('maintenanceDetailModal');
@@ -1906,9 +2033,24 @@ function showMaintenanceDetailModal(maintenance) {
                         <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
                             <h4 style="margin: 0 0 15px 0; color: #333;">📸 사진 (${maintenance.photos.length}장)</h4>
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-                                ${maintenance.photos.map(photo => `
-                                    <img src="${photo}" alt="정비 사진" style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: pointer;" onclick="showPhotoModal('${photo}')">
-                                `).join('')}
+                                ${maintenance.photos.map(photo => {
+                                    // photo가 객체인 경우와 문자열인 경우 모두 처리
+                                    const photoUrl = typeof photo === 'object' ? (photo.url || photo.thumbnailUrl) : photo;
+                                    const photoType = typeof photo === 'object' ? photo.type : '사진';
+                                    return `
+                                        <div style="position: relative;">
+                                                                                         <img src="${photoUrl}" alt="${photoType}" 
+                                                  style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: pointer;" 
+                                                  onclick="showPhotoModal('${photoUrl}')"
+                                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                             <div style="display: none; width: 100%; height: 150px; background: #ddd; border-radius: 8px; align-items: center; justify-content: center; color: #666; flex-direction: column;">
+                                                 <i class="fas fa-image" style="font-size: 24px; margin-bottom: 8px;"></i>
+                                                 <span style="font-size: 12px;">이미지 로딩 실패</span>
+                                             </div>
+                                            ${photoType !== '사진' ? `<span style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px;">${photoType}</span>` : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
                             </div>
                         </div>
                     ` : ''}
