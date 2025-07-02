@@ -3075,35 +3075,45 @@ function showMaintenanceDetailModal(maintenance) {
                         // 🔄 신규 방식과 기존 방식 모두 지원하는 사진 처리
                         let photos = [];
                         
+                        console.log('🔍 DEBUG: 사진 처리 시작');
+                        console.log('📸 maintenance.photos:', maintenance.photos);
+                        console.log('📸 maintenance.beforePhoto:', maintenance.beforePhoto);
+                        console.log('📸 maintenance.duringPhoto:', maintenance.duringPhoto);
+                        console.log('📸 maintenance.afterPhoto:', maintenance.afterPhoto);
+                        
                         // 1️⃣ 신규 방식: photos 배열 확인
                         if (maintenance.photos && maintenance.photos.length > 0) {
                             console.log('📸 신규 방식 사진 발견:', maintenance.photos.length + '개');
-                            photos = maintenance.photos.map(photo => ({
-                                url: photo.url,
-                                type: photo.type === 'before' ? '정비 전' : 
-                                      photo.type === 'during' ? '정비 중' : 
-                                      photo.type === 'after' ? '정비 후' : photo.type
-                            }));
+                            photos = maintenance.photos.map(photo => {
+                                console.log('📸 처리 중인 사진:', photo);
+                                return {
+                                    url: photo.url,
+                                    type: photo.type === 'before' ? '정비 전' : 
+                                          photo.type === 'during' ? '정비 중' : 
+                                          photo.type === 'after' ? '정비 후' : photo.type
+                                };
+                            });
                         } 
                         // 2️⃣ 기존 방식: 개별 필드 확인
                         else {
                             console.log('📸 기존 방식 사진 확인 중...');
                             if (maintenance.beforePhoto) {
                                 photos.push({ url: maintenance.beforePhoto, type: '정비 전' });
-                                console.log('📸 정비 전 사진 발견');
+                                console.log('📸 정비 전 사진 발견:', maintenance.beforePhoto);
                             }
                             if (maintenance.duringPhoto) {
                                 photos.push({ url: maintenance.duringPhoto, type: '정비 중' });
-                                console.log('📸 정비 중 사진 발견');
+                                console.log('📸 정비 중 사진 발견:', maintenance.duringPhoto);
                             }
                             if (maintenance.afterPhoto) {
                                 photos.push({ url: maintenance.afterPhoto, type: '정비 후' });
-                                console.log('📸 정비 후 사진 발견');
+                                console.log('📸 정비 후 사진 발견:', maintenance.afterPhoto);
                             }
                         }
                         
                         const hasPhotos = photos.length > 0;
                         console.log('📸 총 발견된 사진:', photos.length + '개');
+                        console.log('📸 최종 photos 배열:', photos);
                         
                         let photoDeleteInfo = '';
                         
@@ -3137,6 +3147,7 @@ function showMaintenanceDetailModal(maintenance) {
                         }
                         
                         if (hasPhotos) {
+                            console.log('🖼️ 사진 HTML 생성 중...');
                             
                             return `
                                 <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
@@ -3144,15 +3155,19 @@ function showMaintenanceDetailModal(maintenance) {
                                     ${photoDeleteInfo}
                                     
                                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px;">
-                                        ${photos.map(photo => `
+                                        ${photos.map((photo, index) => {
+                                            console.log(`🖼️ 사진 ${index + 1} HTML 생성:`, photo.url);
+                                            return `
                                             <div style="position: relative; background: white; border-radius: 10px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                                                 <img src="${photo.url}" alt="${photo.type}" 
                                                      style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: pointer;" 
                                                      onclick="showPhotoModal('${photo.url}')"
-                                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                     onload="console.log('✅ 이미지 로딩 성공:', '${photo.url}')"
+                                                     onerror="console.error('❌ 이미지 로딩 실패:', '${photo.url}'); this.style.display='none'; this.nextElementSibling.style.display='flex';">
                                                 <div style="display: none; width: 100%; height: 150px; background: #ddd; border-radius: 8px; align-items: center; justify-content: center; color: #666; flex-direction: column;">
                                                     <i class="fas fa-image" style="font-size: 24px; margin-bottom: 8px;"></i>
                                                     <span style="font-size: 12px;">이미지 로딩 실패</span>
+                                                    <small style="font-size: 10px; margin-top: 4px; word-break: break-all; text-align: center;">${photo.url.substring(0, 50)}...</small>
                                                 </div>
                                                 <div style="margin-top: 8px; text-align: center;">
                                                     <span style="font-size: 12px; font-weight: bold; color: #666;">${photo.type}</span>
@@ -3163,7 +3178,8 @@ function showMaintenanceDetailModal(maintenance) {
                                                     </button>
                                                 </div>
                                             </div>
-                                        `).join('')}
+                                        `;
+                                        }).join('')}
                                     </div>
                                     
                                     <div style="margin-top: 15px; text-align: center;">
@@ -3174,6 +3190,8 @@ function showMaintenanceDetailModal(maintenance) {
                                     </div>
                                 </div>
                             `;
+                        } else {
+                            console.log('📸 사진이 없어서 섹션을 표시하지 않음');
                         }
                         return '';
                     })()}
@@ -4800,3 +4818,41 @@ async function generatePDFFromHTML(htmlContent, customerName, carNumber) {
         showNotification('PDF 생성 중 오류가 발생했습니다.', 'error');
     }
 }
+
+// 사진 문제 디버그용 임시 함수
+async function debugPhotoIssue() {
+    try {
+        console.log('🔍 사진 문제 디버깅 시작...');
+        
+        const snapshot = await db.collection('maintenance').limit(10).get();
+        console.log('📊 전체 정비 이력 수:', snapshot.size);
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            console.log(`📋 정비 ID ${doc.id}:`);
+            console.log('  - photos 배열:', data.photos ? data.photos.length + '개' : '없음');
+            console.log('  - beforePhoto:', data.beforePhoto ? '있음' : '없음');
+            console.log('  - duringPhoto:', data.duringPhoto ? '있음' : '없음');
+            console.log('  - afterPhoto:', data.afterPhoto ? '있음' : '없음');
+            
+            if (data.photos && data.photos.length > 0) {
+                data.photos.forEach((photo, index) => {
+                    console.log(`    📸 사진 ${index + 1}:`, {
+                        type: photo.type,
+                        url: photo.url ? photo.url.substring(0, 50) + '...' : '없음',
+                        hasDeleteUrl: !!photo.deleteUrl
+                    });
+                });
+            }
+        });
+        
+        showNotification('사진 디버그 완료 - 콘솔을 확인하세요', 'info');
+        
+    } catch (error) {
+        console.error('❌ 사진 디버그 실패:', error);
+        showNotification('사진 디버그 실패', 'error');
+    }
+}
+
+// 전역에서 접근 가능하도록 설정
+window.debugPhotoIssue = debugPhotoIssue;
