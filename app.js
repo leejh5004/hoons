@@ -2312,11 +2312,14 @@ async function updateMaintenanceStatus(maintenanceId, newStatus) {
         const maintenanceDoc = await db.collection('maintenance').doc(maintenanceId).get();
         const maintenanceData = maintenanceDoc.data();
         
-        // 권한 체크: 관리자는 진행중 상태만 완료로 변경 가능, 사용자는 완료된 것만 확인/거절 가능
-        if (isAdmin && maintenanceData.status === 'in-progress' && newStatus === 'completed') {
+        // 권한 체크: 관리자는 진행중/승인된 상태를 완료로 변경 가능, 사용자는 완료된 것만 확인/거절 가능
+        const status = maintenanceData.status ? maintenanceData.status.toLowerCase() : '';
+        const isCompletable = status === 'in-progress' || status === 'approved' || status === 'pending';
+        
+        if (isAdmin && isCompletable && newStatus === 'completed') {
             await completeMaintenanceWork(maintenanceId);
             return;
-        } else if (!isAdmin && maintenanceData.status === 'completed' && ['approved', 'rejected'].includes(newStatus)) {
+        } else if (!isAdmin && status === 'completed' && ['approved', 'rejected'].includes(newStatus)) {
             // 사용자의 확인/거절 처리
             await db.collection('maintenance').doc(maintenanceId).update({
                 status: newStatus,
@@ -3137,10 +3140,13 @@ function showMaintenanceDetailModal(maintenance) {
                         
                         if (isAdmin) {
                             console.log('👨‍💼 Admin view detected');
-                            // 관리자 화면
-                            if (maintenance.status === 'in-progress') {
-                                console.log('⚙️ In-progress status - showing edit/complete buttons');
-                                // 진행중: 수정 + 완료 버튼
+                            // 관리자 화면 - 다양한 상태값 형식 처리
+                            const status = maintenance.status ? maintenance.status.toLowerCase() : '';
+                            const isInProgress = status === 'in-progress' || status === 'approved' || status === 'pending';
+                            
+                            if (isInProgress) {
+                                console.log('⚙️ In-progress/approved/pending status - showing edit/complete buttons');
+                                // 진행중/승인됨/대기중: 수정 + 완료 버튼
                                 return `
                                     <button class="btn btn-primary" onclick="editMaintenance('${maintenance.id}')">
                                         <i class="fas fa-edit"></i> 수정
@@ -3150,19 +3156,21 @@ function showMaintenanceDetailModal(maintenance) {
                                     </button>
                                 `;
                             } else {
-                                console.log('❌ Status not in-progress, no admin buttons shown. Current status:', maintenance.status);
-                                console.log('❌ Expected status: "in-progress", actual status: "' + maintenance.status + '"');
-                                // 상태가 in-progress가 아닌 경우에도 정보 표시용 버튼을 제공
+                                console.log('❌ Status not actionable, no admin buttons shown. Current status:', maintenance.status);
+                                console.log('❌ Expected status: "in-progress/approved/pending", actual status: "' + maintenance.status + '"');
+                                // 상태가 완료되지 않은 경우 정보 표시
                                 return `
                                     <div style="padding: 10px; background: #f8f9fa; border-radius: 8px; color: #666; text-align: center;">
-                                        상태: ${maintenance.status} (진행중인 정비만 수정/완료 가능)
+                                        상태: ${maintenance.status} (이미 완료된 정비입니다)
                                     </div>
                                 `;
                             }
                         } else {
                             console.log('👤 User view detected');
-                            // 사용자 화면
-                            if (maintenance.status === 'completed') {
+                            // 사용자 화면 - completed 상태에서만 확인/거절 버튼 표시
+                            const status = maintenance.status ? maintenance.status.toLowerCase() : '';
+                            
+                            if (status === 'completed') {
                                 console.log('✅ Completed status - showing approve/reject buttons');
                                 // 완료됨: 확인/거절 버튼
                                 return `
@@ -3174,14 +3182,9 @@ function showMaintenanceDetailModal(maintenance) {
                                     </button>
                                 `;
                             } else {
-                                console.log('❌ Status not completed, no user buttons shown. Current status:', maintenance.status);
-                                console.log('❌ Expected status: "completed", actual status: "' + maintenance.status + '"');
-                                // 상태 정보 표시
-                                return `
-                                    <div style="padding: 10px; background: #f8f9fa; border-radius: 8px; color: #666; text-align: center;">
-                                        상태: ${maintenance.status} (완료된 정비만 확인/거절 가능)
-                                    </div>
-                                `;
+                                console.log('👤 User - no buttons needed for status:', maintenance.status);
+                                // 사용자에게는 다른 상태에서 아무것도 표시하지 않음
+                                return '';
                             }
                         }
                         console.log('🚫 No buttons to show');
@@ -3270,9 +3273,12 @@ async function editMaintenance(maintenanceId) {
         
         const maintenance = maintenanceDoc.data();
         
-        // 진행중 상태만 수정 가능
-        if (maintenance.status !== 'in-progress') {
-            showNotification('진행중인 정비만 수정할 수 있습니다.', 'error');
+        // 진행중/승인됨/대기중 상태만 수정 가능
+        const status = maintenance.status ? maintenance.status.toLowerCase() : '';
+        const isEditable = status === 'in-progress' || status === 'approved' || status === 'pending';
+        
+        if (!isEditable) {
+            showNotification('진행중/승인된 정비만 수정할 수 있습니다.', 'error');
             return;
         }
         
