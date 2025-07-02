@@ -3907,7 +3907,14 @@ function showEstimateModal() {
     
     const modalHTML = `
         <div id="estimateModal" class="modal-overlay active">
-                         <div class="modal-container" style="max-width: min(700px, 95vw); max-height: 90vh; margin: 20px;">
+                         <div class="modal-container" style="
+                max-width: min(700px, 95vw); 
+                max-height: 85vh; 
+                margin: 10px auto;
+                display: flex;
+                flex-direction: column;
+                position: relative;
+            ">
                 <div class="modal-header">
                     <h2 class="modal-title">
                         <i class="fas fa-file-invoice-dollar"></i> 견적서 생성
@@ -3917,7 +3924,12 @@ function showEstimateModal() {
                     </button>
                 </div>
                 
-                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div class="modal-body" style="
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 20px;
+                    min-height: 0;
+                ">
                     <form id="estimateForm">
                         <!-- 기본 정보 -->
                         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
@@ -4015,12 +4027,37 @@ function showEstimateModal() {
                     </form>
                 </div>
                 
-                                 <div class="modal-footer" style="padding: 20px; border-top: 1px solid #e5e5e5; display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
-                     <button class="btn btn-secondary" onclick="closeEstimateModal()" style="flex: 0 1 auto; min-width: 100px;">
+                                 <div class="modal-footer" style="
+                     padding: 15px 20px; 
+                     border-top: 1px solid #e5e5e5; 
+                     display: flex; 
+                     gap: 10px; 
+                     flex-wrap: wrap; 
+                     justify-content: space-between;
+                     position: sticky;
+                     bottom: 0;
+                     background: white;
+                     z-index: 10;
+                 ">
+                     <button class="btn btn-secondary" onclick="closeEstimateModal()" style="
+                         flex: 1; 
+                         min-width: 90px;
+                         max-width: 110px;
+                         padding: 12px 8px;
+                         font-size: 13px;
+                     ">
                          <i class="fas fa-times"></i> 취소
                      </button>
-                     <button class="btn btn-primary" onclick="generateEstimatePDF()" style="flex: 0 1 auto; min-width: 150px;">
-                         <i class="fas fa-file-pdf"></i> PDF 견적서 생성
+                     <button class="btn btn-primary" onclick="generateEstimatePDF()" style="
+                         flex: 2; 
+                         min-width: 140px;
+                         padding: 12px 8px;
+                         font-size: 13px;
+                         white-space: nowrap;
+                         text-overflow: ellipsis;
+                         overflow: hidden;
+                     ">
+                         <i class="fas fa-file-pdf"></i> 견적서 생성
                      </button>
                  </div>
             </div>
