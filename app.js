@@ -334,7 +334,7 @@ async function handleLogout() {
         showNotification('로그아웃되었습니다.', 'info');
         
         // 로그인 화면으로 강제 이동
-        showScreen('auth');
+        showScreen('loginScreen');
         
     } catch (error) {
         console.error('❌ Logout error:', error);
@@ -4409,21 +4409,9 @@ async function generateEstimatePDF() {
         
         showNotification('PDF 견적서를 생성하는 중...', 'info');
         
-        // 현재 관리자 이름 가져오기 (강제 업데이트 v2)
-        const currentUser = auth.currentUser;
-        const userEmail = currentUser ? currentUser.email.toLowerCase() : '';
-        let currentManagerName = '정비사';
-        
-        if (userEmail.includes('admin2')) {
-            currentManagerName = '황태훈';
-            console.log('✅ ADMIN2 감지 → 황태훈 확정!');
-        } else if (userEmail.includes('admin1')) {
-            currentManagerName = '이정훈';
-            console.log('✅ ADMIN1 감지 → 이정훈 확정!');
-        }
-        
-        console.log('🚀 이메일:', userEmail);
-        console.log('🚀 최종 관리자 이름:', currentManagerName);
+        // 현재 로그인한 관리자 이름 가져오기
+        let currentManagerName = getCurrentManagerSignature();
+        console.log('🚀 현재 관리자 이름:', currentManagerName);
         
         // 🎨 HTML 견적서 템플릿 생성
         const estimateHTML = createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel, bikeYear, mileage, currentManagerName);
@@ -4506,17 +4494,18 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                     <div style="
                         width: 50px; 
                         height: 50px; 
-                        background: rgba(255,255,255,0.2);
+                        background: rgba(255,255,255,0.3);
                         border-radius: 50%;
                         display: flex;
                         align-items: center;
                         justify-content: center;
                         overflow: hidden;
+                        border: 2px solid rgba(255,255,255,0.5);
                     ">
-                        <svg width="40" height="40" viewBox="0 0 40 40" style="background: rgba(255,255,255,0.1); border-radius: 50%;">
-                            <circle cx="20" cy="20" r="18" fill="#667eea" stroke="white" stroke-width="1"/>
-                            <text x="20" y="16" text-anchor="middle" fill="white" font-size="8" font-weight="bold" font-family="Arial">TW</text>
-                            <text x="20" y="28" text-anchor="middle" fill="white" font-size="6" font-weight="bold" font-family="Arial">GARAGE</text>
+                        <svg width="30" height="30" viewBox="0 0 100 100" style="fill: white;">
+                            <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.2)" stroke="white" stroke-width="2"/>
+                            <text x="50" y="38" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">TW</text>
+                            <text x="50" y="58" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial">GARAGE</text>
                         </svg>
                     </div>
                     <div>
@@ -4545,21 +4534,35 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                     <!-- 왼쪽: 고객 정보 -->
                     <div>
                         <h4 style="margin: 0 0 10px 0; color: #333; font-size: 14px; font-weight: bold; border-bottom: 1px solid #667eea; padding-bottom: 4px;">고객 정보</h4>
-                        <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 15px; align-items: center;">
-                            <span style="font-weight: 600; color: #666;">고객명:</span>
-                            <span style="color: #333;">${customerName}</span>
-                            
+                        
+                        <!-- 첫 번째 줄: 고객명 + 기종 -->
+                        <div style="display: flex; gap: 20px; margin-bottom: 8px; align-items: center;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span style="font-weight: 600; color: #666;">고객명:</span>
+                                <span style="color: #333;">${customerName}</span>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span style="font-weight: 600; color: #666;">기종:</span>
+                                <span style="color: #333;">${bikeModel || '-'}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 두 번째 줄: 차량번호 -->
+                        <div style="margin-bottom: 8px;">
                             <span style="font-weight: 600; color: #666;">차량번호:</span>
-                            <span style="color: #333;">${carNumber}</span>
-                            
-                            <span style="font-weight: 600; color: #666;">기종:</span>
-                            <span style="color: #333;">${bikeModel || '-'}</span>
-                            
-                            <span style="font-weight: 600; color: #666;">년식:</span>
-                            <span style="color: #333;">${bikeYear || '-'}</span>
-                            
-                            <span style="font-weight: 600; color: #666;">키로수:</span>
-                            <span style="color: #333;">${mileage || '-'}</span>
+                            <span style="color: #333; margin-left: 8px;">${carNumber}</span>
+                        </div>
+                        
+                        <!-- 세 번째 줄: 년식 + 키로수 -->
+                        <div style="display: flex; gap: 20px; align-items: center;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span style="font-weight: 600; color: #666;">년식:</span>
+                                <span style="color: #333;">${bikeYear || '-'}</span>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span style="font-weight: 600; color: #666;">키로수:</span>
+                                <span style="color: #333;">${mileage || '-'}</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -4722,20 +4725,45 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
             <!-- 📞 푸터 - 편지 스타일 -->
             <div style="
                 margin-top: 15px;
-                padding: 10px;
+                padding: 15px;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
                 border-radius: 6px;
                 text-align: center;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             ">
-                <div style="margin-bottom: 6px;">
-                    <span style="font-size: 13px; font-weight: bold;">TWOHOONS GARAGE</span>
-                    <span style="margin: 0 8px; opacity: 0.7;">|</span>
-                    <span style="font-size: 11px; opacity: 0.9;">이륜차 정비 서비스</span>
-                </div>
-                <div style="font-size: 11px; opacity: 0.8;">
-                    견적서 생성일: ${new Date().toLocaleString('ko-KR')}
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <!-- 왼쪽: 회사 정보 -->
+                    <div style="flex: 1; text-align: left;">
+                        <div style="margin-bottom: 6px;">
+                            <span style="font-size: 13px; font-weight: bold;">TWOHOONS GARAGE</span>
+                            <span style="margin: 0 8px; opacity: 0.7;">|</span>
+                            <span style="font-size: 11px; opacity: 0.9;">이륜차 정비 서비스</span>
+                        </div>
+                        <div style="font-size: 11px; opacity: 0.8;">
+                            견적서 생성일: ${new Date().toLocaleString('ko-KR')}
+                        </div>
+                    </div>
+                    
+                    <!-- 오른쪽: QR 코드 -->
+                    <div style="flex: 0 0 auto; text-align: center;">
+                        <div id="qrcode-container" style="
+                            width: 80px;
+                            height: 80px;
+                            background: white;
+                            border-radius: 8px;
+                            padding: 8px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin-bottom: 8px;
+                        ">
+                            <!-- QR 코드가 여기에 동적으로 추가됩니다 -->
+                        </div>
+                        <div style="font-size: 10px; opacity: 0.9; font-weight: 500;">
+                            사이트 접속
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -4745,6 +4773,8 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
 // 🎨 HTML을 PDF로 변환
 async function generatePDFFromHTML(htmlContent, customerName, carNumber) {
     try {
+        console.log('📄 PDF 생성 시작...');
+        
         // 임시 div 생성
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = htmlContent;
@@ -4754,15 +4784,120 @@ async function generatePDFFromHTML(htmlContent, customerName, carNumber) {
         tempDiv.style.background = 'white';
         document.body.appendChild(tempDiv);
         
-        // 잠시 대기 (DOM 렌더링 완료 대기)
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // QR 코드 생성 및 추가
+        const qrContainer = tempDiv.querySelector('#qrcode-container');
+        console.log('🔍 QR 컨테이너 찾기:', qrContainer ? '성공' : '실패');
+        
+        if (qrContainer) {
+            try {
+                const siteUrl = 'https://leejh5004.github.io/hoons'; // 사이트 URL
+                console.log('🔗 QR 코드 URL:', siteUrl);
+                
+                // QR 코드를 Canvas로 직접 생성 (html2canvas 호환)
+                const qrImageUrl = generateSimpleQRCode();
+                console.log('📱 QR 이미지 URL:', qrImageUrl);
+                
+                // 임시 이미지로 QR 코드 로드
+                const tempImg = new Image();
+                tempImg.crossOrigin = 'anonymous';
+                
+                // QR 코드를 Canvas로 변환
+                const qrCanvas = document.createElement('canvas');
+                qrCanvas.width = 64;
+                qrCanvas.height = 64;
+                qrCanvas.style.width = '64px';
+                qrCanvas.style.height = '64px';
+                qrCanvas.style.display = 'block';
+                
+                const ctx = qrCanvas.getContext('2d');
+                
+                // 이미지 로딩 완료를 기다리고 Canvas에 그리기
+                await new Promise((resolve) => {
+                    tempImg.onload = () => {
+                        console.log('✅ QR 코드 이미지 로드 성공');
+                        // Canvas에 QR 코드 그리기
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, 64, 64);
+                        ctx.drawImage(tempImg, 0, 0, 64, 64);
+                        resolve();
+                    };
+                    tempImg.onerror = () => {
+                        console.log('⚠️ QR 코드 이미지 로드 실패, 기본 패턴 생성');
+                        // 실패시 간단한 패턴 생성
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, 64, 64);
+                        ctx.fillStyle = 'black';
+                        
+                        // 간단한 QR 코드 패턴 그리기
+                        for(let i = 0; i < 8; i++) {
+                            for(let j = 0; j < 8; j++) {
+                                if((i + j) % 2 === 0) {
+                                    ctx.fillRect(i * 8, j * 8, 8, 8);
+                                }
+                            }
+                        }
+                        
+                        // 가운데에 텍스트
+                        ctx.fillStyle = 'white';
+                        ctx.font = '8px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('QR', 32, 30);
+                        ctx.fillText('CODE', 32, 42);
+                        
+                        resolve();
+                    };
+                    
+                    // 2초 후 무조건 진행
+                    setTimeout(() => {
+                        console.log('⏰ QR 코드 로딩 타임아웃, 기본 패턴 생성');
+                        // 기본 패턴 생성
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, 64, 64);
+                        ctx.fillStyle = 'black';
+                        ctx.font = '10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('TWOHOONS', 32, 25);
+                        ctx.fillText('GARAGE', 32, 40);
+                        resolve();
+                    }, 2000);
+                    
+                    // 이미지 로드 시작
+                    tempImg.src = qrImageUrl;
+                });
+                
+                qrContainer.appendChild(qrCanvas);
+                console.log('✅ QR 코드 Canvas 추가 완료');
+                
+            } catch (error) {
+                console.error('❌ QR 코드 생성 실패:', error);
+                // 오류 시 대체 텍스트 표시
+                qrContainer.innerHTML = `
+                    <div style="
+                        font-size: 10px; 
+                        text-align: center; 
+                        color: #333;
+                        padding: 5px;
+                        line-height: 1.2;
+                    ">
+                        <div style="font-weight: bold; margin-bottom: 2px;">🔗 QR 코드</div>
+                        <div style="font-size: 8px;">사이트 접속</div>
+                        <div style="font-size: 8px; margin-top: 2px; word-break: break-all;">leejh5004.github.io/hoons</div>
+                    </div>
+                `;
+            }
+        }
+        
+        // 잠시 대기 (DOM 렌더링 및 QR 코드 생성 완료 대기)
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // html2canvas로 이미지 생성
         const canvas = await html2canvas(tempDiv.firstElementChild, {
             scale: 2,
             backgroundColor: '#ffffff',
             width: 794,
-            height: null
+            height: null,
+            allowTaint: true,
+            useCORS: true
         });
         
         // 임시 div 제거
@@ -4856,3 +4991,17 @@ async function debugPhotoIssue() {
 
 // 전역에서 접근 가능하도록 설정
 window.debugPhotoIssue = debugPhotoIssue;
+
+// 📱 QR 코드 생성 함수 (사이트 접속용)
+function generateSimpleQRCode() {
+    // TWOHOONS GARAGE 사이트 QR 코드 - qr-server API 사용 (CORS 없음)
+    const siteUrl = 'https://leejh5004.github.io/hoons';
+    
+    // QR Server API를 사용한 QR 코드 생성
+    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&format=png&data=${encodeURIComponent(siteUrl)}`;
+    
+    return qrApiUrl;
+}
+
+// 전역에서 접근 가능하도록 설정
+window.generateSimpleQRCode = generateSimpleQRCode;
