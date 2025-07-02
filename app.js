@@ -4142,8 +4142,24 @@ async function generateEstimatePDF() {
         
         showNotification('PDF 견적서를 생성하는 중...', 'info');
         
+        // 현재 관리자 이름 가져오기 (강제 업데이트 v2)
+        const currentUser = auth.currentUser;
+        const userEmail = currentUser ? currentUser.email.toLowerCase() : '';
+        let currentManagerName = '정비사';
+        
+        if (userEmail.includes('admin2')) {
+            currentManagerName = '황태훈';
+            console.log('✅ ADMIN2 감지 → 황태훈 확정!');
+        } else if (userEmail.includes('admin1')) {
+            currentManagerName = '이정훈';
+            console.log('✅ ADMIN1 감지 → 이정훈 확정!');
+        }
+        
+        console.log('🚀 이메일:', userEmail);
+        console.log('🚀 최종 관리자 이름:', currentManagerName);
+        
         // 🎨 HTML 견적서 템플릿 생성
-        const estimateHTML = createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel, bikeYear, mileage);
+        const estimateHTML = createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel, bikeYear, mileage, currentManagerName);
         
                 // HTML을 이미지로 변환 후 PDF 생성
         await generatePDFFromHTML(estimateHTML, customerName, carNumber);
@@ -4162,25 +4178,37 @@ window.removeEstimateItem = removeEstimateItem;
 window.calculateTotal = calculateTotal;
 window.generateEstimatePDF = generateEstimatePDF;
 
-// 🔧 현재 관리자 서명 이름 가져오기
+// 🔧 현재 관리자 서명 이름 가져오기 (v2)
 function getCurrentManagerSignature() {
     const currentUser = auth.currentUser;
     if (!currentUser) return '정비사';
     
-    const email = currentUser.email;
+    const email = currentUser.email.toLowerCase(); // 소문자로 변환
+    console.log('🔍 현재 로그인 이메일:', currentUser.email);
+    console.log('🔍 소문자 변환:', email);
     
-    // 이메일에 따라 실제 이름으로 서명 결정
-    if (email.includes('taehun') || email.includes('태훈')) {
-        return '태훈';
-    } else if (email.includes('admin1') || email.includes('lee') || email.includes('이')) {
-        return '이정훈'; // admin1도 이정훈으로 매핑
+    // 이메일에 따라 실제 이름으로 서명 결정 (대소문자 구분 없이)
+    if (email.includes('admin2')) {
+        console.log('✅ admin2 감지 → 황태훈');
+        return '황태훈'; // admin2는 황태훈
+    } else if (email.includes('admin1')) {
+        console.log('✅ admin1 감지 → 이정훈');
+        return '이정훈'; // admin1은 이정훈
+    } else if (email.includes('taehun') || email.includes('태훈')) {
+        console.log('✅ taehun 감지 → 황태훈');
+        return '황태훈'; // 태훈 관련
+    } else if (email.includes('lee') || email.includes('이')) {
+        console.log('✅ lee 감지 → 이정훈');
+        return '이정훈'; // 이정훈 관련
     } else {
-        return '이정훈'; // 기본값을 이정훈으로 설정
+        console.log('❌ 매칭 실패 → 정비사');
+        return '정비사'; // 기본값
     }
 }
 
+
 // 🎨 HTML 견적서 템플릿 생성
-function createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel = '', bikeYear = '', mileage = '') {
+function createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel = '', bikeYear = '', mileage = '', managerName = '정비사') {
     const currentDate = new Date().toLocaleDateString('ko-KR');
     
     return `
@@ -4208,7 +4236,22 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                 align-items: center;
             ">
                 <div style="display: flex; align-items: center; gap: 15px;">
-                    <img src="logo.png" alt="TWOHOONS" style="width: 50px; height: 50px; object-fit: contain;">
+                    <div style="
+                        width: 50px; 
+                        height: 50px; 
+                        background: rgba(255,255,255,0.2);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        overflow: hidden;
+                    ">
+                        <svg width="40" height="40" viewBox="0 0 40 40" style="background: rgba(255,255,255,0.1); border-radius: 50%;">
+                            <circle cx="20" cy="20" r="18" fill="#667eea" stroke="white" stroke-width="1"/>
+                            <text x="20" y="16" text-anchor="middle" fill="white" font-size="8" font-weight="bold" font-family="Arial">TW</text>
+                            <text x="20" y="28" text-anchor="middle" fill="white" font-size="6" font-weight="bold" font-family="Arial">GARAGE</text>
+                        </svg>
+                    </div>
                     <div>
                         <h1 style="margin: 0; font-size: 28px; font-weight: bold;">TWOHOONS GARAGE</h1>
                         <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">이륜차 정비소</p>
@@ -4403,7 +4446,7 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                             font-weight: bold;
                             font-size: 14px;
                             color: #333;
-                        ">${getCurrentManagerSignature()}</div>
+                        ">${managerName}</div>
                         <p style="margin: 5px 0 0 0; font-size: 11px; color: #666;">TWOHOONS GARAGE</p>
                     </div>
                 </div>
@@ -4444,29 +4487,15 @@ async function generatePDFFromHTML(htmlContent, customerName, carNumber) {
         tempDiv.style.background = 'white';
         document.body.appendChild(tempDiv);
         
-        // 로고 이미지 로딩 대기
-        const logoImg = tempDiv.querySelector('img');
-        if (logoImg) {
-            await new Promise((resolve) => {
-                if (logoImg.complete) {
-                    resolve();
-                } else {
-                    logoImg.onload = resolve;
-                    logoImg.onerror = resolve; // 로고 로딩 실패해도 계속 진행
-                }
-            });
-        }
+        // 잠시 대기 (DOM 렌더링 완료 대기)
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         // html2canvas로 이미지 생성
         const canvas = await html2canvas(tempDiv.firstElementChild, {
-            scale: 2, // 고해상도
-            useCORS: true,
-            allowTaint: true,
+            scale: 2,
             backgroundColor: '#ffffff',
             width: 794,
-            height: null, // 자동 높이
-            scrollX: 0,
-            scrollY: 0
+            height: null
         });
         
         // 임시 div 제거
