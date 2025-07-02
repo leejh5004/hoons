@@ -1721,4 +1721,94 @@ body {
     .list-row {
         padding: 12px;
     }
+}
+
+/* ==============================================
+   사진 보존 기간 안내 스타일
+   ============================================== */
+
+.photo-retention-notice {
+    background: rgba(52, 152, 219, 0.1);
+    border: 1px solid rgba(52, 152, 219, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 16px;
+    text-align: center;
+    color: #3498db;
+    transition: all var(--transition-fast);
+}
+
+.photo-retention-notice:hover {
+    background: rgba(52, 152, 219, 0.15);
+    transform: translateY(-1px);
+}
+
+.photo-retention-notice i {
+    margin-right: 8px;
+    font-size: 14px;
+}
+
+.photo-retention-notice small {
+    font-size: 13px;
+    font-weight: 500;
+    display: block;
+}
+
+/* Dark theme support */
+[data-theme="dark"] .photo-retention-notice {
+    background: rgba(52, 152, 219, 0.15);
+    border-color: rgba(52, 152, 219, 0.4);
+    color: #5dade2;
+}
+
+[data-theme="dark"] .photo-retention-notice:hover {
+    background: rgba(52, 152, 219, 0.2);
+}
+
+/* ==============================================
+   사진 삭제 경고 애니메이션
+   ============================================== */
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.02);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* 삭제 임박 경고 스타일 */
+.days-warning {
+    color: #ff6b35;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+.days-normal {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.days-expired {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* 슬라이드 인 애니메이션 */
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 } 

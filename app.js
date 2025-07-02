@@ -13,6 +13,12 @@ let currentStep = 1;
 let currentTheme = 'light';
 let currentViewMode = 'card'; // 'card' or 'list'
 
+// 📸 사진 보존 기간 설정 (30일)
+const PHOTO_RETENTION_DAYS = 30;
+
+// 📅 삭제 경고 기간 설정 (5일 전부터 경고)
+const DELETE_WARNING_DAYS = 5;
+
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 TWOHOONS GARAGE - Starting application...');
@@ -37,6 +43,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Check authentication state
     firebase.auth().onAuthStateChanged(handleAuthStateChange);
+    
+    // 📸 사진 정리 시스템 시작 (5초 후 실행 - 앱 로딩 완료 후)
+    setTimeout(() => {
+        schedulePhotoCleanup();
+        checkPhotoWarnings(); // 삭제 임박 사진 경고 체크
+    }, 5000);
     
     console.log('✅ Application initialized successfully');
 });
@@ -433,6 +445,13 @@ function showProfileOptions() {
             text: '오토바이 번호 수정', 
             action: () => showCarNumberModal(), 
             icon: 'fas fa-motorcycle' 
+        });
+    } else {
+        // 관리자 전용 메뉴
+        options.unshift({ 
+            text: '오래된 사진 정리', 
+            action: () => manualPhotoCleanup(), 
+            icon: 'fas fa-broom' 
         });
     }
     
@@ -836,8 +855,8 @@ function createMaintenanceNotification(maintenanceId, status, maintenanceType = 
     
     switch (status) {
         case 'approved':
-            title = '정비 승인됨';
-            message = `${maintenanceType} 정비가 승인되었습니다.`;
+            title = '정비 확인됨';
+            message = `${maintenanceType} 정비가 확인되었습니다.`;
             type = 'success';
             break;
         case 'rejected':
@@ -952,6 +971,14 @@ function showContextMenu(options) {
 async function loadDashboardData() {
     console.log('📊 Loading dashboard data...');
     
+    // 🔒 로그인 상태 체크 - 보안 강화
+    if (!currentUser) {
+        console.log('🚫 Not logged in - redirecting to auth screen');
+        showNotification('로그인이 필요합니다.', 'error');
+        showScreen('auth');
+        return;
+    }
+    
     try {
         // Show loading
         showLoadingSpinner(true);
@@ -976,6 +1003,12 @@ async function loadDashboardData() {
 
 async function updateTodayStats() {
     try {
+        // 🔒 로그인 상태 체크
+        if (!currentUser) {
+            updateStatCard('todayCount', 0);
+            return;
+        }
+        
         const today = new Date().toISOString().split('T')[0];
         let query = db.collection('maintenance').where('date', '==', today);
         
@@ -992,11 +1025,18 @@ async function updateTodayStats() {
         
     } catch (error) {
         console.error('❌ Error updating today stats:', error);
+        updateStatCard('todayCount', 0);
     }
 }
 
 async function updatePendingStats() {
     try {
+        // 🔒 로그인 상태 체크
+        if (!currentUser) {
+            updateStatCard('pendingCount', 0);
+            return;
+        }
+        
         let query = db.collection('maintenance').where('status', '==', 'pending');
         
         if (isAdmin) {
@@ -1012,11 +1052,18 @@ async function updatePendingStats() {
         
     } catch (error) {
         console.error('❌ Error updating pending stats:', error);
+        updateStatCard('pendingCount', 0);
     }
 }
 
 async function updateMonthStats() {
     try {
+        // 🔒 로그인 상태 체크
+        if (!currentUser) {
+            updateStatCard('monthCount', 0);
+            return;
+        }
+        
         // 단순한 쿼리로 변경 - 인덱스 오류 방지
         let query = db.collection('maintenance');
         
@@ -1056,6 +1103,12 @@ async function updateMonthStats() {
 
 async function updateAverageStats() {
     try {
+        // 🔒 로그인 상태 체크
+        if (!currentUser) {
+            updateStatCard('averageDays', '-');
+            return;
+        }
+        
         // 단순한 쿼리로 변경 - 인덱스 오류 방지
         let query = db.collection('maintenance');
         
@@ -1128,6 +1181,17 @@ async function loadMaintenanceTimeline(searchTerm = '') {
     console.log('📋 Loading maintenance timeline...');
     console.log('👤 Current user:', currentUser);
     console.log('🔧 Is admin:', isAdmin);
+    
+    // 🔒 로그인 상태 체크 - 보안 강화
+    if (!currentUser) {
+        console.log('🚫 Not logged in - clearing timeline');
+        const timelineContent = document.getElementById('timelineContent');
+        if (timelineContent) {
+            timelineContent.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">로그인 후 정비 이력을 확인하세요</div>';
+        }
+        showLoadingSpinner(false);
+        return;
+    }
     
     // 로딩 스피너 표시
     showLoadingSpinner(true);
@@ -1411,10 +1475,45 @@ function renderCardView(maintenances) {
         
         const gradient = gradients[index % gradients.length];
         
+        // 📸 사진이 있는 경우 삭제까지 남은 일수 계산
+        const hasPhotos = maintenance.beforePhoto || maintenance.duringPhoto || maintenance.afterPhoto;
+        let photoDeleteInfo = '';
+        
+        if (hasPhotos && maintenance.createdAt) {
+            const deleteInfo = getDaysUntilDeletion(maintenance.createdAt);
+            if (deleteInfo) {
+                if (deleteInfo.isExpired) {
+                    photoDeleteInfo = `
+                        <div style="background: rgba(220, 53, 69, 0.9); padding: 8px; border-radius: 6px; margin: 10px 0; font-size: 13px; font-weight: bold;">
+                            📸 사진이 삭제되었습니다
+                        </div>
+                    `;
+                } else if (deleteInfo.isWarning) {
+                    photoDeleteInfo = `
+                        <div style="background: rgba(255, 193, 7, 0.9); color: #000; padding: 8px; border-radius: 6px; margin: 10px 0; font-size: 13px; font-weight: bold; animation: pulse 2s infinite;">
+                            ⚠️ 📸 사진 삭제 임박: D-${deleteInfo.daysLeft}
+                            <br><small>📅 ${deleteInfo.deletionDate.toLocaleDateString('ko-KR')} 삭제 예정</small>
+                        </div>
+                    `;
+                } else {
+                    photoDeleteInfo = `
+                        <div style="background: rgba(0, 123, 255, 0.8); padding: 8px; border-radius: 6px; margin: 10px 0; font-size: 13px;">
+                            📸 사진 보존: D-${deleteInfo.daysLeft}
+                            <br><small>📅 ${deleteInfo.deletionDate.toLocaleDateString('ko-KR')} 삭제 예정</small>
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        // 📸 사진 개수 계산
+        const photoCount = [maintenance.beforePhoto, maintenance.duringPhoto, maintenance.afterPhoto].filter(photo => photo).length;
+        const photoIndicator = photoCount > 0 ? ` <span style="background: rgba(255,255,255,0.3); padding: 2px 6px; border-radius: 12px; font-size: 12px; margin-left: 8px;">📸${photoCount}</span>` : '';
+        
         return `
             <div class="maintenance-card-view" style="background: ${gradient}; color: white; padding: 25px; margin: 15px 0; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); cursor: pointer;" onclick="showMaintenanceDetail('${maintenance.id}')">
                 <h3 style="margin: 0 0 15px 0; font-size: 20px;">
-                    ${typeIcon} ${maintenance.type || '정비'}
+                    ${typeIcon} ${maintenance.type || '정비'}${photoIndicator}
                 </h3>
                 <p style="margin: 5px 0; opacity: 0.9;">
                     📅 ${maintenance.date || '날짜 없음'}
@@ -1427,6 +1526,7 @@ function renderCardView(maintenances) {
                 </p>
                 ${maintenance.mileage ? `<p style="margin: 5px 0; opacity: 0.9;">📏 주행거리: ${maintenance.mileage}km</p>` : ''}
                 ${(maintenance.status === 'approved' || maintenance.status === 'rejected') && maintenance.adminName ? `<p style="margin: 5px 0; opacity: 0.9;">👨‍💼 관리자: ${maintenance.adminName}</p>` : ''}
+                ${photoDeleteInfo}
                 <p style="margin: 15px 0 0 0; line-height: 1.5;">
                     ${(maintenance.description || '설명이 없습니다.').substring(0, 100)}${(maintenance.description || '').length > 100 ? '...' : ''}
                 </p>
@@ -1465,11 +1565,43 @@ function renderListView(maintenances) {
                 const statusColor = statusColors[maintenance.status] || '#6c757d';
                 const typeIcon = typeIcons[maintenance.type] || '🔧';
                 
+                // 📸 사진 정보 및 삭제 카운터
+                        // 🔄 신규/기존 방식 모두 지원하는 사진 개수 계산
+        let photoCount = 0;
+        let hasPhotos = false;
+        
+        if (maintenance.photos && maintenance.photos.length > 0) {
+            // 신규 방식: photos 배열
+            photoCount = maintenance.photos.length;
+            hasPhotos = true;
+        } else {
+            // 기존 방식: 개별 필드
+            const photos = [maintenance.beforePhoto, maintenance.duringPhoto, maintenance.afterPhoto].filter(photo => photo);
+            photoCount = photos.length;
+            hasPhotos = photoCount > 0;
+        }
+                let photoInfo = '';
+                
+                if (hasPhotos && maintenance.createdAt) {
+                    const deleteInfo = getDaysUntilDeletion(maintenance.createdAt);
+                    if (deleteInfo) {
+                        if (deleteInfo.isExpired) {
+                            photoInfo = ` <span style="color: #dc3545; font-size: 11px; font-weight: bold;">📸삭제됨</span>`;
+                        } else if (deleteInfo.isWarning) {
+                            photoInfo = ` <span style="color: #ff6b35; font-size: 11px; font-weight: bold; animation: pulse 2s infinite;">📸D-${deleteInfo.daysLeft}</span>`;
+                        } else {
+                            photoInfo = ` <span style="color: #28a745; font-size: 11px; font-weight: 600;">📸${photoCount}</span>`;
+                        }
+                    }
+                } else if (photoCount > 0) {
+                    photoInfo = ` <span style="color: #6c757d; font-size: 11px;">📸${photoCount}</span>`;
+                }
+                
                 return `
                     <div class="list-row ${index % 2 === 0 ? 'even' : 'odd'}" onclick="showMaintenanceDetail('${maintenance.id}')">
                         <div class="list-col-type">
                             <span class="type-icon">${typeIcon}</span>
-                            ${maintenance.type || '정비'}
+                            ${maintenance.type || '정비'}${photoInfo}
                         </div>
                         <div class="list-col-date">
                             ${maintenance.date || '날짜 없음'}
@@ -1752,6 +1884,13 @@ async function handleMaintenanceSubmit(e) {
             }
             
             showNotification('정비 이력이 성공적으로 등록되었습니다!', 'success');
+        
+        // 사진이 있을 경우 보존 기간 안내
+        if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
+            setTimeout(() => {
+                showNotification(`📸 등록된 사진은 ${PHOTO_RETENTION_DAYS}일 후 자동 삭제됩니다.`, 'info');
+            }, 2000);
+        }
         }
         
         closeMaintenanceModal();
@@ -1979,7 +2118,7 @@ async function createMaintenanceCard(maintenance) {
     const rejectedClass = maintenance.status === 'rejected' ? '' : ' badge-inactive';
     const pendingClass = maintenance.status === 'pending' ? '' : ' badge-inactive';
 
-    // 도장(관리자 이름) 노출 조건: 승인/거절 상태일 때만
+            // 도장(관리자 이름) 노출 조건: 확인/거절 상태일 때만
     const showAdminSeal = maintenance.status === 'approved' || maintenance.status === 'rejected';
 
     card.innerHTML = `
@@ -2008,7 +2147,7 @@ async function createMaintenanceCard(maintenance) {
             ` : ''}
             ${!isAdmin && maintenance.status === 'pending' ? `
                 <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'approved')">
-                    <i class="fas fa-check"></i> 승인
+                                            <i class="fas fa-check"></i> 확인
                 </button>
                 <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'rejected')">
                     <i class="fas fa-times"></i> 거절
@@ -2023,6 +2162,12 @@ async function createMaintenanceCard(maintenance) {
 async function loadMaintenanceHistory(search = '') {
     const maintenanceItems = document.getElementById('maintenanceItems');
     if (!maintenanceItems) return;
+
+    // 🔒 로그인 상태 체크 - 보안 강화
+    if (!currentUser) {
+        maintenanceItems.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">로그인 후 정비 이력을 확인하세요</div>';
+        return;
+    }
 
     maintenanceItems.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> 로딩중...</div>';
 
@@ -2105,7 +2250,7 @@ async function completeMaintenanceWork(maintenanceId) {
         const maintenanceDoc = await db.collection('maintenance').doc(maintenanceId).get();
         const maintenanceData = maintenanceDoc.data();
         
-        // 상태를 "완료됨"으로 업데이트 (사용자 승인 대기)
+        // 상태를 "완료됨"으로 업데이트 (사용자 확인 대기)
         await db.collection('maintenance').doc(maintenanceId).update({
             status: 'completed',
             completedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2113,7 +2258,7 @@ async function completeMaintenanceWork(maintenanceId) {
         });
         
         console.log('✅ Maintenance marked as completed');
-        showNotification('정비 작업이 완료되었습니다. 사용자 승인을 기다립니다.', 'success');
+        showNotification('정비 작업이 완료되었습니다. 사용자 확인을 기다립니다.', 'success');
         
         // 해당 차량번호의 사용자에게 알림
         if (maintenanceData && maintenanceData.carNumber) {
@@ -2128,7 +2273,7 @@ async function completeMaintenanceWork(maintenanceId) {
                 // 사용자에게 정비 완료 알림
                 const notification = {
                     title: '정비 작업 완료',
-                    message: `${maintenanceData.type || '정비'} 작업이 완료되었습니다. 승인/거절을 선택해주세요.`,
+                    message: `${maintenanceData.type || '정비'} 작업이 완료되었습니다. 확인/거절을 선택해주세요.`,
                     type: 'info',
                     read: false,
                     userId: userId,
@@ -2149,7 +2294,7 @@ async function completeMaintenanceWork(maintenanceId) {
     }
 }
 
-// 정비 상태 업데이트 함수 (사용자용 승인/거절)
+// 정비 상태 업데이트 함수 (사용자용 확인/거절)
 async function updateMaintenanceStatus(maintenanceId, newStatus) {
     if (!currentUser) return;
     
@@ -2160,19 +2305,19 @@ async function updateMaintenanceStatus(maintenanceId, newStatus) {
         const maintenanceDoc = await db.collection('maintenance').doc(maintenanceId).get();
         const maintenanceData = maintenanceDoc.data();
         
-        // 권한 체크: 관리자는 진행중 상태만 완료로 변경 가능, 사용자는 완료된 것만 승인/거절 가능
+        // 권한 체크: 관리자는 진행중 상태만 완료로 변경 가능, 사용자는 완료된 것만 확인/거절 가능
         if (isAdmin && maintenanceData.status === 'in-progress' && newStatus === 'completed') {
             await completeMaintenanceWork(maintenanceId);
             return;
         } else if (!isAdmin && maintenanceData.status === 'completed' && ['approved', 'rejected'].includes(newStatus)) {
-            // 사용자의 승인/거절 처리
+            // 사용자의 확인/거절 처리
             await db.collection('maintenance').doc(maintenanceId).update({
                 status: newStatus,
                 finalizedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 finalizedBy: currentUser.name || '사용자'
             });
             
-            showNotification(`정비를 ${newStatus === 'approved' ? '승인' : '거절'}하였습니다.`, newStatus === 'approved' ? 'success' : 'warning');
+            showNotification(`정비를 ${newStatus === 'approved' ? '확인' : '거절'}하였습니다.`, newStatus === 'approved' ? 'success' : 'warning');
             
             // 관리자에게 알림
             const adminSnapshot = await db.collection('users')
@@ -2184,8 +2329,8 @@ async function updateMaintenanceStatus(maintenanceId, newStatus) {
                 const adminId = adminSnapshot.docs[0].id;
                 
                 const notification = {
-                    title: newStatus === 'approved' ? '정비 승인됨' : '정비 거절됨',
-                    message: `${currentUser.name || '사용자'}가 ${maintenanceData.type || '정비'}를 ${newStatus === 'approved' ? '승인' : '거절'}했습니다.`,
+                    title: newStatus === 'approved' ? '정비 확인됨' : '정비 거절됨',
+                    message: `${currentUser.name || '사용자'}가 ${maintenanceData.type || '정비'}를 ${newStatus === 'approved' ? '확인' : '거절'}했습니다.`,
                     type: newStatus === 'approved' ? 'success' : 'warning',
                     read: false,
                     userId: adminId,
@@ -2329,6 +2474,14 @@ function applyFilter(filter) {
 function loadDashboardData() {
     console.log('📊 Loading dashboard data...');
     
+    // 🔒 로그인 상태 체크 - 보안 강화
+    if (!currentUser) {
+        console.log('🚫 Not logged in - redirecting to auth screen');
+        showNotification('로그인이 필요합니다.', 'error');
+        showScreen('auth');
+        return;
+    }
+    
     // 통계 업데이트
     updateTodayStats();
     updatePendingStats(); 
@@ -2466,7 +2619,7 @@ function getStatusText(status) {
     const statusTexts = {
         'in-progress': '진행중',
         'completed': '완료됨',
-        'approved': '승인됨',
+        'approved': '확인됨',
         'rejected': '거절됨',
         'pending': '대기중'
     };
@@ -2490,7 +2643,7 @@ function getStatusInfo(status) {
     const statusInfo = {
         'in-progress': { icon: 'fas fa-cog fa-spin', text: '진행중', class: 'primary', color: '#3498db' },
         'completed': { icon: 'fas fa-check', text: '완료됨', class: 'info', color: '#17a2b8' },
-        'approved': { icon: 'fas fa-check-double', text: '승인됨', class: 'success', color: '#27ae60' },
+        'approved': { icon: 'fas fa-check-double', text: '확인됨', class: 'success', color: '#27ae60' },
         'rejected': { icon: 'fas fa-times', text: '거절됨', class: 'danger', color: '#e74c3c' },
         'pending': { icon: 'fas fa-clock', text: '대기중', class: 'warning', color: '#f39c12' }
     };
@@ -2730,12 +2883,15 @@ async function uploadMaintenancePhotos(maintenanceId) {
                         type,
                         url: result.data.url,
                         thumbnailUrl: result.data.thumb ? result.data.thumb.url : result.data.url,
+                        deleteUrl: result.data.delete_url, // 🗑️ 삭제 URL 저장
+                        imgbbId: result.data.id, // 📸 imgbb ID 저장
                         createdAt: new Date().toISOString(),
                         filename: `${type}_${Date.now()}.jpg`
                     };
                     
                     photos.push(photoData);
                     console.log(`✅ ${type} photo uploaded successfully:`, result.data.url);
+                    console.log(`🗑️ Delete URL saved:`, result.data.delete_url);
                 } else {
                     console.error(`❌ ImgBB upload failed for ${type}:`, result);
                     showNotification(`${type} 사진 업로드 실패: ${result.error?.message || '알 수 없는 오류'}`, 'error');
@@ -2848,31 +3004,112 @@ function showMaintenanceDetailModal(maintenance) {
                         <p style="line-height: 1.6; color: #555; white-space: pre-wrap;">${maintenance.description || '설명이 없습니다.'}</p>
                     </div>
                     
-                    ${maintenance.photos && maintenance.photos.length > 0 ? `
-                        <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                            <h4 style="margin: 0 0 15px 0; color: #333;">📸 사진 (${maintenance.photos.length}장)</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-                                ${maintenance.photos.map(photo => {
-                                    // photo가 객체인 경우와 문자열인 경우 모두 처리
-                                    const photoUrl = typeof photo === 'object' ? (photo.url || photo.thumbnailUrl) : photo;
-                                    const photoType = typeof photo === 'object' ? photo.type : '사진';
-                                    return `
-                                        <div style="position: relative;">
-                                                                                         <img src="${photoUrl}" alt="${photoType}" 
-                                                  style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: pointer;" 
-                                                  onclick="showPhotoModal('${photoUrl}')"
-                                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                             <div style="display: none; width: 100%; height: 150px; background: #ddd; border-radius: 8px; align-items: center; justify-content: center; color: #666; flex-direction: column;">
-                                                 <i class="fas fa-image" style="font-size: 24px; margin-bottom: 8px;"></i>
-                                                 <span style="font-size: 12px;">이미지 로딩 실패</span>
-                                             </div>
-                                            ${photoType !== '사진' ? `<span style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px;">${photoType}</span>` : ''}
+                    ${(() => {
+                        // 🔄 신규 방식과 기존 방식 모두 지원하는 사진 처리
+                        let photos = [];
+                        
+                        // 1️⃣ 신규 방식: photos 배열 확인
+                        if (maintenance.photos && maintenance.photos.length > 0) {
+                            console.log('📸 신규 방식 사진 발견:', maintenance.photos.length + '개');
+                            photos = maintenance.photos.map(photo => ({
+                                url: photo.url,
+                                type: photo.type === 'before' ? '정비 전' : 
+                                      photo.type === 'during' ? '정비 중' : 
+                                      photo.type === 'after' ? '정비 후' : photo.type
+                            }));
+                        } 
+                        // 2️⃣ 기존 방식: 개별 필드 확인
+                        else {
+                            console.log('📸 기존 방식 사진 확인 중...');
+                            if (maintenance.beforePhoto) {
+                                photos.push({ url: maintenance.beforePhoto, type: '정비 전' });
+                                console.log('📸 정비 전 사진 발견');
+                            }
+                            if (maintenance.duringPhoto) {
+                                photos.push({ url: maintenance.duringPhoto, type: '정비 중' });
+                                console.log('📸 정비 중 사진 발견');
+                            }
+                            if (maintenance.afterPhoto) {
+                                photos.push({ url: maintenance.afterPhoto, type: '정비 후' });
+                                console.log('📸 정비 후 사진 발견');
+                            }
+                        }
+                        
+                        const hasPhotos = photos.length > 0;
+                        console.log('📸 총 발견된 사진:', photos.length + '개');
+                        
+                        let photoDeleteInfo = '';
+                        
+                        if (hasPhotos && maintenance.createdAt) {
+                            const deleteInfo = getDaysUntilDeletion(maintenance.createdAt);
+                            if (deleteInfo) {
+                                if (deleteInfo.isExpired) {
+                                    photoDeleteInfo = `
+                                        <div style="background: #dc3545; color: white; padding: 12px; border-radius: 8px; margin-bottom: 15px; text-align: center;">
+                                            <strong>📸 사진이 삭제되었습니다</strong>
                                         </div>
                                     `;
-                                }).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
+                                } else if (deleteInfo.isWarning) {
+                                    photoDeleteInfo = `
+                                        <div style="background: #ffc107; color: #000; padding: 12px; border-radius: 8px; margin-bottom: 15px; text-align: center; animation: pulse 2s infinite;">
+                                            <strong>⚠️ 사진 삭제 임박!</strong><br>
+                                            <span style="font-size: 16px; font-weight: bold;">D-${deleteInfo.daysLeft}</span><br>
+                                            <small>📅 ${deleteInfo.deletionDate.toLocaleDateString('ko-KR')} 삭제 예정</small>
+                                        </div>
+                                    `;
+                                } else {
+                                    photoDeleteInfo = `
+                                        <div style="background: #17a2b8; color: white; padding: 12px; border-radius: 8px; margin-bottom: 15px; text-align: center;">
+                                            <strong>📸 사진 보존 기간</strong><br>
+                                            <span style="font-size: 16px; font-weight: bold;">D-${deleteInfo.daysLeft}</span><br>
+                                            <small>📅 ${deleteInfo.deletionDate.toLocaleDateString('ko-KR')} 자동 삭제 예정</small>
+                                        </div>
+                                    `;
+                                }
+                            }
+                        }
+                        
+                        if (hasPhotos) {
+                            
+                            return `
+                                <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                                    <h4 style="margin: 0 0 15px 0; color: #333;">📸 사진 (${photos.length}장)</h4>
+                                    ${photoDeleteInfo}
+                                    
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px;">
+                                        ${photos.map(photo => `
+                                            <div style="position: relative; background: white; border-radius: 10px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                                <img src="${photo.url}" alt="${photo.type}" 
+                                                     style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: pointer;" 
+                                                     onclick="showPhotoModal('${photo.url}')"
+                                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                <div style="display: none; width: 100%; height: 150px; background: #ddd; border-radius: 8px; align-items: center; justify-content: center; color: #666; flex-direction: column;">
+                                                    <i class="fas fa-image" style="font-size: 24px; margin-bottom: 8px;"></i>
+                                                    <span style="font-size: 12px;">이미지 로딩 실패</span>
+                                                </div>
+                                                <div style="margin-top: 8px; text-align: center;">
+                                                    <span style="font-size: 12px; font-weight: bold; color: #666;">${photo.type}</span>
+                                                    <br>
+                                                    <button onclick="downloadPhoto('${photo.url}', '${maintenance.type || '정비'}_${photo.type}_${maintenance.date || 'unknown'}.jpg'); event.stopPropagation();" 
+                                                            style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-top: 4px;">
+                                                        <i class="fas fa-download"></i> 다운로드
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    
+                                    <div style="margin-top: 15px; text-align: center;">
+                                        <button onclick="downloadAllPhotos('${maintenance.id}', '${maintenance.type || '정비'}', '${maintenance.date || 'unknown'}')" 
+                                                style="background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                                            <i class="fas fa-download"></i> 모든 사진 다운로드
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        return '';
+                    })()}
                     
                     <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
                         <h4 style="margin: 0 0 15px 0; color: #333;">ℹ️ 추가 정보</h4>
@@ -2911,10 +3148,10 @@ function showMaintenanceDetailModal(maintenance) {
                             // 사용자 화면
                             if (maintenance.status === 'completed') {
                                 console.log('✅ Completed status - showing approve/reject buttons');
-                                // 완료됨: 승인/거절 버튼
+                                // 완료됨: 확인/거절 버튼
                                 return `
                                     <button class="btn btn-success" onclick="updateMaintenanceStatus('${maintenance.id}', 'approved'); closeMaintenanceDetailModal();">
-                                        <i class="fas fa-thumbs-up"></i> 승인
+                                                                                  <i class="fas fa-thumbs-up"></i> 확인
                                     </button>
                                     <button class="btn btn-danger" onclick="updateMaintenanceStatus('${maintenance.id}', 'rejected'); closeMaintenanceDetailModal();">
                                         <i class="fas fa-thumbs-down"></i> 거절
@@ -2952,12 +3189,27 @@ function closeMaintenanceDetailModal() {
 // 사진 확대 모달
 function showPhotoModal(photoUrl) {
     const photoModalHTML = `
-        <div id="photoModal" class="modal-overlay active" style="background: rgba(0,0,0,0.9);" onclick="closePhotoModal()">
-            <div class="modal-container" style="max-width: 90vw; max-height: 90vh; background: transparent; box-shadow: none;">
+        <div id="photoModal" class="modal-overlay active" style="background: rgba(0,0,0,0.9);" onclick="event.target === this && closePhotoModal()">
+            <div class="modal-container" style="max-width: 90vw; max-height: 90vh; background: transparent; box-shadow: none; position: relative;">
                 <img src="${photoUrl}" alt="정비 사진" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
-                <button class="modal-close" onclick="closePhotoModal()" style="position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.5); color: white;">
-                    <i class="fas fa-times"></i>
-                </button>
+                
+                <!-- 상단 버튼 그룹 -->
+                <div style="position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 10001;">
+                    <button onclick="downloadPhoto('${photoUrl}', 'maintenance-photo-${Date.now()}.jpg'); event.stopPropagation();" 
+                            style="background: rgba(40, 167, 69, 0.9); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 14px; backdrop-filter: blur(10px);">
+                        <i class="fas fa-download"></i>
+                        <span>다운로드</span>
+                    </button>
+                    <button onclick="closePhotoModal()" 
+                            style="background: rgba(220, 53, 69, 0.9); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; font-size: 16px; backdrop-filter: blur(10px);">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <!-- 하단 안내 -->
+                <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; backdrop-filter: blur(10px);">
+                    클릭하면 닫힙니다
+                </div>
             </div>
         </div>
     `;
@@ -3188,4 +3440,444 @@ function testTimelineRender() {
 }
 
 // 전역 함수로 등록
-window.testTimelineRender = testTimelineRender; 
+window.testTimelineRender = testTimelineRender;
+
+// =============================================
+// 📸 사진 자동 삭제 시스템 (30일 보존)
+// =============================================
+
+async function schedulePhotoCleanup() {
+    try {
+        console.log('🧹 시작: 30일 이상 된 사진 정리 체크');
+        
+        // 30일 전 날짜 계산
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - PHOTO_RETENTION_DAYS);
+        const cutoffTimestamp = firebase.firestore.Timestamp.fromDate(cutoffDate);
+        
+        console.log(`📅 삭제 기준일: ${cutoffDate.toLocaleDateString('ko-KR')} (${PHOTO_RETENTION_DAYS}일 전)`);
+        
+        // 30일 이상 된 정비 이력 찾기
+        const oldMaintenances = await db.collection('maintenance')
+            .where('createdAt', '<', cutoffTimestamp)
+            .get();
+        
+        if (oldMaintenances.empty) {
+            console.log('✅ 삭제할 오래된 사진이 없습니다.');
+            return;
+        }
+        
+        console.log(`🔍 ${oldMaintenances.size}개의 오래된 정비 이력 발견`);
+        
+        let processedMaintenances = 0;
+        let totalMaintenances = 0;
+        let totalPhotosFromDB = 0;
+        let totalPhotosFromImgbb = 0;
+        let failedPhotosFromImgbb = 0;
+        
+        // 각 정비 이력의 사진들 삭제
+        for (const doc of oldMaintenances.docs) {
+            const maintenanceId = doc.id;
+            const data = doc.data();
+            
+            // 사진이 있는지 확인 (신규/기존 방식 모두 체크)
+            const hasPhotos = (data.photos && data.photos.length > 0) || 
+                             data.beforePhoto || data.duringPhoto || data.afterPhoto;
+            
+            if (hasPhotos) {
+                totalMaintenances++;
+                const result = await deleteMaintenancePhotos(maintenanceId, data);
+                
+                if (result.success) {
+                    processedMaintenances++;
+                    totalPhotosFromDB += result.totalPhotos;
+                    totalPhotosFromImgbb += result.deletedFromImgbb;
+                    failedPhotosFromImgbb += result.failedFromImgbb;
+                }
+            }
+        }
+        
+        if (totalMaintenances > 0) {
+            console.log(`🗑️ 사진 삭제 완료: ${processedMaintenances}/${totalMaintenances}개 정비 이력`);
+            console.log(`📊 상세 결과: DB에서 ${totalPhotosFromDB}개, imgbb에서 ${totalPhotosFromImgbb}개 삭제, ${failedPhotosFromImgbb}개 실패`);
+            
+            // 📱 사용자에게 상세한 결과 알림
+            let notificationMessage = `30일 이상 된 사진 자동 삭제 완료!\n`;
+            notificationMessage += `📂 정비 이력: ${processedMaintenances}개\n`;
+            notificationMessage += `🗑️ 앱에서 제거: ${totalPhotosFromDB}장\n`;
+            notificationMessage += `☁️ imgbb에서 삭제: ${totalPhotosFromImgbb}장`;
+            
+            if (failedPhotosFromImgbb > 0) {
+                notificationMessage += `\n⚠️ imgbb 삭제 실패: ${failedPhotosFromImgbb}장`;
+            }
+            
+            showNotification(notificationMessage, totalPhotosFromImgbb > 0 ? 'success' : 'warning');
+        }
+        
+    } catch (error) {
+        console.error('❌ 사진 정리 시스템 오류:', error);
+    }
+}
+
+async function deleteMaintenancePhotos(maintenanceId, maintenanceData) {
+    try {
+        console.log(`🗑️ 정비 ${maintenanceId}의 사진 삭제 시작`);
+        
+        const photosToDelete = [];
+        
+        // 삭제할 사진 데이터 수집 (기존 방식과 신규 방식 모두 지원)
+        if (maintenanceData.photos && maintenanceData.photos.length > 0) {
+            // 신규 방식: photos 배열에서 삭제 URL 포함
+            maintenanceData.photos.forEach(photo => {
+                photosToDelete.push({
+                    type: photo.type,
+                    url: photo.url,
+                    deleteUrl: photo.deleteUrl,
+                    imgbbId: photo.imgbbId
+                });
+            });
+        } else {
+            // 기존 방식: 개별 필드에서 URL만 있음
+            if (maintenanceData.beforePhoto) {
+                photosToDelete.push({ type: 'beforePhoto', url: maintenanceData.beforePhoto });
+            }
+            if (maintenanceData.duringPhoto) {
+                photosToDelete.push({ type: 'duringPhoto', url: maintenanceData.duringPhoto });
+            }
+            if (maintenanceData.afterPhoto) {
+                photosToDelete.push({ type: 'afterPhoto', url: maintenanceData.afterPhoto });
+            }
+        }
+        
+        if (photosToDelete.length === 0) {
+            console.log(`ℹ️ 정비 ${maintenanceId}: 삭제할 사진이 없음`);
+            return true;
+        }
+        
+        console.log(`📸 정비 ${maintenanceId}: ${photosToDelete.length}개 사진 삭제 예정`);
+        
+        // 🔥 실제 imgbb에서 사진 삭제 시도
+        let deletedFromImgbb = 0;
+        let failedFromImgbb = 0;
+        
+        for (const photo of photosToDelete) {
+            try {
+                if (photo.deleteUrl) {
+                    // 새로운 방식: delete_url 사용
+                    console.log(`🗑️ imgbb에서 ${photo.type} 사진 삭제 시도 (delete_url 사용)`);
+                    const deleteResponse = await fetch(photo.deleteUrl, {
+                        method: 'GET' // imgbb delete_url은 GET 요청
+                    });
+                    
+                    if (deleteResponse.ok) {
+                        console.log(`✅ imgbb에서 ${photo.type} 사진 삭제 성공`);
+                        deletedFromImgbb++;
+                    } else {
+                        console.warn(`⚠️ imgbb에서 ${photo.type} 사진 삭제 실패 (HTTP ${deleteResponse.status})`);
+                        failedFromImgbb++;
+                    }
+                } else {
+                    // 기존 방식: delete_url이 없는 경우
+                    console.log(`⚠️ ${photo.type} 사진의 delete_url이 없음 - imgbb에서 삭제 불가`);
+                    failedFromImgbb++;
+                }
+            } catch (error) {
+                console.error(`❌ imgbb에서 ${photo.type} 사진 삭제 중 오류:`, error);
+                failedFromImgbb++;
+            }
+        }
+        
+        console.log(`📊 imgbb 삭제 결과: 성공 ${deletedFromImgbb}개, 실패 ${failedFromImgbb}개`);
+        
+        // 🗄️ Firestore에서 사진 참조 삭제 (imgbb 삭제 성공 여부와 관계없이 실행)
+        const updateData = {};
+        
+        if (maintenanceData.photos && maintenanceData.photos.length > 0) {
+            // 신규 방식: photos 배열 삭제
+            updateData.photos = firebase.firestore.FieldValue.delete();
+            console.log(`🗑️ DB에서 photos 배열 삭제`);
+        } else {
+            // 기존 방식: 개별 필드 삭제
+            photosToDelete.forEach(photo => {
+                updateData[photo.type] = firebase.firestore.FieldValue.delete();
+                console.log(`🗑️ DB에서 ${photo.type} 사진 참조 삭제: ${photo.url.substring(0, 50)}...`);
+            });
+        }
+        
+        // Firestore에서 사진 참조 삭제
+        await db.collection('maintenance').doc(maintenanceId).update(updateData);
+        
+        console.log(`✅ 정비 ${maintenanceId}: ${photosToDelete.length}개 사진 참조 삭제 완료`);
+        
+        // 삭제 결과 반환
+        return {
+            success: true,
+            totalPhotos: photosToDelete.length,
+            deletedFromImgbb: deletedFromImgbb,
+            failedFromImgbb: failedFromImgbb
+        };
+        
+    } catch (error) {
+        console.error(`❌ 정비 ${maintenanceId} 사진 삭제 실패:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+// 수동 사진 정리 함수 (관리자용)
+async function manualPhotoCleanup() {
+    if (!isAdmin) {
+        showNotification('관리자만 수동 정리를 실행할 수 있습니다.', 'error');
+        return;
+    }
+    
+    const confirmed = confirm(`30일 이상 된 모든 사진을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`);
+    if (!confirmed) return;
+    
+    showNotification('사진 정리를 시작합니다...', 'info');
+    await schedulePhotoCleanup();
+}
+
+// 📅 삭제까지 남은 일수 계산 함수
+function getDaysUntilDeletion(createdAt) {
+    if (!createdAt) return null;
+    
+    // createdAt이 Timestamp 객체인 경우 Date로 변환
+    const createdDate = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
+    
+    // 삭제 예정일 계산
+    const deletionDate = new Date(createdDate);
+    deletionDate.setDate(deletionDate.getDate() + PHOTO_RETENTION_DAYS);
+    
+    // 현재 날짜와의 차이 계산
+    const today = new Date();
+    const diffTime = deletionDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return {
+        daysLeft: diffDays,
+        deletionDate: deletionDate,
+        isExpired: diffDays <= 0,
+        isWarning: diffDays <= DELETE_WARNING_DAYS && diffDays > 0
+    };
+}
+
+// 📸 사진 다운로드 함수
+async function downloadPhoto(photoUrl, filename = 'maintenance-photo.jpg') {
+    try {
+        showNotification('사진을 다운로드하는 중...', 'info');
+        
+        // 이미지를 fetch로 가져오기
+        const response = await fetch(photoUrl, { mode: 'cors' });
+        if (!response.ok) throw new Error('사진을 가져올 수 없습니다.');
+        
+        // Blob으로 변환
+        const blob = await response.blob();
+        
+        // 다운로드 링크 생성
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        
+        // 정리
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+        
+        showNotification('사진이 다운로드되었습니다!', 'success');
+        
+    } catch (error) {
+        console.error('❌ 사진 다운로드 실패:', error);
+        showNotification('사진 다운로드에 실패했습니다.', 'error');
+    }
+}
+
+// 📅 D-Day 형태로 표시하는 함수
+function formatDaysLeft(daysLeft) {
+    if (daysLeft <= 0) {
+        return '<span class="days-expired">삭제됨</span>';
+    } else if (daysLeft <= DELETE_WARNING_DAYS) {
+        return `<span class="days-warning">D-${daysLeft}</span>`;
+    } else {
+        return `<span class="days-normal">D-${daysLeft}</span>`;
+    }
+}
+
+// 📸 모든 사진 다운로드 함수
+async function downloadAllPhotos(maintenanceId, maintenanceType, maintenanceDate) {
+    try {
+        showNotification('모든 사진을 다운로드하는 중...', 'info');
+        
+        // 정비 데이터 가져오기
+        const doc = await db.collection('maintenance').doc(maintenanceId).get();
+        if (!doc.exists) {
+            showNotification('정비 이력을 찾을 수 없습니다.', 'error');
+            return;
+        }
+        
+        const maintenance = doc.data();
+        const photos = [];
+        
+        // 사진 URL 수집
+        if (maintenance.beforePhoto) {
+            photos.push({ url: maintenance.beforePhoto, type: '정비전', filename: `${maintenanceType}_정비전_${maintenanceDate}.jpg` });
+        }
+        if (maintenance.duringPhoto) {
+            photos.push({ url: maintenance.duringPhoto, type: '정비중', filename: `${maintenanceType}_정비중_${maintenanceDate}.jpg` });
+        }
+        if (maintenance.afterPhoto) {
+            photos.push({ url: maintenance.afterPhoto, type: '정비후', filename: `${maintenanceType}_정비후_${maintenanceDate}.jpg` });
+        }
+        
+        if (photos.length === 0) {
+            showNotification('다운로드할 사진이 없습니다.', 'warning');
+            return;
+        }
+        
+        // 순차적으로 다운로드 (동시 다운로드는 브라우저에서 제한될 수 있음)
+        let downloadCount = 0;
+        for (const photo of photos) {
+            try {
+                await downloadPhoto(photo.url, photo.filename);
+                downloadCount++;
+                // 다운로드 간격 (브라우저 제한 방지)
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            } catch (error) {
+                console.error(`❌ ${photo.type} 사진 다운로드 실패:`, error);
+            }
+        }
+        
+        if (downloadCount > 0) {
+            showNotification(`${downloadCount}개 사진이 다운로드되었습니다!`, 'success');
+        } else {
+            showNotification('사진 다운로드에 실패했습니다.', 'error');
+        }
+        
+    } catch (error) {
+        console.error('❌ 모든 사진 다운로드 실패:', error);
+        showNotification('사진 다운로드 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+// 📸 삭제 임박 사진 경고 체크 함수
+async function checkPhotoWarnings() {
+    try {
+        console.log('⚠️ 삭제 임박 사진 경고 체크 시작');
+        
+        if (!currentUser) {
+            console.log('🚫 로그인되지 않음 - 경고 체크 건너뛰기');
+            return;
+        }
+        
+        // 사용자의 정비 이력 가져오기
+        let query = db.collection('maintenance');
+        
+        if (isAdmin) {
+            query = query.where('adminEmail', '==', currentUser.email);
+        } else {
+            query = query.where('carNumber', '==', currentUser.carNumber);
+        }
+        
+        const snapshot = await query.get();
+        
+        let warningCount = 0;
+        let expiredCount = 0;
+        const warningMaintenances = [];
+        
+        snapshot.forEach(doc => {
+            const maintenance = doc.data();
+            const hasPhotos = maintenance.beforePhoto || maintenance.duringPhoto || maintenance.afterPhoto;
+            
+            if (hasPhotos && maintenance.createdAt) {
+                const deleteInfo = getDaysUntilDeletion(maintenance.createdAt);
+                if (deleteInfo) {
+                    if (deleteInfo.isExpired) {
+                        expiredCount++;
+                    } else if (deleteInfo.isWarning) {
+                        warningCount++;
+                        warningMaintenances.push({
+                            id: doc.id,
+                            type: maintenance.type || '정비',
+                            date: maintenance.date,
+                            daysLeft: deleteInfo.daysLeft,
+                            deletionDate: deleteInfo.deletionDate
+                        });
+                    }
+                }
+            }
+        });
+        
+        // 경고 알림 표시
+        if (warningCount > 0) {
+            const maintenanceList = warningMaintenances
+                .map(m => `• ${m.type} (${m.date}) - D-${m.daysLeft}`)
+                .join('\n');
+                
+            setTimeout(() => {
+                // 더 눈에 띄는 삭제 경고 알림
+                const notification = document.createElement('div');
+                notification.className = 'notification warning show';
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #ff6b35, #f7931e);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 12px;
+                    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+                    z-index: 10000;
+                    max-width: 400px;
+                    animation: slideInRight 0.5s ease-out, pulse 2s infinite 1s;
+                    border-left: 5px solid #dc3545;
+                `;
+                
+                notification.innerHTML = `
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 24px; color: #fff; margin-top: 2px;"></i>
+                        <div>
+                            <strong style="display: block; font-size: 16px; margin-bottom: 8px;">사진 삭제 임박!</strong>
+                            <p style="margin: 0; font-size: 14px; line-height: 1.4;">
+                                ${warningCount}개 정비의 사진이 ${DELETE_WARNING_DAYS}일 이내 삭제됩니다.<br>
+                                <strong>상세보기에서 다운로드하세요!</strong>
+                            </p>
+                        </div>
+                        <button onclick="this.parentElement.parentElement.remove()" 
+                                style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; margin-left: auto;">×</button>
+                    </div>
+                `;
+                
+                document.body.appendChild(notification);
+                
+                // 10초 후 자동 제거
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 10000);
+            }, 3000);
+            
+            console.log(`⚠️ 삭제 임박 정비 ${warningCount}개 발견:`, warningMaintenances);
+        }
+        
+        if (expiredCount > 0) {
+            console.log(`🗑️ 삭제된 사진 ${expiredCount}개 발견`);
+        }
+        
+        if (warningCount === 0 && expiredCount === 0) {
+            console.log('✅ 삭제 임박 또는 만료된 사진 없음');
+        }
+        
+    } catch (error) {
+        console.error('❌ 사진 경고 체크 실패:', error);
+    }
+}
+
+// 전역 함수로 등록 (브라우저 콘솔에서 테스트 가능)
+window.schedulePhotoCleanup = schedulePhotoCleanup;
+window.manualPhotoCleanup = manualPhotoCleanup;
+window.downloadPhoto = downloadPhoto;
+window.downloadAllPhotos = downloadAllPhotos;
+window.getDaysUntilDeletion = getDaysUntilDeletion;
+window.checkPhotoWarnings = checkPhotoWarnings; 
