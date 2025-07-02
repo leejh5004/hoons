@@ -453,6 +453,11 @@ function showProfileOptions() {
             action: () => manualPhotoCleanup(), 
             icon: 'fas fa-broom' 
         });
+        options.unshift({ 
+            text: '견적서 생성', 
+            action: () => showEstimateModal(), 
+            icon: 'fas fa-file-invoice-dollar' 
+        });
     }
     
     // Create and show profile modal
@@ -3881,3 +3886,639 @@ window.downloadPhoto = downloadPhoto;
 window.downloadAllPhotos = downloadAllPhotos;
 window.getDaysUntilDeletion = getDaysUntilDeletion;
 window.checkPhotoWarnings = checkPhotoWarnings; 
+
+// =============================================
+// 💰 견적서 시스템
+// =============================================
+
+// 견적서 생성 모달 표시
+function showEstimateModal() {
+    // 🔒 관리자 권한 확인
+    if (!isAdmin) {
+        showNotification('관리자만 견적서를 생성할 수 있습니다.', 'error');
+        return;
+    }
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('estimateModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modalHTML = `
+        <div id="estimateModal" class="modal-overlay active">
+                         <div class="modal-container" style="max-width: min(700px, 95vw); max-height: 90vh; margin: 20px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <i class="fas fa-file-invoice-dollar"></i> 견적서 생성
+                    </h2>
+                    <button class="modal-close" onclick="closeEstimateModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <form id="estimateForm">
+                        <!-- 기본 정보 -->
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                            <h3 style="margin: 0 0 15px 0; font-size: 18px;">📋 기본 정보</h3>
+                                                         <div style="display: flex; flex-direction: column; gap: 15px;">
+                                 <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                                     <div style="flex: 1; min-width: 200px;">
+                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">🚗 차량번호</label>
+                                         <input type="text" id="estimateCarNumber" placeholder="12가3456" required
+                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                                     </div>
+                                     <div style="flex: 1; min-width: 200px;">
+                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">👤 고객명</label>
+                                         <input type="text" id="estimateCustomerName" placeholder="홍길동" required
+                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                                     </div>
+                                 </div>
+                                 <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+                                     <div style="flex: 1; min-width: 150px;">
+                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">🏍️ 기종</label>
+                                         <input type="text" id="estimateBikeModel" placeholder="혼다 PCX150"
+                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                                     </div>
+                                     <div style="flex: 1; min-width: 100px;">
+                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">📅 년식</label>
+                                         <input type="text" id="estimateBikeYear" placeholder="2023"
+                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                                     </div>
+                                     <div style="flex: 1; min-width: 120px;">
+                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">📏 키로수</label>
+                                         <input type="text" id="estimateMileage" placeholder="15,000km"
+                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                                     </div>
+                                 </div>
+                             </div>
+                                                             <div>
+                                     <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">🔧 정비 내용</label>
+                                     <input type="text" id="estimateTitle" placeholder="엔진 오일 교체 및 점검" required
+                                            style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                                 </div>
+                        </div>
+                        
+                        <!-- 견적 항목 -->
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <h3 style="margin: 0; font-size: 18px; color: #333;">💰 견적 항목</h3>
+                                <button type="button" onclick="addEstimateItem()" 
+                                        style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                                    <i class="fas fa-plus"></i> 항목 추가
+                                </button>
+                            </div>
+                            
+                            <div id="estimateItems">
+                                <!-- 기본 항목 1개 -->
+                                <div class="estimate-item" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd;">
+                                                                         <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch;">
+                                         <div style="flex: 2; min-width: 150px;">
+                                             <input type="text" placeholder="항목명 (예: 엔진오일)" class="item-name" required
+                                                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                                         </div>
+                                         <div style="flex: 1; min-width: 80px;">
+                                             <input type="number" placeholder="가격" class="item-price" min="0" required
+                                                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" 
+                                                    oninput="calculateTotal()">
+                                         </div>
+                                         <div style="flex: 0.5; min-width: 60px;">
+                                             <input type="number" placeholder="수량" class="item-quantity" min="1" value="1" required
+                                                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" 
+                                                    oninput="calculateTotal()">
+                                         </div>
+                                         <div style="flex: 0; min-width: 40px;">
+                                             <button type="button" onclick="removeEstimateItem(this)" 
+                                                     style="width: 100%; height: 36px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                                 <i class="fas fa-trash"></i>
+                                             </button>
+                                         </div>
+                                     </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 총액 표시 -->
+                            <div style="margin-top: 20px; padding: 15px; background: #e9ecef; border-radius: 8px; text-align: right;">
+                                <h4 style="margin: 0; font-size: 20px; color: #333;">
+                                    💰 총 견적액: <span id="totalAmount" style="color: #007bff; font-weight: bold;">0</span>원
+                                </h4>
+                            </div>
+                        </div>
+                        
+                        <!-- 추가 메모 -->
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 10px; font-size: 16px; font-weight: 600; color: #333;">📝 추가 메모</label>
+                                                         <textarea id="estimateNotes" placeholder="견적서에 포함할 추가 설명이나 주의사항을 입력하세요..." 
+                                       style="width: 100%; height: 80px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; resize: vertical; box-sizing: border-box;"></textarea>
+                        </div>
+                    </form>
+                </div>
+                
+                                 <div class="modal-footer" style="padding: 20px; border-top: 1px solid #e5e5e5; display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                     <button class="btn btn-secondary" onclick="closeEstimateModal()" style="flex: 0 1 auto; min-width: 100px;">
+                         <i class="fas fa-times"></i> 취소
+                     </button>
+                     <button class="btn btn-primary" onclick="generateEstimatePDF()" style="flex: 0 1 auto; min-width: 150px;">
+                         <i class="fas fa-file-pdf"></i> PDF 견적서 생성
+                     </button>
+                 </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // 초기 총액 계산
+    calculateTotal();
+}
+
+// 견적서 모달 닫기
+function closeEstimateModal() {
+    const modal = document.getElementById('estimateModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 견적 항목 추가
+function addEstimateItem() {
+    const itemsContainer = document.getElementById('estimateItems');
+    const itemHTML = `
+        <div class="estimate-item" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd;">
+                         <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch;">
+                 <div style="flex: 2; min-width: 150px;">
+                     <input type="text" placeholder="항목명 (예: 브레이크패드)" class="item-name" required
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                 </div>
+                 <div style="flex: 1; min-width: 80px;">
+                     <input type="number" placeholder="가격" class="item-price" min="0" required
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" 
+                            oninput="calculateTotal()">
+                 </div>
+                 <div style="flex: 0.5; min-width: 60px;">
+                     <input type="number" placeholder="수량" class="item-quantity" min="1" value="1" required
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" 
+                            oninput="calculateTotal()">
+                 </div>
+                 <div style="flex: 0; min-width: 40px;">
+                     <button type="button" onclick="removeEstimateItem(this)" 
+                             style="width: 100%; height: 36px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                         <i class="fas fa-trash"></i>
+                     </button>
+                 </div>
+             </div>
+        </div>
+    `;
+    
+    itemsContainer.insertAdjacentHTML('beforeend', itemHTML);
+    calculateTotal();
+}
+
+// 견적 항목 제거
+function removeEstimateItem(button) {
+    const item = button.closest('.estimate-item');
+    if (document.querySelectorAll('.estimate-item').length > 1) {
+        item.remove();
+        calculateTotal();
+    } else {
+        showNotification('최소 1개의 항목은 필요합니다.', 'warning');
+    }
+}
+
+// 총액 계산
+function calculateTotal() {
+    const items = document.querySelectorAll('.estimate-item');
+    let total = 0;
+    
+    items.forEach(item => {
+        const price = parseFloat(item.querySelector('.item-price').value) || 0;
+        const quantity = parseInt(item.querySelector('.item-quantity').value) || 0;
+        total += price * quantity;
+    });
+    
+    document.getElementById('totalAmount').textContent = total.toLocaleString();
+}
+
+// 🎨 전문적인 PDF 견적서 생성
+async function generateEstimatePDF() {
+    try {
+        // 폼 검증
+        const carNumber = document.getElementById('estimateCarNumber').value.trim();
+        const customerName = document.getElementById('estimateCustomerName').value.trim();
+        const title = document.getElementById('estimateTitle').value.trim();
+        
+        if (!carNumber || !customerName || !title) {
+            showNotification('필수 정보를 모두 입력해주세요.', 'error');
+            return;
+        }
+        
+        // 견적 항목 수집
+        const items = [];
+        const itemElements = document.querySelectorAll('.estimate-item');
+        let hasValidItem = false;
+        
+        itemElements.forEach(item => {
+            const name = item.querySelector('.item-name').value.trim();
+            const price = parseFloat(item.querySelector('.item-price').value) || 0;
+            const quantity = parseInt(item.querySelector('.item-quantity').value) || 0;
+            
+            if (name && price > 0 && quantity > 0) {
+                items.push({ name, price, quantity, total: price * quantity });
+                hasValidItem = true;
+            }
+        });
+        
+        if (!hasValidItem) {
+            showNotification('최소 1개의 유효한 견적 항목을 입력해주세요.', 'error');
+            return;
+        }
+        
+        const notes = document.getElementById('estimateNotes').value.trim();
+        const bikeModel = document.getElementById('estimateBikeModel').value.trim();
+        const bikeYear = document.getElementById('estimateBikeYear').value.trim();
+        const mileage = document.getElementById('estimateMileage').value.trim();
+        const totalAmount = items.reduce((sum, item) => sum + item.total, 0);
+        
+        showNotification('PDF 견적서를 생성하는 중...', 'info');
+        
+        // 🎨 HTML 견적서 템플릿 생성
+        const estimateHTML = createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel, bikeYear, mileage);
+        
+                // HTML을 이미지로 변환 후 PDF 생성
+        await generatePDFFromHTML(estimateHTML, customerName, carNumber);
+         
+    } catch (error) {
+        console.error('❌ PDF 생성 오류:', error);
+        showNotification('PDF 생성 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+// 전역 함수로 등록
+window.showEstimateModal = showEstimateModal;
+window.closeEstimateModal = closeEstimateModal;
+window.addEstimateItem = addEstimateItem;
+window.removeEstimateItem = removeEstimateItem;
+window.calculateTotal = calculateTotal;
+window.generateEstimatePDF = generateEstimatePDF;
+
+// 🔧 현재 관리자 서명 이름 가져오기
+function getCurrentManagerSignature() {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return '정비사';
+    
+    const email = currentUser.email;
+    
+    // 이메일에 따라 실제 이름으로 서명 결정
+    if (email.includes('taehun') || email.includes('태훈')) {
+        return '태훈';
+    } else if (email.includes('admin1') || email.includes('lee') || email.includes('이')) {
+        return '이정훈'; // admin1도 이정훈으로 매핑
+    } else {
+        return '이정훈'; // 기본값을 이정훈으로 설정
+    }
+}
+
+// 🎨 HTML 견적서 템플릿 생성
+function createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel = '', bikeYear = '', mileage = '') {
+    const currentDate = new Date().toLocaleDateString('ko-KR');
+    
+    return `
+        <div id="estimateDocument" style="
+            width: 794px; 
+            min-height: 600px; 
+            padding: 20px; 
+            background: white; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #333;
+            box-sizing: border-box;
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.1;
+        ">
+            <!-- 🎨 헤더 -->
+            <div style="
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            ">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <img src="logo.png" alt="TWOHOONS" style="width: 50px; height: 50px; object-fit: contain;">
+                    <div>
+                        <h1 style="margin: 0; font-size: 28px; font-weight: bold;">TWOHOONS GARAGE</h1>
+                        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">이륜차 정비소</p>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <h2 style="margin: 0; font-size: 24px; font-weight: bold;">견적서</h2>
+                    <p style="margin: 5px 0 0 0; font-size: 12px; opacity: 0.8;">ESTIMATE</p>
+                </div>
+            </div>
+            
+            <!-- 📋 기본 정보 - 편지 스타일 -->
+            <div style="
+                background: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 6px;
+                padding: 15px;
+                margin-bottom: 15px;
+            ">
+                <h3 style="margin: 0 0 12px 0; color: #667eea; font-size: 15px; font-weight: bold; text-align: center;">견적 의뢰서</h3>
+                
+                <!-- 편지 스타일 레이아웃 -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+                    <!-- 왼쪽: 고객 정보 -->
+                    <div>
+                        <h4 style="margin: 0 0 10px 0; color: #333; font-size: 14px; font-weight: bold; border-bottom: 1px solid #667eea; padding-bottom: 4px;">고객 정보</h4>
+                        <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 15px; align-items: center;">
+                            <span style="font-weight: 600; color: #666;">고객명:</span>
+                            <span style="color: #333;">${customerName}</span>
+                            
+                            <span style="font-weight: 600; color: #666;">차량번호:</span>
+                            <span style="color: #333;">${carNumber}</span>
+                            
+                            <span style="font-weight: 600; color: #666;">기종:</span>
+                            <span style="color: #333;">${bikeModel || '-'}</span>
+                            
+                            <span style="font-weight: 600; color: #666;">년식:</span>
+                            <span style="color: #333;">${bikeYear || '-'}</span>
+                            
+                            <span style="font-weight: 600; color: #666;">키로수:</span>
+                            <span style="color: #333;">${mileage || '-'}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 오른쪽: 견적 정보 -->
+                    <div>
+                        <h4 style="margin: 0 0 10px 0; color: #333; font-size: 14px; font-weight: bold; border-bottom: 1px solid #667eea; padding-bottom: 4px;">견적 정보</h4>
+                        <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 15px; align-items: center;">
+                            <span style="font-weight: 600; color: #666;">작성일:</span>
+                            <span style="color: #333;">${currentDate}</span>
+                            
+                            <span style="font-weight: 600; color: #666;">정비내용:</span>
+                            <span style="color: #333;">${title}</span>
+                        </div>
+                        
+                        <!-- 장식적 요소 -->
+                        <div style="margin-top: 15px; text-align: center;">
+                            <div style="
+                                display: inline-block;
+                                padding: 6px 12px;
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                border-radius: 15px;
+                                font-size: 11px;
+                                font-weight: bold;
+                            ">견적서 No. ${Date.now().toString().slice(-6)}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 💰 견적 내역 - 편지 스타일 -->
+            <div style="
+                background: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 6px;
+                padding: 15px;
+                margin-bottom: 15px;
+            ">
+                <h3 style="margin: 0 0 12px 0; color: #667eea; font-size: 15px; font-weight: bold; text-align: center; border-bottom: 1px solid #667eea; padding-bottom: 6px;">견적 내역서</h3>
+                
+                <table style="
+                    width: 100%;
+                    border-collapse: collapse;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <thead>
+                        <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                            <th style="padding: 10px 8px; text-align: left; font-size: 12px; font-weight: bold;">항목명</th>
+                            <th style="padding: 10px 8px; text-align: right; font-size: 12px; font-weight: bold;">단가</th>
+                            <th style="padding: 10px 6px; text-align: center; font-size: 12px; font-weight: bold;">수량</th>
+                            <th style="padding: 10px 8px; text-align: right; font-size: 12px; font-weight: bold;">금액</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${items.map((item, index) => `
+                            <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f8f9fa'}; border-bottom: 1px solid #e9ecef;">
+                                <td style="padding: 8px; font-size: 12px;">${item.name}</td>
+                                <td style="padding: 8px; text-align: right; font-size: 12px;">${item.price.toLocaleString()}원</td>
+                                <td style="padding: 8px; text-align: center; font-size: 12px;">${item.quantity}</td>
+                                <td style="padding: 8px; text-align: right; font-size: 12px; font-weight: bold; color: #667eea;">${item.total.toLocaleString()}원</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                
+                <!-- 총액 - 편지 스타일 -->
+                <div style="
+                    margin-top: 12px;
+                    padding: 12px 15px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border-radius: 6px;
+                    text-align: center;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 15px; font-weight: 600;">총 견적액</span>
+                        <span style="font-size: 18px; font-weight: bold;">${totalAmount.toLocaleString()}원</span>
+                    </div>
+                </div>
+            </div>
+            
+            ${notes ? `
+            <!-- 📝 추가 메모 - 편지 스타일 -->
+            <div style="
+                background: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 15px;
+            ">
+                <h4 style="margin: 0 0 8px 0; color: #667eea; font-size: 13px; font-weight: bold; border-bottom: 1px solid #667eea; padding-bottom: 3px;">특별 사항</h4>
+                <div style="
+                    background: white;
+                    border: 1px solid #e9ecef;
+                    border-radius: 4px;
+                    padding: 12px;
+                    white-space: pre-wrap;
+                    font-size: 12px;
+                    line-height: 1.4;
+                    color: #333;
+                    font-style: italic;
+                ">${notes}</div>
+            </div>
+            ` : ''}
+            
+            <!-- ✍️ 서명란 - 편지 스타일 -->
+            <div style="margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
+                <div style="text-align: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0; color: #667eea; font-size: 13px; font-weight: bold;">서명란</h4>
+                    <p style="margin: 3px 0 0 0; color: #666; font-size: 11px;">위 견적서 내용에 동의하며 서명합니다.</p>
+                </div>
+                
+                <div style="display: flex; justify-content: space-around; align-items: end;">
+                    <!-- 고객 서명 -->
+                    <div style="text-align: center;">
+                        <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #333;">고객</p>
+                        <div style="
+                            width: 100px;
+                            height: 40px;
+                            border: 2px solid #999;
+                            border-radius: 4px;
+                            background: #fff;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-family: 'Malgun Gothic', sans-serif;
+                            font-weight: bold;
+                            font-size: 14px;
+                            color: #333;
+                        ">(서명)</div>
+                        <p style="margin: 5px 0 0 0; font-size: 11px; color: #666;">${customerName}</p>
+                    </div>
+                    
+                    <!-- 정비사 서명 -->
+                    <div style="text-align: center;">
+                        <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #333;">정비사</p>
+                        <div style="
+                            width: 100px;
+                            height: 40px;
+                            border: 2px solid #999;
+                            border-radius: 4px;
+                            background: #fff;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-family: 'Malgun Gothic', sans-serif;
+                            font-weight: bold;
+                            font-size: 14px;
+                            color: #333;
+                        ">${getCurrentManagerSignature()}</div>
+                        <p style="margin: 5px 0 0 0; font-size: 11px; color: #666;">TWOHOONS GARAGE</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 📞 푸터 - 편지 스타일 -->
+            <div style="
+                margin-top: 15px;
+                padding: 10px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border-radius: 6px;
+                text-align: center;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <div style="margin-bottom: 6px;">
+                    <span style="font-size: 13px; font-weight: bold;">TWOHOONS GARAGE</span>
+                    <span style="margin: 0 8px; opacity: 0.7;">|</span>
+                    <span style="font-size: 11px; opacity: 0.9;">이륜차 정비 서비스</span>
+                </div>
+                <div style="font-size: 11px; opacity: 0.8;">
+                    견적서 생성일: ${new Date().toLocaleString('ko-KR')}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 🎨 HTML을 PDF로 변환
+async function generatePDFFromHTML(htmlContent, customerName, carNumber) {
+    try {
+        // 임시 div 생성
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = htmlContent;
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        tempDiv.style.background = 'white';
+        document.body.appendChild(tempDiv);
+        
+        // 로고 이미지 로딩 대기
+        const logoImg = tempDiv.querySelector('img');
+        if (logoImg) {
+            await new Promise((resolve) => {
+                if (logoImg.complete) {
+                    resolve();
+                } else {
+                    logoImg.onload = resolve;
+                    logoImg.onerror = resolve; // 로고 로딩 실패해도 계속 진행
+                }
+            });
+        }
+        
+        // html2canvas로 이미지 생성
+        const canvas = await html2canvas(tempDiv.firstElementChild, {
+            scale: 2, // 고해상도
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            width: 794,
+            height: null, // 자동 높이
+            scrollX: 0,
+            scrollY: 0
+        });
+        
+        // 임시 div 제거
+        document.body.removeChild(tempDiv);
+        
+        // PDF 생성
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        // 캔버스를 이미지로 변환
+        const imgData = canvas.toDataURL('image/png');
+        
+        // A4 크기 계산
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        // 이미지 크기 조정
+        const imgWidth = pdfWidth;
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        // 페이지가 길면 여러 페이지로 분할
+        let position = 0;
+        let pageHeight = pdfHeight;
+        
+        while (position < imgHeight) {
+            // 현재 페이지에 이미지 추가
+            pdf.addImage(
+                imgData, 
+                'PNG', 
+                0, 
+                position === 0 ? 0 : -position, 
+                imgWidth, 
+                imgHeight
+            );
+            
+            position += pageHeight;
+            
+            // 다음 페이지가 필요하면 추가
+            if (position < imgHeight) {
+                pdf.addPage();
+            }
+        }
+        
+        // PDF 저장
+        const fileName = `견적서_${customerName}_${carNumber}_${new Date().toISOString().slice(0, 10)}.pdf`;
+        pdf.save(fileName);
+        
+        showNotification('PDF 견적서가 성공적으로 생성되었습니다! 🎉', 'success');
+        closeEstimateModal();
+        
+    } catch (error) {
+        console.error('❌ PDF 생성 오류:', error);
+        showNotification('PDF 생성 중 오류가 발생했습니다.', 'error');
+    }
+}

@@ -914,7 +914,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--space-lg);
+    padding: 20px;
+    box-sizing: border-box;
     opacity: 0;
     visibility: hidden;
     transition: all var(--transition-base);
@@ -1811,4 +1812,60 @@ body {
         transform: translateX(0);
         opacity: 1;
     }
+}
+
+/* 견적서 모달 반응형 스타일 */
+@media (max-width: 768px) {
+    .modal-container {
+        margin: 10px !important;
+        max-width: calc(100vw - 20px) !important;
+    }
+    
+    .modal-body {
+        padding: 15px !important;
+    }
+    
+    .modal-footer {
+        padding: 15px !important;
+        flex-direction: column !important;
+    }
+    
+    .modal-footer button {
+        width: 100% !important;
+        margin: 0 !important;
+        min-width: auto !important;
+    }
+    
+    /* 견적 항목 모바일 최적화 */
+    .estimate-item > div {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    
+    .estimate-item > div > div {
+        min-width: auto !important;
+        flex: none !important;
+    }
+    
+    .estimate-item input,
+    .estimate-item button {
+        width: 100% !important;
+    }
+}
+
+/* 모달 오버레이 패딩 개선은 기존 스타일에 포함됨 */
+
+/* 입력 필드 공통 스타일 개선 */
+input[type="text"],
+input[type="number"],
+textarea {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* 버튼 터치 개선 */
+button {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 } 
