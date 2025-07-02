@@ -2364,6 +2364,63 @@ async function updateMaintenanceStatus(maintenanceId, newStatus) {
     }
 }
 
+// 거절 이유와 함께 정비 상태 업데이트 함수
+async function updateMaintenanceStatusWithReason(maintenanceId, newStatus, rejectReason) {
+    if (!currentUser) return;
+    
+    try {
+        console.log('🔄 Updating maintenance status with reason:', maintenanceId, newStatus, rejectReason);
+        
+        // 정비 이력 정보 가져오기
+        const maintenanceDoc = await db.collection('maintenance').doc(maintenanceId).get();
+        const maintenanceData = maintenanceDoc.data();
+        
+        const status = maintenanceData.status ? maintenanceData.status.toLowerCase() : '';
+        
+        if (!isAdmin && status === 'completed' && newStatus === 'rejected') {
+            // 사용자의 거절 처리 (거절 이유 포함)
+            await db.collection('maintenance').doc(maintenanceId).update({
+                status: newStatus,
+                rejectReason: rejectReason,
+                finalizedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                finalizedBy: currentUser.name || '사용자'
+            });
+            
+            // 관리자에게 알림 (거절 이유 포함)
+            const adminSnapshot = await db.collection('users')
+                .where('email', '==', maintenanceData.adminEmail)
+                .get();
+                
+            if (!adminSnapshot.empty) {
+                const adminData = adminSnapshot.docs[0].data();
+                const adminId = adminSnapshot.docs[0].id;
+                
+                const notification = {
+                    title: '정비 거절됨',
+                    message: `${currentUser.name || '사용자'}가 ${maintenanceData.type || '정비'}를 거절했습니다.\n거절 이유: ${rejectReason}`,
+                    type: 'warning',
+                    read: false,
+                    userId: adminId,
+                    maintenanceId: maintenanceId,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                await db.collection('notifications').add(notification);
+                console.log('🔔 Rejection notification sent to admin:', adminData.name);
+            }
+        } else {
+            showNotification('권한이 없거나 잘못된 상태 변경입니다.', 'error');
+            return;
+        }
+        
+        loadDashboardData(); // Refresh dashboard
+        
+    } catch (error) {
+        console.error('❌ Error updating maintenance status with reason:', error);
+        showNotification('상태 변경 실패: ' + error.message, 'error');
+    }
+}
+
 // 알림 표시
 function showNotification(message, type = 'info') {
     const container = document.getElementById('notificationContainer');
@@ -3158,10 +3215,50 @@ function showMaintenanceDetailModal(maintenance) {
                             } else {
                                 console.log('❌ Status not actionable, no admin buttons shown. Current status:', maintenance.status);
                                 console.log('❌ Expected status: "in-progress/approved/pending", actual status: "' + maintenance.status + '"');
-                                // 상태가 완료되지 않은 경우 정보 표시
+                                
+                                // 상태에 따른 메시지와 색상 결정
+                                let statusMessage = '';
+                                let statusColor = '';
+                                let statusIcon = '';
+                                
+                                if (status === 'rejected') {
+                                    let statusMessage_text = '사용자가 거절한 정비입니다';
+                                    if (maintenance.rejectReason) {
+                                        statusMessage_text += `<div style="margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; font-size: 12px; line-height: 1.3;"><strong>거절 이유:</strong><br>${maintenance.rejectReason}</div>`;
+                                    }
+                                    statusMessage = statusMessage_text;
+                                    statusColor = '#dc3545';
+                                    statusIcon = 'fas fa-times-circle';
+                                } else if (status === 'approved') {
+                                    statusMessage = '사용자가 확인한 정비입니다';
+                                    statusColor = '#28a745';
+                                    statusIcon = 'fas fa-check-circle';
+                                } else if (status === 'completed') {
+                                    statusMessage = '정비 완료 - 사용자 확인 대기중';
+                                    statusColor = '#17a2b8';
+                                    statusIcon = 'fas fa-clock';
+                                } else {
+                                    statusMessage = '처리 완료된 정비입니다';
+                                    statusColor = '#6c757d';
+                                    statusIcon = 'fas fa-info-circle';
+                                }
+                                
                                 return `
-                                    <div style="padding: 10px; background: #f8f9fa; border-radius: 8px; color: #666; text-align: center;">
-                                        상태: ${maintenance.status} (이미 완료된 정비입니다)
+                                    <div style="
+                                        padding: 16px; 
+                                        background: ${statusColor}10; 
+                                        border-left: 4px solid ${statusColor}; 
+                                        border-radius: 8px; 
+                                        color: ${statusColor}; 
+                                        font-weight: 500;
+                                        font-size: 14px;
+                                        line-height: 1.4;
+                                        margin: 0;
+                                    ">
+                                        <div style="display: flex; align-items: flex-start; gap: 10px;">
+                                            <i class="${statusIcon}" style="font-size: 18px; margin-top: 1px; flex-shrink: 0;"></i>
+                                            <div>${statusMessage}</div>
+                                        </div>
                                     </div>
                                 `;
                             }
@@ -3177,7 +3274,7 @@ function showMaintenanceDetailModal(maintenance) {
                                     <button class="btn btn-success" onclick="updateMaintenanceStatus('${maintenance.id}', 'approved'); closeMaintenanceDetailModal();">
                                         <i class="fas fa-thumbs-up"></i> 확인
                                     </button>
-                                    <button class="btn btn-danger" onclick="updateMaintenanceStatus('${maintenance.id}', 'rejected'); closeMaintenanceDetailModal();">
+                                    <button class="btn btn-danger" onclick="showRejectReasonModal('${maintenance.id}');">
                                         <i class="fas fa-thumbs-down"></i> 거절
                                     </button>
                                 `;
@@ -3320,6 +3417,94 @@ async function editMaintenance(maintenanceId) {
     }
 }
 
+// 거절 이유 입력 모달
+function showRejectReasonModal(maintenanceId) {
+    const modalHTML = `
+        <div id="rejectReasonModal" class="modal-overlay active">
+            <div class="modal-container" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <i class="fas fa-times-circle"></i> 정비 거절
+                    </h2>
+                    <button class="modal-close" onclick="closeRejectReasonModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <div style="margin-bottom: 15px;">
+                        <p style="color: #666; margin-bottom: 15px;">정비를 거절하는 이유를 알려주세요:</p>
+                        <textarea 
+                            id="rejectReason" 
+                            rows="4" 
+                            placeholder="거절 이유를 입력해주세요..." 
+                            style="
+                                width: 100%; 
+                                padding: 12px; 
+                                border: 2px solid #ddd; 
+                                border-radius: 8px; 
+                                font-size: 14px; 
+                                resize: vertical;
+                                min-height: 100px;
+                            "
+                        ></textarea>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeRejectReasonModal()">
+                        <i class="fas fa-times"></i> 취소
+                    </button>
+                    <button class="btn btn-danger" onclick="submitRejectReason('${maintenanceId}')">
+                        <i class="fas fa-thumbs-down"></i> 거절하기
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // 텍스트 영역에 포커스
+    setTimeout(() => {
+        const textarea = document.getElementById('rejectReason');
+        if (textarea) {
+            textarea.focus();
+        }
+    }, 100);
+}
+
+function closeRejectReasonModal() {
+    const modal = document.getElementById('rejectReasonModal');
+    if (modal) {
+        try {
+            modal.remove();
+        } catch (error) {
+            console.log('Modal already removed:', error);
+        }
+    }
+}
+
+async function submitRejectReason(maintenanceId) {
+    const rejectReason = document.getElementById('rejectReason').value.trim();
+    
+    if (!rejectReason) {
+        showNotification('거절 이유를 입력해주세요.', 'error');
+        return;
+    }
+    
+    try {
+        // 거절 이유와 함께 상태 업데이트
+        await updateMaintenanceStatusWithReason(maintenanceId, 'rejected', rejectReason);
+        closeRejectReasonModal();
+        closeMaintenanceDetailModal();
+        showNotification('정비를 거절하였습니다.', 'warning');
+    } catch (error) {
+        console.error('❌ Error rejecting maintenance:', error);
+        showNotification('거절 처리 중 오류가 발생했습니다.', 'error');
+    }
+}
+
 // 전역 함수로 등록
 window.showMaintenanceDetail = showMaintenanceDetail;
 window.closeMaintenanceDetailModal = closeMaintenanceDetailModal;
@@ -3327,6 +3512,9 @@ window.showPhotoModal = showPhotoModal;
 window.closePhotoModal = closePhotoModal;
 window.editMaintenance = editMaintenance;
 window.completeMaintenanceWork = completeMaintenanceWork;
+window.showRejectReasonModal = showRejectReasonModal;
+window.closeRejectReasonModal = closeRejectReasonModal;
+window.submitRejectReason = submitRejectReason;
 
 // 테스트 데이터 추가 함수 (관리자 전용)
 async function addTestData() {
