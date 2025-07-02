@@ -1827,13 +1827,15 @@ body {
     
     .modal-footer {
         padding: 15px !important;
-        flex-direction: column !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        gap: 10px !important;
     }
     
     .modal-footer button {
-        width: 100% !important;
+        flex: 1 !important;
         margin: 0 !important;
-        min-width: auto !important;
+        min-width: 120px !important;
     }
     
     /* 견적 항목 모바일 최적화 */
