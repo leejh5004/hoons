@@ -1831,6 +1831,8 @@ async function handleMaintenanceSubmit(e) {
             photos: []
         };
         
+        console.log('📝 Creating maintenance with status:', formData.status);
+        
         // 수정 모드인지 확인
         if (window.editingMaintenanceId) {
             // 수정 모드
@@ -3130,6 +3132,8 @@ function showMaintenanceDetailModal(maintenance) {
                     </button>
                     ${(() => {
                         console.log('🔍 Modal button logic - isAdmin:', isAdmin, 'status:', maintenance.status, 'id:', maintenance.id);
+                        console.log('🔍 Available statuses: in-progress, completed, approved, rejected');
+                        console.log('🔍 Current user:', currentUser);
                         
                         if (isAdmin) {
                             console.log('👨‍💼 Admin view detected');
@@ -3147,6 +3151,13 @@ function showMaintenanceDetailModal(maintenance) {
                                 `;
                             } else {
                                 console.log('❌ Status not in-progress, no admin buttons shown. Current status:', maintenance.status);
+                                console.log('❌ Expected status: "in-progress", actual status: "' + maintenance.status + '"');
+                                // 상태가 in-progress가 아닌 경우에도 정보 표시용 버튼을 제공
+                                return `
+                                    <div style="padding: 10px; background: #f8f9fa; border-radius: 8px; color: #666; text-align: center;">
+                                        상태: ${maintenance.status} (진행중인 정비만 수정/완료 가능)
+                                    </div>
+                                `;
                             }
                         } else {
                             console.log('👤 User view detected');
@@ -3156,7 +3167,7 @@ function showMaintenanceDetailModal(maintenance) {
                                 // 완료됨: 확인/거절 버튼
                                 return `
                                     <button class="btn btn-success" onclick="updateMaintenanceStatus('${maintenance.id}', 'approved'); closeMaintenanceDetailModal();">
-                                                                                  <i class="fas fa-thumbs-up"></i> 확인
+                                        <i class="fas fa-thumbs-up"></i> 확인
                                     </button>
                                     <button class="btn btn-danger" onclick="updateMaintenanceStatus('${maintenance.id}', 'rejected'); closeMaintenanceDetailModal();">
                                         <i class="fas fa-thumbs-down"></i> 거절
@@ -3164,6 +3175,13 @@ function showMaintenanceDetailModal(maintenance) {
                                 `;
                             } else {
                                 console.log('❌ Status not completed, no user buttons shown. Current status:', maintenance.status);
+                                console.log('❌ Expected status: "completed", actual status: "' + maintenance.status + '"');
+                                // 상태 정보 표시
+                                return `
+                                    <div style="padding: 10px; background: #f8f9fa; border-radius: 8px; color: #666; text-align: center;">
+                                        상태: ${maintenance.status} (완료된 정비만 확인/거절 가능)
+                                    </div>
+                                `;
                             }
                         }
                         console.log('🚫 No buttons to show');

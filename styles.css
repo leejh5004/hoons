@@ -1816,13 +1816,25 @@ body {
 
 /* 견적서 모달 반응형 스타일 */
 @media (max-width: 768px) {
+    .modal-overlay {
+        padding: 10px !important;
+        padding-bottom: 100px !important;
+        align-items: flex-start !important;
+        justify-content: center !important;
+        overflow-y: auto !important;
+    }
+    
     .modal-container {
-        margin: 10px !important;
+        margin: 20px 10px 20px 10px !important;
         max-width: calc(100vw - 20px) !important;
+        max-height: calc(100vh - 120px) !important;
+        position: relative !important;
     }
     
     .modal-body {
         padding: 15px !important;
+        max-height: calc(100vh - 240px) !important;
+        overflow-y: auto !important;
     }
     
     .modal-footer {
@@ -1830,6 +1842,10 @@ body {
         flex-direction: row !important;
         flex-wrap: wrap !important;
         gap: 10px !important;
+        position: sticky !important;
+        bottom: 0 !important;
+        background: var(--bg-secondary) !important;
+        border-top: 1px solid var(--secondary-200) !important;
     }
     
     .modal-footer button {
