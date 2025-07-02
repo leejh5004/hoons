@@ -3217,11 +3217,11 @@ function showMaintenanceDetailModal(maintenance) {
                             console.log('👨‍💼 Admin view detected');
                             // 관리자 화면 - 다양한 상태값 형식 처리
                             const status = maintenance.status ? maintenance.status.toLowerCase() : '';
-                            const isInProgress = status === 'in-progress' || status === 'approved' || status === 'pending';
+                            const isPending = status === 'in-progress' || status === 'pending';
                             
-                            if (isInProgress) {
-                                console.log('⚙️ In-progress/approved/pending status - showing edit/complete buttons');
-                                // 진행중/승인됨/대기중: 수정 + 완료 버튼
+                            if (isPending) {
+                                console.log('⚙️ In-progress/pending status - showing edit/complete buttons');
+                                // 진행중/대기중: 수정 + 완료 버튼
                                 return `
                                     <button class="btn btn-primary" onclick="editMaintenance('${maintenance.id}')">
                                         <i class="fas fa-edit"></i> 수정
@@ -3388,12 +3388,12 @@ async function editMaintenance(maintenanceId) {
         
         const maintenance = maintenanceDoc.data();
         
-        // 진행중/승인됨/대기중 상태만 수정 가능
+        // 진행중/대기중 상태만 수정 가능 (approved는 사용자가 이미 확인한 상태라 수정 불가)
         const status = maintenance.status ? maintenance.status.toLowerCase() : '';
-        const isEditable = status === 'in-progress' || status === 'approved' || status === 'pending';
+        const isEditable = status === 'in-progress' || status === 'pending';
         
         if (!isEditable) {
-            showNotification('진행중/승인된 정비만 수정할 수 있습니다.', 'error');
+            showNotification('진행중/대기중인 정비만 수정할 수 있습니다.', 'error');
             return;
         }
         
