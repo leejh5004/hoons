@@ -453,6 +453,12 @@ function showProfileOptions() {
             action: () => manualPhotoCleanup(), 
             icon: 'fas fa-broom' 
         });
+
+        options.unshift({ 
+            text: '견적서 조회', 
+            action: () => showEstimateSearchModal(), 
+            icon: 'fas fa-search' 
+        });
         options.unshift({ 
             text: '견적서 생성', 
             action: () => showEstimateModal(), 
@@ -1513,26 +1519,37 @@ function renderCardView(maintenances) {
         
         // 📸 사진 개수 계산
         const photoCount = [maintenance.beforePhoto, maintenance.duringPhoto, maintenance.afterPhoto].filter(photo => photo).length;
-        const photoIndicator = photoCount > 0 ? ` <span style="background: rgba(255,255,255,0.3); padding: 2px 6px; border-radius: 12px; font-size: 12px; margin-left: 8px;">📸${photoCount}</span>` : '';
+        const photoIndicator = photoCount > 0 ? ` <span class="photo-indicator">📸${photoCount}</span>` : '';
+        
+        // 타입별 클래스 매핑
+        const typeClassMap = {
+            '엔진오일교체': 'type-engine',
+            '타이어교체': 'type-tire', 
+            '브레이크정비': 'type-brake',
+            '일반점검': 'type-inspection',
+            '기타': 'type-other'
+        };
+        
+        const typeClass = typeClassMap[maintenance.type] || 'type-other';
         
         return `
-            <div class="maintenance-card-view" style="background: ${gradient}; color: white; padding: 25px; margin: 15px 0; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); cursor: pointer;" onclick="showMaintenanceDetail('${maintenance.id}')">
-                <h3 style="margin: 0 0 15px 0; font-size: 20px;">
+            <div class="maintenance-card-enhanced ${typeClass}" onclick="showMaintenanceDetail('${maintenance.id}')">
+                <h3>
                     ${typeIcon} ${maintenance.type || '정비'}${photoIndicator}
                 </h3>
-                <p style="margin: 5px 0; opacity: 0.9;">
+                <p>
                     📅 ${maintenance.date || '날짜 없음'}
                 </p>
-                <p style="margin: 5px 0; opacity: 0.9;">
+                <p>
                     🏍️ 차량번호: ${maintenance.carNumber || '없음'}
                 </p>
-                <p style="margin: 5px 0; opacity: 0.9;">
-                    📋 상태: <span style="background: ${statusColor}; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: white;">${getStatusText(maintenance.status) || maintenance.status || '없음'}</span>
+                <p>
+                    📋 상태: <span class="status-badge" style="background: ${statusColor};">${getStatusText(maintenance.status) || maintenance.status || '없음'}</span>
                 </p>
-                ${maintenance.mileage ? `<p style="margin: 5px 0; opacity: 0.9;">📏 주행거리: ${maintenance.mileage}km</p>` : ''}
-                ${(maintenance.status === 'approved' || maintenance.status === 'rejected') && maintenance.adminName ? `<p style="margin: 5px 0; opacity: 0.9;">👨‍💼 관리자: ${maintenance.adminName}</p>` : ''}
+                ${maintenance.mileage ? `<p>📏 주행거리: ${maintenance.mileage}km</p>` : ''}
+                ${(maintenance.status === 'approved' || maintenance.status === 'rejected') && maintenance.adminName ? `<p>👨‍💼 관리자: ${maintenance.adminName}</p>` : ''}
                 ${photoDeleteInfo}
-                <p style="margin: 15px 0 0 0; line-height: 1.5;">
+                <p class="description">
                     ${(maintenance.description || '설명이 없습니다.').substring(0, 100)}${(maintenance.description || '').length > 100 ? '...' : ''}
                 </p>
             </div>
@@ -1645,8 +1662,11 @@ function initializeMaintenanceModal() {
     const submitBtn = document.getElementById('submitForm');
     const form = document.getElementById('maintenanceForm');
     
-    if (fab) {
+    // 🔧 FAB 버튼 이벤트 리스너 (중복 방지)
+    if (fab && !fab.hasAttribute('data-listener-added')) {
         fab.addEventListener('click', openMaintenanceModal);
+        fab.setAttribute('data-listener-added', 'true');
+        console.log('✅ FAB 이벤트 리스너 등록');
     }
     
     if (prevBtn) {
@@ -1677,6 +1697,8 @@ function openMaintenanceModal() {
         modal.classList.add('active');
         resetMaintenanceForm();
         showStep(1);
+    } else {
+        showNotification('페이지를 새로고침 후 다시 시도해주세요.', 'error');
     }
 }
 
@@ -1932,77 +1954,47 @@ function initializeTypeSelector() {
 
 // 사진 업로드 초기화 함수
 function initializePhotoUpload() {
-    console.log('🖼️ Initializing photo upload...');
-    
-    // 사진 업로드 영역 클릭 이벤트
     const photoAreas = document.querySelectorAll('.photo-upload-area');
-    console.log('📸 Found photo areas:', photoAreas.length);
     
-    photoAreas.forEach((area, index) => {
+    photoAreas.forEach((area) => {
         const type = area.dataset.type;
-        console.log(`📸 Setting up area ${index + 1}:`, type);
         
-        // 기존 이벤트 제거 후 새로 추가
-        area.replaceWith(area.cloneNode(true));
-        const newArea = document.querySelectorAll('.photo-upload-area')[index];
-        
-        newArea.addEventListener('click', () => {
-            console.log('📸 Photo area clicked:', type);
-            const fileInput = document.getElementById(`${type}Photo`);
-            if (fileInput) {
-                fileInput.click();
-            } else {
-                console.error('❌ File input not found:', `${type}Photo`);
-            }
-        });
-    });
-    
-    // 파일 입력 이벤트
-    const photoInputs = ['beforePhoto', 'duringPhoto', 'afterPhoto'];
-    
-    photoInputs.forEach(inputId => {
-        const input = document.getElementById(inputId);
-        if (input) {
-            console.log('📸 Setting up file input:', inputId);
-            
-            // 기존 이벤트 제거 후 새로 추가
-            input.replaceWith(input.cloneNode(true));
-            const newInput = document.getElementById(inputId);
-            
-            newInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                console.log('📸 File selected:', file?.name);
-                
-                if (file) {
-                    const photoType = inputId.replace('Photo', '');
-                    console.log('📸 Processing photo type:', photoType);
-                    handlePhotoUpload(file, photoType);
+        if (!area.hasAttribute('data-initialized')) {
+            area.addEventListener('click', () => {
+                const fileInput = document.getElementById(`${type}Photo`);
+                if (fileInput) {
+                    fileInput.click();
                 }
             });
-        } else {
-            console.error('❌ Photo input not found:', inputId);
+            area.setAttribute('data-initialized', 'true');
         }
     });
     
-    console.log('✅ Photo upload initialization complete');
+    const photoInputs = ['beforePhoto', 'duringPhoto', 'afterPhoto'];
+    photoInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input && !input.hasAttribute('data-initialized')) {
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const photoType = inputId.replace('Photo', '');
+                    handlePhotoUpload(file, photoType);
+                }
+            });
+            input.setAttribute('data-initialized', 'true');
+        }
+    });
 }
 
 // 사진 업로드 처리 함수
 async function handlePhotoUpload(file, type) {
     try {
-        console.log(`📸 Processing ${type} photo upload:`, file.name, file.size, 'bytes');
-        
         // 이미지 리사이즈
         const resizedFile = await resizeImage(file);
-        console.log(`📸 Resized ${type} photo:`, resizedFile.size, 'bytes');
         
         // Base64로 변환하여 임시 저장
         const base64 = await convertToBase64(resizedFile);
-        console.log(`📸 Converted ${type} to base64:`, base64.length, 'characters');
-        console.log(`📸 Base64 preview for ${type}:`, base64.substring(0, 50) + '...');
-        
         uploadedPhotos[type] = base64;
-        console.log(`📸 Saved ${type} to uploadedPhotos. Current keys:`, Object.keys(uploadedPhotos));
         
         // 미리보기 표시
         showPhotoPreview(base64, type);
@@ -2017,20 +2009,13 @@ async function handlePhotoUpload(file, type) {
 
 // 사진 미리보기 표시 함수
 function showPhotoPreview(base64, type) {
-    console.log('🖼️ Showing photo preview for:', type);
-    
-    // 업로드 영역 찾기
     const uploadArea = document.querySelector(`[data-type="${type}"]`);
-    if (!uploadArea) {
-        console.error('❌ Upload area not found for:', type);
-        return;
-    }
+    if (!uploadArea) return;
     
     const placeholder = uploadArea.querySelector('.upload-placeholder');
     const preview = uploadArea.querySelector('.photo-preview');
     
     if (placeholder && preview) {
-        // 플레이스홀더 숨기고 미리보기 표시
         placeholder.style.display = 'none';
         preview.style.display = 'block';
         
@@ -2038,35 +2023,24 @@ function showPhotoPreview(base64, type) {
         if (img) {
             img.src = base64;
         }
-        
-        console.log('✅ Photo preview updated for:', type);
-    } else {
-        console.error('❌ Preview elements not found for:', type);
     }
 }
 
 // 사진 제거 함수
 function removePhoto(type) {
-    console.log('🗑️ Removing photo:', type);
-    
     uploadedPhotos[type] = null;
     
-    // 업로드 영역 찾기
     const uploadArea = document.querySelector(`[data-type="${type}"]`);
     if (uploadArea) {
         const placeholder = uploadArea.querySelector('.upload-placeholder');
         const preview = uploadArea.querySelector('.photo-preview');
         
         if (placeholder && preview) {
-            // 미리보기 숨기고 플레이스홀더 표시
             preview.style.display = 'none';
             placeholder.style.display = 'flex';
-            
-            console.log('✅ Photo preview hidden for:', type);
         }
     }
     
-    // 파일 입력 초기화
     const input = document.getElementById(`${type}Photo`);
     if (input) {
         input.value = '';
@@ -2581,6 +2555,71 @@ function initializeEventListeners() {
             closeMaintenanceModal();
         }
     });
+    
+    // 맨 위로 가기 버튼 초기화
+    initializeScrollToTop();
+}
+
+// 맨 위로 가기 버튼 초기화 함수
+function initializeScrollToTop() {
+    console.log('⬆️ Initializing scroll to top functionality...');
+    
+    const scrollToTopBtn = document.getElementById('scrollToTopBtn');
+    if (!scrollToTopBtn) {
+        console.warn('❌ Scroll to top button not found');
+        return;
+    }
+    
+    let scrollTimer = null;
+    
+    // 스크롤 이벤트 리스너 (스로틀링)
+    function handleScroll() {
+        if (scrollTimer) {
+            clearTimeout(scrollTimer);
+        }
+        
+        scrollTimer = setTimeout(() => {
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const showThreshold = 300; // 300px 이상 스크롤하면 버튼 표시
+            
+            if (scrollTop > showThreshold) {
+                scrollToTopBtn.classList.add('show');
+                scrollToTopBtn.style.display = 'flex';
+            } else {
+                scrollToTopBtn.classList.remove('show');
+                // 애니메이션 완료 후 display none
+                setTimeout(() => {
+                    if (!scrollToTopBtn.classList.contains('show')) {
+                        scrollToTopBtn.style.display = 'none';
+                    }
+                }, 300);
+            }
+        }, 100); // 100ms 디바운싱
+    }
+    
+    // 클릭 이벤트 리스너
+    function handleScrollToTop() {
+        console.log('⬆️ Scrolling to top...');
+        
+        // 부드러운 스크롤
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+        
+        // 햅틱 피드백 (모바일에서만)
+        if (navigator.vibrate) {
+            navigator.vibrate(50);
+        }
+        
+        showNotification('맨 위로 이동했습니다', 'info');
+    }
+    
+    // 이벤트 리스너 등록
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    scrollToTopBtn.addEventListener('click', handleScrollToTop);
+    
+    console.log('✅ Scroll to top functionality initialized');
 }
 
 // 보기 모드 전환 함수
@@ -3054,21 +3093,21 @@ function showMaintenanceDetailModal(maintenance) {
                 </div>
                 
                 <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
-                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                        <h3 style="margin: 0 0 10px 0; font-size: 20px;">${typeIcon} ${maintenance.type || '정비'}</h3>
-                        <p style="margin: 5px 0; opacity: 0.9;">📅 날짜: ${formatDate(maintenance.date) || '날짜 없음'}</p>
-                        <p style="margin: 5px 0; opacity: 0.9;">🏍️ 차량번호: ${maintenance.carNumber || '없음'}</p>
-                        <p style="margin: 5px 0; opacity: 0.9;">
+                    <div class="info-section-unified">
+                        <h3>${typeIcon} ${maintenance.type || '정비'}</h3>
+                        <p>📅 날짜: ${formatDate(maintenance.date) || '날짜 없음'}</p>
+                        <p>🏍️ 차량번호: ${maintenance.carNumber || '없음'}</p>
+                        <p>
                             📋 상태: <span style="background: ${statusInfo.color}; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
                                 ${statusInfo.text || maintenance.status || '없음'}
                             </span>
                         </p>
-                        ${maintenance.mileage ? `<p style="margin: 5px 0; opacity: 0.9;">📏 주행거리: ${maintenance.mileage}km</p>` : ''}
+                        ${maintenance.mileage ? `<p>📏 주행거리: ${maintenance.mileage}km</p>` : ''}
                     </div>
                     
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                        <h4 style="margin: 0 0 15px 0; color: #333;">📝 상세 설명</h4>
-                        <p style="line-height: 1.6; color: #555; white-space: pre-wrap;">${maintenance.description || '설명이 없습니다.'}</p>
+                    <div class="info-section-secondary">
+                        <h4>📝 상세 설명</h4>
+                        <p>${maintenance.description || '설명이 없습니다.'}</p>
                     </div>
                     
                     ${(() => {
@@ -3150,17 +3189,16 @@ function showMaintenanceDetailModal(maintenance) {
                             console.log('🖼️ 사진 HTML 생성 중...');
                             
                             return `
-                                <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                                    <h4 style="margin: 0 0 15px 0; color: #333;">📸 사진 (${photos.length}장)</h4>
+                                <div class="photo-section">
+                                    <h4 style="margin: 0 0 var(--space-lg) 0; color: #1e293b; font-size: var(--font-size-lg); font-weight: 800;">📸 사진 (${photos.length}장)</h4>
                                     ${photoDeleteInfo}
                                     
-                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px;">
+                                    <div class="photo-grid">
                                         ${photos.map((photo, index) => {
                                             console.log(`🖼️ 사진 ${index + 1} HTML 생성:`, photo.url);
                                             return `
-                                            <div style="position: relative; background: white; border-radius: 10px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                            <div class="photo-item">
                                                 <img src="${photo.url}" alt="${photo.type}" 
-                                                     style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: pointer;" 
                                                      onclick="showPhotoModal('${photo.url}')"
                                                      onload="console.log('✅ 이미지 로딩 성공:', '${photo.url}')"
                                                      onerror="console.error('❌ 이미지 로딩 실패:', '${photo.url}'); this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -3169,11 +3207,11 @@ function showMaintenanceDetailModal(maintenance) {
                                                     <span style="font-size: 12px;">이미지 로딩 실패</span>
                                                     <small style="font-size: 10px; margin-top: 4px; word-break: break-all; text-align: center;">${photo.url.substring(0, 50)}...</small>
                                                 </div>
-                                                <div style="margin-top: 8px; text-align: center;">
-                                                    <span style="font-size: 12px; font-weight: bold; color: #666;">${photo.type}</span>
+                                                <div class="photo-label">
+                                                    <span>${photo.type}</span>
                                                     <br>
                                                     <button onclick="downloadPhoto('${photo.url}', '${maintenance.type || '정비'}_${photo.type}_${maintenance.date || 'unknown'}.jpg'); event.stopPropagation();" 
-                                                            style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-top: 4px;">
+                                                            class="photo-download-btn">
                                                         <i class="fas fa-download"></i> 다운로드
                                                     </button>
                                                 </div>
@@ -3182,9 +3220,9 @@ function showMaintenanceDetailModal(maintenance) {
                                         }).join('')}
                                     </div>
                                     
-                                    <div style="margin-top: 15px; text-align: center;">
+                                    <div style="text-align: center;">
                                         <button onclick="downloadAllPhotos('${maintenance.id}', '${maintenance.type || '정비'}', '${maintenance.date || 'unknown'}')" 
-                                                style="background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                                                class="download-all-btn">
                                             <i class="fas fa-download"></i> 모든 사진 다운로드
                                         </button>
                                     </div>
@@ -3196,11 +3234,11 @@ function showMaintenanceDetailModal(maintenance) {
                         return '';
                     })()}
                     
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
-                        <h4 style="margin: 0 0 15px 0; color: #333;">ℹ️ 추가 정보</h4>
-                        <p style="margin: 5px 0; color: #666;">🆔 ID: ${maintenance.id}</p>
-                        <p style="margin: 5px 0; color: #666;">📅 등록일: ${maintenance.createdAt ? new Date(maintenance.createdAt.toDate()).toLocaleString('ko-KR') : '없음'}</p>
-                        ${maintenance.adminName ? `<p style="margin: 5px 0; color: #666;">👨‍💼 관리자: ${maintenance.adminName}</p>` : ''}
+                    <div class="info-section-secondary">
+                        <h4>ℹ️ 추가 정보</h4>
+                        <p>🆔 ID: ${maintenance.id}</p>
+                        <p>📅 등록일: ${maintenance.createdAt ? new Date(maintenance.createdAt.toDate()).toLocaleString('ko-KR') : '없음'}</p>
+                        ${maintenance.adminName ? `<p>👨‍💼 관리자: ${maintenance.adminName}</p>` : ''}
                     </div>
                 </div>
                 
@@ -4162,131 +4200,92 @@ function showEstimateModal() {
                 ">
                     <form id="estimateForm">
                         <!-- 기본 정보 -->
-                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                            <h3 style="margin: 0 0 15px 0; font-size: 18px;">📋 기본 정보</h3>
-                                                         <div style="display: flex; flex-direction: column; gap: 15px;">
-                                 <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                                     <div style="flex: 1; min-width: 200px;">
-                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">🚗 차량번호</label>
-                                         <input type="text" id="estimateCarNumber" placeholder="12가3456" required
-                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
-                                     </div>
-                                     <div style="flex: 1; min-width: 200px;">
-                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">👤 고객명</label>
-                                         <input type="text" id="estimateCustomerName" placeholder="홍길동" required
-                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
-                                     </div>
-                                 </div>
-                                 <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
-                                     <div style="flex: 1; min-width: 150px;">
-                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">🏍️ 기종</label>
-                                         <input type="text" id="estimateBikeModel" placeholder="혼다 PCX150"
-                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
-                                     </div>
-                                     <div style="flex: 1; min-width: 100px;">
-                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">📅 년식</label>
-                                         <input type="text" id="estimateBikeYear" placeholder="2023"
-                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
-                                     </div>
-                                     <div style="flex: 1; min-width: 120px;">
-                                         <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">📏 키로수</label>
-                                         <input type="text" id="estimateMileage" placeholder="15,000km"
-                                                style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
-                                     </div>
-                                 </div>
-                             </div>
-                                                             <div>
-                                     <label style="display: block; margin-bottom: 5px; font-size: 14px; opacity: 0.9;">🔧 정비 내용</label>
-                                     <input type="text" id="estimateTitle" placeholder="엔진 오일 교체 및 점검" required
-                                            style="width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
-                                 </div>
+                        <div class="info-section-unified">
+                            <h3>📋 기본 정보</h3>
+                            <div class="info-form-grid">
+                                <div class="info-form-row">
+                                    <div class="info-form-col large">
+                                        <label class="info-form-label">🚗 차량번호</label>
+                                        <input type="text" id="estimateCarNumber" placeholder="12가3456" required class="info-form-input">
+                                    </div>
+                                    <div class="info-form-col large">
+                                        <label class="info-form-label">👤 고객명</label>
+                                        <input type="text" id="estimateCustomerName" placeholder="홍길동" required class="info-form-input">
+                                    </div>
+                                </div>
+                                <div class="info-form-row">
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">🏍️ 기종</label>
+                                        <input type="text" id="estimateBikeModel" placeholder="혼다 PCX150" class="info-form-input">
+                                    </div>
+                                    <div class="info-form-col small">
+                                        <label class="info-form-label">📅 년식</label>
+                                        <input type="text" id="estimateBikeYear" placeholder="2023" class="info-form-input">
+                                    </div>
+                                    <div class="info-form-col medium">
+                                        <label class="info-form-label">📏 키로수</label>
+                                        <input type="text" id="estimateMileage" placeholder="15,000km" class="info-form-input">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="info-form-label">🔧 정비 내용</label>
+                                    <input type="text" id="estimateTitle" placeholder="엔진 오일 교체 및 점검" required class="info-form-input">
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- 견적 항목 -->
-                        <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                <h3 style="margin: 0; font-size: 18px; color: #333;">💰 견적 항목</h3>
-                                <button type="button" onclick="addEstimateItem()" 
-                                        style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                        <div class="info-section-unified">
+                            <div class="estimate-modal-header">
+                                <h3>💰 견적 항목</h3>
+                                <button type="button" onclick="addEstimateItem()" class="estimate-add-item-btn">
                                     <i class="fas fa-plus"></i> 항목 추가
                                 </button>
                             </div>
                             
                             <div id="estimateItems">
                                 <!-- 기본 항목 1개 -->
-                                <div class="estimate-item" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd;">
-                                                                         <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch;">
-                                         <div style="flex: 2; min-width: 150px;">
-                                             <input type="text" placeholder="항목명 (예: 엔진오일)" class="item-name" required
-                                                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
-                                         </div>
-                                         <div style="flex: 1; min-width: 80px;">
-                                             <input type="number" placeholder="가격" class="item-price" min="0" required
-                                                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" 
-                                                    oninput="calculateTotal()">
-                                         </div>
-                                         <div style="flex: 0.5; min-width: 60px;">
-                                             <input type="number" placeholder="수량" class="item-quantity" min="1" value="1" required
-                                                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" 
-                                                    oninput="calculateTotal()">
-                                         </div>
-                                         <div style="flex: 0; min-width: 40px;">
-                                             <button type="button" onclick="removeEstimateItem(this)" 
-                                                     style="width: 100%; height: 36px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-                                                 <i class="fas fa-trash"></i>
-                                             </button>
-                                         </div>
+                                <div class="estimate-item-card">
+                                     <div class="estimate-item-flex">
+                                                                              <div class="estimate-item-col-name">
+                                         <input type="text" placeholder="항목명 (예: 엔진오일)" class="item-name estimate-item-input" required>
+                                     </div>
+                                     <div class="estimate-item-col-price">
+                                         <input type="number" placeholder="가격" class="item-price estimate-item-input" min="0" required oninput="calculateTotal()">
+                                     </div>
+                                     <div class="estimate-item-col-quantity">
+                                         <input type="number" placeholder="수량" class="item-quantity estimate-item-input" min="1" value="1" required oninput="calculateTotal()">
+                                     </div>
+                                     <div class="estimate-item-col-action">
+                                         <button type="button" onclick="removeEstimateItem(this)" class="estimate-item-remove-btn">
+                                             <i class="fas fa-trash"></i>
+                                         </button>
+                                     </div>
                                      </div>
                                 </div>
                             </div>
                             
                             <!-- 총액 표시 -->
-                            <div style="margin-top: 20px; padding: 15px; background: #e9ecef; border-radius: 8px; text-align: right;">
-                                <h4 style="margin: 0; font-size: 20px; color: #333;">
-                                    💰 총 견적액: <span id="totalAmount" style="color: #007bff; font-weight: bold;">0</span>원
+                            <div class="estimate-total-section-modal">
+                                <h4>
+                                    💰 총 견적액: <span id="totalAmount" class="estimate-total-amount-modal">0</span>원
                                 </h4>
                             </div>
                         </div>
                         
                         <!-- 추가 메모 -->
-                        <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                            <label style="display: block; margin-bottom: 10px; font-size: 16px; font-weight: 600; color: #333;">📝 추가 메모</label>
-                                                         <textarea id="estimateNotes" placeholder="견적서에 포함할 추가 설명이나 주의사항을 입력하세요..." 
-                                       style="width: 100%; height: 80px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; resize: vertical; box-sizing: border-box;"></textarea>
+                        <div class="estimate-notes-section">
+                            <label>📝 추가 메모</label>
+                            <textarea id="estimateNotes" placeholder="견적서에 포함할 추가 설명이나 주의사항을 입력하세요..." class="estimate-notes-textarea"></textarea>
                         </div>
                     </form>
                 </div>
                 
-                                 <div class="modal-footer" style="
-                     padding: 15px 20px; 
-                     border-top: 1px solid #e5e5e5; 
-                     display: flex; 
-                     gap: 10px; 
-                     flex-wrap: wrap; 
-                     justify-content: space-between;
-                     position: sticky;
-                     bottom: 0;
-                     background: white;
-                     z-index: 10;
-                 ">
-                     <button class="btn btn-secondary" onclick="closeEstimateModal()" style="
-                         flex: 1; 
-                         min-width: 90px;
-                         max-width: 110px;
-                         padding: 12px 8px;
-                         font-size: 13px;
-                     ">
+                                 <div class="modal-footer estimate-modal-footer">
+                     <button class="btn btn-secondary estimate-modal-btn-cancel" onclick="closeEstimateModal()">
                          <i class="fas fa-times"></i> 취소
                      </button>
-                     <button class="btn btn-primary" onclick="generateEstimatePDF()" style="
-                         flex: 2; 
-                         min-width: 140px;
-                         padding: 12px 8px;
-                         font-size: 13px;
-                         white-space: nowrap;
-                         text-overflow: ellipsis;
-                         overflow: hidden;
-                     ">
+                     <button class="btn btn-primary estimate-modal-btn-generate" onclick="generateEstimatePDF()">
                          <i class="fas fa-file-pdf"></i> 견적서 생성
                      </button>
                  </div>
@@ -4312,29 +4311,23 @@ function closeEstimateModal() {
 function addEstimateItem() {
     const itemsContainer = document.getElementById('estimateItems');
     const itemHTML = `
-        <div class="estimate-item" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd;">
-                         <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch;">
-                 <div style="flex: 2; min-width: 150px;">
-                     <input type="text" placeholder="항목명 (예: 브레이크패드)" class="item-name" required
-                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
-                 </div>
-                 <div style="flex: 1; min-width: 80px;">
-                     <input type="number" placeholder="가격" class="item-price" min="0" required
-                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" 
-                            oninput="calculateTotal()">
-                 </div>
-                 <div style="flex: 0.5; min-width: 60px;">
-                     <input type="number" placeholder="수량" class="item-quantity" min="1" value="1" required
-                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" 
-                            oninput="calculateTotal()">
-                 </div>
-                 <div style="flex: 0; min-width: 40px;">
-                     <button type="button" onclick="removeEstimateItem(this)" 
-                             style="width: 100%; height: 36px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-                         <i class="fas fa-trash"></i>
-                     </button>
-                 </div>
-             </div>
+        <div class="estimate-item-card">
+            <div class="estimate-item-flex">
+                <div class="estimate-item-col-name">
+                    <input type="text" placeholder="항목명 (예: 브레이크패드)" class="item-name estimate-item-input" required>
+                </div>
+                <div class="estimate-item-col-price">
+                    <input type="number" placeholder="가격" class="item-price estimate-item-input" min="0" required oninput="calculateTotal()">
+                </div>
+                <div class="estimate-item-col-quantity">
+                    <input type="number" placeholder="수량" class="item-quantity estimate-item-input" min="1" value="1" required oninput="calculateTotal()">
+                </div>
+                <div class="estimate-item-col-action">
+                    <button type="button" onclick="removeEstimateItem(this)" class="estimate-item-remove-btn">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
         </div>
     `;
     
@@ -4344,8 +4337,8 @@ function addEstimateItem() {
 
 // 견적 항목 제거
 function removeEstimateItem(button) {
-    const item = button.closest('.estimate-item');
-    if (document.querySelectorAll('.estimate-item').length > 1) {
+    const item = button.closest('.estimate-item-card');
+    if (document.querySelectorAll('.estimate-item-card').length > 1) {
         item.remove();
         calculateTotal();
     } else {
@@ -4355,7 +4348,7 @@ function removeEstimateItem(button) {
 
 // 총액 계산
 function calculateTotal() {
-    const items = document.querySelectorAll('.estimate-item');
+    const items = document.querySelectorAll('.estimate-item-card');
     let total = 0;
     
     items.forEach(item => {
@@ -4382,7 +4375,7 @@ async function generateEstimatePDF() {
         
         // 견적 항목 수집
         const items = [];
-        const itemElements = document.querySelectorAll('.estimate-item');
+        const itemElements = document.querySelectorAll('.estimate-item-card');
         let hasValidItem = false;
         
         itemElements.forEach(item => {
@@ -4413,10 +4406,34 @@ async function generateEstimatePDF() {
         let currentManagerName = getCurrentManagerSignature();
         console.log('🚀 현재 관리자 이름:', currentManagerName);
         
-        // 🎨 HTML 견적서 템플릿 생성
-        const estimateHTML = createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel, bikeYear, mileage, currentManagerName);
+        // 견적서 번호 생성
+        const estimateNumber = Date.now().toString().slice(-6);
         
-                // HTML을 이미지로 변환 후 PDF 생성
+        // 🎨 HTML 견적서 템플릿 생성
+        const estimateHTML = createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel, bikeYear, mileage, currentManagerName, estimateNumber);
+        
+        // 📁 견적서 데이터 Firebase에 저장
+        console.log('💾 견적서 저장 시도:', estimateNumber);
+        
+        await saveEstimateToFirebase({
+            estimateNumber,
+            customerName,
+            carNumber,
+            title,
+            items,
+            totalAmount,
+            notes,
+            bikeModel,
+            bikeYear,
+            mileage,
+            managerName: currentManagerName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdBy: currentUser?.email || 'unknown'
+        });
+        
+
+        
+        // HTML을 이미지로 변환 후 PDF 생성
         await generatePDFFromHTML(estimateHTML, customerName, carNumber);
          
     } catch (error) {
@@ -4463,7 +4480,7 @@ function getCurrentManagerSignature() {
 
 
 // 🎨 HTML 견적서 템플릿 생성
-function createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel = '', bikeYear = '', mileage = '', managerName = '정비사') {
+function createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel = '', bikeYear = '', mileage = '', managerName = '정비사', estimateNumber = '') {
     const currentDate = new Date().toLocaleDateString('ko-KR');
     
     return `
@@ -4587,7 +4604,7 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                                 border-radius: 15px;
                                 font-size: 11px;
                                 font-weight: bold;
-                            ">견적서 No. ${Date.now().toString().slice(-6)}</div>
+                            ">견적서 No. ${estimateNumber || Date.now().toString().slice(-6)}</div>
                         </div>
                     </div>
                 </div>
@@ -4992,6 +5009,285 @@ async function debugPhotoIssue() {
 // 전역에서 접근 가능하도록 설정
 window.debugPhotoIssue = debugPhotoIssue;
 
+// 💾 견적서 데이터를 Firebase에 저장
+async function saveEstimateToFirebase(estimateData) {
+    try {
+        console.log('💾 견적서 저장 시작:', {
+            estimateNumber: estimateData.estimateNumber,
+            currentUser: currentUser?.email,
+            isAdmin,
+            token: await auth.currentUser?.getIdTokenResult()
+        });
+        
+        await db.collection('estimates').doc(estimateData.estimateNumber).set(estimateData);
+        
+        console.log('✅ 견적서 저장 완료:', estimateData.estimateNumber);
+        showNotification(`견적서 No. ${estimateData.estimateNumber} 저장 완료`, 'success');
+        
+    } catch (error) {
+        console.error('❌ 견적서 저장 중 에러:', {
+            error,
+            code: error.code,
+            message: error.message
+        });
+        showNotification(`견적서 저장 실패: ${error.message}`, 'error');
+        throw error; // 에러를 다시 던져서 상위에서 처리하도록
+    }
+}
+
+// 🔍 견적서 번호로 조회
+async function searchEstimateByNumber(estimateNumber) {
+    try {
+        console.log('🔍 견적서 조회 시작:', {
+            estimateNumber,
+            currentUser: currentUser?.email,
+            isAdmin,
+            dbReady: !!db
+        });
+        
+        // 간단한 알림으로 시작
+        showNotification('견적서를 조회하고 있습니다...', 'info');
+        
+        const doc = await db.collection('estimates').doc(estimateNumber).get();
+        console.log('📄 문서 조회 결과:', {
+            exists: doc.exists,
+            id: doc.id,
+            data: doc.exists ? doc.data() : null
+        });
+        
+        if (doc.exists) {
+            const estimateData = doc.data();
+            console.log('✅ 견적서 데이터:', estimateData);
+            
+            // ✅ 견적서 조회 성공
+            console.log('✅ 견적서 조회 완료');
+            showNotification('견적서 조회 완료', 'success');
+            
+            return estimateData;
+        } else {
+            console.log('❌ 견적서 문서가 존재하지 않음');
+            showNotification(`견적서 No. ${estimateNumber}를 찾을 수 없습니다.`, 'error');
+            return null;
+        }
+        
+    } catch (error) {
+        console.error('❌ 견적서 조회 중 에러:', {
+            error,
+            code: error.code,
+            message: error.message,
+            stack: error.stack
+        });
+        alert(`견적서 조회 실패: ${error.message}`);
+        showNotification(`견적서 조회 실패: ${error.message}`, 'error');
+        return null;
+    }
+}
+
+// 📋 견적서 상세 정보 표시 (사용 안 함 - alert으로 대체)
+function showEstimateDetails(estimateData) {
+    // 이 함수는 더 이상 사용되지 않음 (alert 방식으로 변경)
+}
+
+// 🔍 견적서 검색 모달 표시
+function showEstimateSearchModal() {
+    console.log('🔍 견적서 검색 모달 표시');
+    
+    const modal = document.getElementById('estimateSearchModal');
+    const input = document.getElementById('estimateNumberInput');
+    
+    if (!modal || !input) {
+        console.error('❌ 견적서 검색 모달 요소를 찾을 수 없음');
+        // 백업: 프롬프트 사용
+        const estimateNumber = prompt('견적서 번호를 입력하세요 (6자리 숫자):');
+        if (estimateNumber && estimateNumber.length === 6 && /^\d+$/.test(estimateNumber)) {
+            searchEstimateByNumber(estimateNumber);
+        }
+        return;
+    }
+    
+    // 모달 표시
+    modal.classList.add('active');
+    input.value = '';
+    input.focus();
+    
+    // Enter 키 이벤트 추가
+    input.onkeypress = function(e) {
+        if (e.key === 'Enter') {
+            handleEstimateSearchSubmit();
+        }
+    };
+}
+
+// 🔍 견적서 검색 처리
+async function handleEstimateSearchSubmit() {
+    const input = document.getElementById('estimateNumberInput');
+    const estimateNumber = input.value.trim();
+    
+    if (!estimateNumber) {
+        showNotification('견적서 번호를 입력해주세요.', 'error');
+        input.focus();
+        return;
+    }
+    
+    if (estimateNumber.length !== 6 || !/^\d+$/.test(estimateNumber)) {
+        showNotification('견적서 번호는 6자리 숫자여야 합니다.', 'error');
+        input.focus();
+        return;
+    }
+    
+    // 검색 모달 닫기
+    closeEstimateSearchModal();
+    
+    // 견적서 조회
+    const estimateData = await searchEstimateByNumber(estimateNumber);
+    
+    if (estimateData) {
+        // 상세 정보 모달로 표시
+        showEstimateDetailModal(estimateData);
+    }
+}
+
+// 🔍 견적서 검색 모달 닫기
+function closeEstimateSearchModal() {
+    const modal = document.getElementById('estimateSearchModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// 📋 견적서 상세 모달 표시
+function showEstimateDetailModal(estimateData) {
+    console.log('📋 견적서 상세 모달 표시:', estimateData);
+    
+    const modal = document.getElementById('estimateDetailModal');
+    const body = document.getElementById('estimateDetailBody');
+    
+    if (!modal || !body) {
+        console.error('❌ 견적서 상세 모달 요소를 찾을 수 없음');
+        // 백업: alert 사용
+        const summary = `
+📋 견적서 No. ${estimateData.estimateNumber}
+
+👤 고객명: ${estimateData.customerName}
+🏍️ 차량번호: ${estimateData.carNumber}  
+🔧 정비내용: ${estimateData.title}
+💰 총액: ${estimateData.totalAmount?.toLocaleString()}원
+👨‍🔧 작성자: ${estimateData.managerName}
+📅 작성일: ${estimateData.createdAt?.toDate?.() ? estimateData.createdAt.toDate().toLocaleDateString('ko-KR') : '알 수 없음'}
+        `;
+        alert(summary);
+        return;
+    }
+    
+    // 견적서 상세 HTML 생성
+    const detailHTML = createEstimateDetailHTML(estimateData);
+    body.innerHTML = detailHTML;
+    
+    // 모달 표시
+    modal.classList.add('active');
+}
+
+// 📋 견적서 상세 모달 닫기
+function closeEstimateDetailModal() {
+    const modal = document.getElementById('estimateDetailModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// 📋 견적서 상세 HTML 생성
+function createEstimateDetailHTML(estimateData) {
+    const createdDate = estimateData.createdAt?.toDate?.() 
+        ? estimateData.createdAt.toDate().toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'long'
+        })
+        : '알 수 없음';
+        
+    const createdTime = estimateData.createdAt?.toDate?.() 
+        ? estimateData.createdAt.toDate().toLocaleTimeString('ko-KR', {
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+        : '';
+    
+    return `
+        <div class="estimate-detail-card">
+            <div class="estimate-header">
+                <div class="estimate-number-badge">
+                    No. ${estimateData.estimateNumber}
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: #1e293b; font-weight: 800; font-size: var(--font-size-xl); text-shadow: 0 1px 2px rgba(0,0,0,0.1);">${estimateData.title || '정비 견적서'}</h3>
+                    <p style="margin: 8px 0 0 0; color: #475569; font-size: var(--font-size-base); font-weight: 600;">
+                        ${estimateData.notes || '정비 내용 상세 견적서'}
+                    </p>
+                </div>
+            </div>
+            
+            <div class="estimate-info-grid">
+                <div class="estimate-info-item">
+                    <div class="estimate-info-label">고객명</div>
+                    <div class="estimate-info-value">
+                        <i class="fas fa-user"></i>
+                        <span style="font-weight: 800; color: #0f172a; font-size: var(--font-size-lg);">${estimateData.customerName || '정보 없음'}</span>
+                    </div>
+                </div>
+                
+                <div class="estimate-info-item">
+                    <div class="estimate-info-label">차량번호</div>
+                    <div class="estimate-info-value">
+                        <i class="fas fa-motorcycle"></i>
+                        <span style="font-weight: 900; color: #0f172a; font-size: var(--font-size-xl); letter-spacing: 1px;">${estimateData.carNumber || '정보 없음'}</span>
+                    </div>
+                </div>
+                
+                <div class="estimate-info-item">
+                    <div class="estimate-info-label">기종</div>
+                    <div class="estimate-info-value">
+                        <i class="fas fa-cog"></i>
+                        <span style="font-weight: 700; color: #0f172a;">${estimateData.bikeModel || '정보 없음'}</span>
+                    </div>
+                </div>
+                
+                <div class="estimate-info-item">
+                    <div class="estimate-info-label">년식 / 키로수</div>
+                    <div class="estimate-info-value">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span style="font-weight: 700; color: #0f172a;">${estimateData.bikeYear || '-'}년 / ${estimateData.mileage || '-'}km</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="estimate-total-section">
+                <div class="estimate-total-label">총 견적 금액</div>
+                <div class="estimate-total-amount">
+                    ${(estimateData.totalAmount || 0).toLocaleString()}원
+                </div>
+            </div>
+            
+            <div class="estimate-meta-info">
+                <div class="estimate-meta-item">
+                    <i class="fas fa-user-tie"></i>
+                    <span style="font-weight: 700; color: #0f172a;">작성자: ${estimateData.managerName || '정보 없음'}</span>
+                </div>
+                
+                <div class="estimate-meta-item">
+                    <i class="fas fa-clock"></i>
+                    <span style="font-weight: 700; color: #0f172a;">${createdTime}</span>
+                </div>
+                
+                <div class="estimate-meta-item" style="grid-column: 1 / -1;">
+                    <i class="fas fa-calendar"></i>
+                    <span style="font-weight: 700; color: #0f172a;">${createdDate}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 // 📱 QR 코드 생성 함수 (사이트 접속용)
 function generateSimpleQRCode() {
     // TWOHOONS GARAGE 사이트 QR 코드 - qr-server API 사용 (CORS 없음)
@@ -5005,3 +5301,13 @@ function generateSimpleQRCode() {
 
 // 전역에서 접근 가능하도록 설정
 window.generateSimpleQRCode = generateSimpleQRCode;
+
+// 견적서 관리 함수들을 전역으로 등록
+window.saveEstimateToFirebase = saveEstimateToFirebase;
+window.searchEstimateByNumber = searchEstimateByNumber;
+window.showEstimateSearchModal = showEstimateSearchModal;
+window.closeEstimateSearchModal = closeEstimateSearchModal;
+window.handleEstimateSearchSubmit = handleEstimateSearchSubmit;
+window.showEstimateDetailModal = showEstimateDetailModal;
+window.closeEstimateDetailModal = closeEstimateDetailModal;
+window.createEstimateDetailHTML = createEstimateDetailHTML;

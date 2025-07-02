@@ -26,6 +26,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 견적서 컬렉션 규칙
+    match /estimates/{estimateId} {
+      allow read, write: if isAdmin(); // 관리자만 견적서 생성/조회 가능
+    }
+
     function isAdmin() {
       return request.auth != null && request.auth.token.email in [
         "admin@admin.com",

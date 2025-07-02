@@ -244,6 +244,11 @@
         <i class="fas fa-plus"></i>
     </button>
 
+    <!-- Scroll to Top Button -->
+    <button class="scroll-to-top" id="scrollToTopBtn" title="맨 위로" style="display: none;">
+        <i class="fas fa-chevron-up"></i>
+    </button>
+
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
         <button class="nav-item active" data-screen="dashboard">
@@ -465,6 +470,75 @@
             
             <div class="modal-body" id="detailModalBody">
                 <!-- Detail content will be dynamically inserted -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Estimate Search Modal -->
+    <div id="estimateSearchModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-search"></i>
+                    견적서 조회
+                </h2>
+                <button class="modal-close" onclick="closeEstimateSearchModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="estimateNumberInput">견적서 번호</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-receipt"></i>
+                        <input type="text" id="estimateNumberInput" placeholder="000000" maxlength="6" pattern="[0-9]{6}">
+                    </div>
+                    <small style="color: var(--text-tertiary); margin-top: 8px; display: block;">
+                        💡 견적서 PDF 하단에 표시된 6자리 번호를 입력해주세요
+                    </small>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEstimateSearchModal()">
+                    <i class="fas fa-times"></i>
+                    취소
+                </button>
+                <button type="button" class="btn btn-primary" onclick="handleEstimateSearchSubmit()">
+                    <i class="fas fa-search"></i>
+                    조회
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estimate Detail Modal -->
+    <div id="estimateDetailModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-receipt"></i>
+                    견적서 상세
+                </h2>
+                <button class="modal-close" onclick="closeEstimateDetailModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body" id="estimateDetailBody">
+                <!-- Content will be dynamically inserted -->
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEstimateDetailModal()">
+                    <i class="fas fa-times"></i>
+                    닫기
+                </button>
+                <button type="button" class="btn btn-primary" onclick="showEstimateSearchModal()">
+                    <i class="fas fa-search"></i>
+                    다시 조회
+                </button>
             </div>
         </div>
     </div>
