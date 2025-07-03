@@ -1876,17 +1876,40 @@ async function handleMaintenanceSubmit(e) {
             
             // 사진 업로드 (있는 경우)
             if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
-                const photos = await uploadMaintenancePhotos(window.editingMaintenanceId);
-                if (photos.length > 0) {
-                    // 기존 사진에 새 사진 추가
+                console.log('📸 Processing photos in edit mode...');
+                const newPhotos = await uploadMaintenancePhotos(window.editingMaintenanceId);
+                console.log('📸 New photos uploaded:', newPhotos);
+                
+                if (newPhotos.length > 0) {
+                    // 🔄 기존 사진과 새 사진을 스마트하게 병합
                     const currentDoc = await db.collection('maintenance').doc(window.editingMaintenanceId).get();
                     const currentPhotos = currentDoc.data().photos || [];
-                    const allPhotos = [...currentPhotos, ...photos];
+                    console.log('📸 Current photos before merge:', currentPhotos);
+                    
+                    // 새로 업로드된 사진의 타입들 수집
+                    const newPhotoTypes = newPhotos.map(p => p.type);
+                    console.log('📸 New photo types:', newPhotoTypes);
+                    
+                    // 기존 사진에서 새로 업로드된 타입과 겹치지 않는 것들만 유지
+                    const filteredCurrentPhotos = currentPhotos.filter(existingPhoto => {
+                        const shouldKeep = !newPhotoTypes.includes(existingPhoto.type);
+                        if (!shouldKeep) {
+                            console.log(`📸 Replacing existing ${existingPhoto.type} photo`);
+                        }
+                        return shouldKeep;
+                    });
+                    
+                    // 필터링된 기존 사진 + 새 사진 = 최종 사진 배열
+                    const finalPhotos = [...filteredCurrentPhotos, ...newPhotos];
+                    console.log('📸 Final photos after merge:', finalPhotos);
                     
                     await db.collection('maintenance').doc(window.editingMaintenanceId).update({
-                        photos: allPhotos
+                        photos: finalPhotos
                     });
-                    console.log('✅ Photos updated for maintenance record:', allPhotos.length);
+                    console.log('✅ Photos updated for maintenance record:', finalPhotos.length);
+                    showNotification(`${newPhotos.length}장의 사진이 업데이트되었습니다!`, 'success');
+                } else {
+                    console.log('📸 No new photos to update');
                 }
             }
             
@@ -1919,13 +1942,13 @@ async function handleMaintenanceSubmit(e) {
             }
             
             showNotification('정비 이력이 성공적으로 등록되었습니다!', 'success');
-        
-        // 사진이 있을 경우 보존 기간 안내
-        if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
-            setTimeout(() => {
-                showNotification(`📸 등록된 사진은 ${PHOTO_RETENTION_DAYS}일 후 자동 삭제됩니다.`, 'info');
-            }, 2000);
-        }
+            
+            // 사진이 있을 경우 보존 기간 안내
+            if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
+                setTimeout(() => {
+                    showNotification(`📸 등록된 사진은 ${PHOTO_RETENTION_DAYS}일 후 자동 삭제됩니다.`, 'info');
+                }, 2000);
+            }
         }
         
         closeMaintenanceModal();
@@ -2960,6 +2983,7 @@ async function uploadMaintenancePhotos(maintenanceId) {
                 // Base64 데이터 검증
                 if (!base64Data.includes('data:image')) {
                     console.error(`❌ Invalid base64 format for ${type}:`, base64Data.substring(0, 50));
+                    showNotification(`${type} 사진 형식이 올바르지 않습니다.`, 'error');
                     continue;
                 }
                 
@@ -2968,8 +2992,11 @@ async function uploadMaintenancePhotos(maintenanceId) {
                 
                 if (!base64Image || base64Image.length < 100) {
                     console.error(`❌ Invalid base64 content for ${type}:`, base64Image ? base64Image.length : 'empty');
+                    showNotification(`${type} 사진 데이터가 손상되었습니다.`, 'error');
                     continue;
                 }
+                
+                console.log(`📸 Base64 processed for ${type}, length: ${base64Image.length}`);
                 
                 // ImgBB API 호출
                 const formData = new FormData();
@@ -2983,12 +3010,18 @@ async function uploadMaintenancePhotos(maintenanceId) {
                     body: formData
                 });
                 
+                console.log(`📸 ImgBB response status for ${type}:`, response.status, response.statusText);
+                
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
                 const result = await response.json();
-                console.log(`📸 ImgBB response for ${type}:`, result.success ? 'SUCCESS' : 'FAILED', result.error);
+                console.log(`📸 ImgBB response for ${type}:`, result.success ? 'SUCCESS' : 'FAILED');
+                
+                if (result.error) {
+                    console.error(`❌ ImgBB error for ${type}:`, result.error);
+                }
                 
                 if (result.success) {
                     const photoData = {
@@ -3003,7 +3036,8 @@ async function uploadMaintenancePhotos(maintenanceId) {
                     
                     photos.push(photoData);
                     console.log(`✅ ${type} photo uploaded successfully:`, result.data.url);
-                    console.log(`🗑️ Delete URL saved:`, result.data.delete_url);
+                    console.log('🗑️ Delete URL saved:', result.data.delete_url);
+                    showNotification(`${type} 사진 업로드 성공!`, 'success');
                 } else {
                     console.error(`❌ ImgBB upload failed for ${type}:`, result);
                     showNotification(`${type} 사진 업로드 실패: ${result.error?.message || '알 수 없는 오류'}`, 'error');
@@ -3019,6 +3053,14 @@ async function uploadMaintenancePhotos(maintenanceId) {
     
     console.log('📸 Final uploaded photos count:', photos.length);
     console.log('📸 Final uploaded photos:', photos.map(p => ({ type: p.type, url: p.url })));
+    
+    if (photos.length === 0) {
+        console.warn('⚠️ No photos were successfully uploaded');
+        showNotification('사진 업로드에 실패했습니다. 다시 시도해주세요.', 'warning');
+    } else {
+        showNotification(`${photos.length}장의 사진이 성공적으로 업로드되었습니다!`, 'success');
+    }
+    
     return photos;
 }
 
@@ -3125,6 +3167,7 @@ function showMaintenanceDetailModal(maintenance) {
                         console.log('📸 maintenance.beforePhoto:', maintenance.beforePhoto);
                         console.log('📸 maintenance.duringPhoto:', maintenance.duringPhoto);
                         console.log('📸 maintenance.afterPhoto:', maintenance.afterPhoto);
+                        console.log('📸 전체 maintenance 데이터:', maintenance);
                         
                         // 1️⃣ 신규 방식: photos 배열 확인
                         if (maintenance.photos && maintenance.photos.length > 0) {
@@ -3198,6 +3241,15 @@ function showMaintenanceDetailModal(maintenance) {
                                 <div class="photo-section">
                                     <h4 style="margin: 0 0 var(--space-lg) 0; color: #1e293b; font-size: var(--font-size-lg); font-weight: 800;">📸 사진 (${photos.length}장)</h4>
                                     ${photoDeleteInfo}
+                                    
+                                    <!-- 디버깅 정보 -->
+                                    <div style="background: #f0f0f0; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-size: 12px; color: #333; border: 1px solid #ccc;">
+                                        <strong>🔍 디버그 정보:</strong><br>
+                                        신규방식 사진: ${maintenance.photos ? maintenance.photos.length : 0}장<br>
+                                        기존방식 사진: ${[maintenance.beforePhoto, maintenance.duringPhoto, maintenance.afterPhoto].filter(p => p).length}장<br>
+                                        최종 표시할 사진: ${photos.length}장<br>
+                                        사진 URL들: ${photos.map(p => p.url?.substring(0, 30) + '...').join(', ')}
+                                    </div>
                                     
                                     <div class="photo-grid">
                                         ${photos.map((photo, index) => {
@@ -3988,28 +4040,64 @@ async function downloadAllPhotos(maintenanceId, maintenanceType, maintenanceDate
     try {
         showNotification('모든 사진을 다운로드하는 중...', 'info');
         
+        console.log('📸 Download All Photos - Starting for:', maintenanceId);
+        
         // 정비 데이터 가져오기
         const doc = await db.collection('maintenance').doc(maintenanceId).get();
         if (!doc.exists) {
+            console.error('❌ Maintenance document not found:', maintenanceId);
             showNotification('정비 이력을 찾을 수 없습니다.', 'error');
             return;
         }
         
         const maintenance = doc.data();
+        console.log('📸 Full maintenance data:', maintenance);
+        console.log('📸 maintenance.photos:', maintenance.photos);
+        console.log('📸 maintenance.beforePhoto:', maintenance.beforePhoto);
+        console.log('📸 maintenance.duringPhoto:', maintenance.duringPhoto);
+        console.log('📸 maintenance.afterPhoto:', maintenance.afterPhoto);
+        
         const photos = [];
         
-        // 사진 URL 수집
-        if (maintenance.beforePhoto) {
-            photos.push({ url: maintenance.beforePhoto, type: '정비전', filename: `${maintenanceType}_정비전_${maintenanceDate}.jpg` });
-        }
-        if (maintenance.duringPhoto) {
-            photos.push({ url: maintenance.duringPhoto, type: '정비중', filename: `${maintenanceType}_정비중_${maintenanceDate}.jpg` });
-        }
-        if (maintenance.afterPhoto) {
-            photos.push({ url: maintenance.afterPhoto, type: '정비후', filename: `${maintenanceType}_정비후_${maintenanceDate}.jpg` });
+        // 🔄 신규 방식과 기존 방식 모두 지원하는 사진 URL 수집
+        if (maintenance.photos && maintenance.photos.length > 0) {
+            console.log('📸 Using NEW format - photos array:', maintenance.photos.length);
+            // 신규 방식: photos 배열
+            maintenance.photos.forEach((photo, index) => {
+                console.log(`📸 Processing photo ${index + 1}:`, photo);
+                const typeKorean = photo.type === 'before' ? '정비전' : 
+                                  photo.type === 'during' ? '정비중' : 
+                                  photo.type === 'after' ? '정비후' : photo.type;
+                const photoData = { 
+                    url: photo.url, 
+                    type: typeKorean, 
+                    filename: `${maintenanceType}_${typeKorean}_${maintenanceDate}.jpg` 
+                };
+                photos.push(photoData);
+                console.log(`📸 Added photo for download:`, photoData);
+            });
+        } else {
+            console.log('📸 Using OLD format - individual fields');
+            // 기존 방식: 개별 필드
+            if (maintenance.beforePhoto) {
+                console.log('📸 Found beforePhoto:', maintenance.beforePhoto);
+                photos.push({ url: maintenance.beforePhoto, type: '정비전', filename: `${maintenanceType}_정비전_${maintenanceDate}.jpg` });
+            }
+            if (maintenance.duringPhoto) {
+                console.log('📸 Found duringPhoto:', maintenance.duringPhoto);
+                photos.push({ url: maintenance.duringPhoto, type: '정비중', filename: `${maintenanceType}_정비중_${maintenanceDate}.jpg` });
+            }
+            if (maintenance.afterPhoto) {
+                console.log('📸 Found afterPhoto:', maintenance.afterPhoto);
+                photos.push({ url: maintenance.afterPhoto, type: '정비후', filename: `${maintenanceType}_정비후_${maintenanceDate}.jpg` });
+            }
         }
         
+        console.log('📸 Total photos found for download:', photos.length);
+        console.log('📸 Photo URLs:', photos.map(p => ({ type: p.type, url: p.url?.substring(0, 50) + '...' })));
+        
         if (photos.length === 0) {
+            console.warn('⚠️ No photos found for download');
             showNotification('다운로드할 사진이 없습니다.', 'warning');
             return;
         }
@@ -4018,8 +4106,10 @@ async function downloadAllPhotos(maintenanceId, maintenanceType, maintenanceDate
         let downloadCount = 0;
         for (const photo of photos) {
             try {
+                console.log(`📸 Downloading ${photo.type}:`, photo.url);
                 await downloadPhoto(photo.url, photo.filename);
                 downloadCount++;
+                console.log(`✅ Successfully downloaded ${photo.type}`);
                 // 다운로드 간격 (브라우저 제한 방지)
                 await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (error) {

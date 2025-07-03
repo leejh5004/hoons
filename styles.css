@@ -1048,28 +1048,84 @@
 
 /* 사진 섹션 */
 .photo-section {
-    background: linear-gradient(145deg, #f8fafc, #f1f5f9);
-    padding: var(--space-xl);
-    border-radius: var(--radius-xl);
-    margin-bottom: var(--space-xl);
-    border: 3px solid var(--secondary-300);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    background: linear-gradient(145deg, #f8fafc, #f1f5f9) !important;
+    padding: var(--space-xl) !important;
+    border-radius: var(--radius-xl) !important;
+    margin-bottom: var(--space-xl) !important;
+    border: 3px solid var(--secondary-300) !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08) !important;
+    overflow: visible !important; /* 모든 사진이 보이도록 */
+    max-height: none !important; /* 높이 제한 제거 */
+    width: 100% !important;
+    display: block !important;
+    clear: both !important;
 }
 
 .photo-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: var(--space-lg);
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+    gap: var(--space-lg) !important;
+    width: 100% !important;
+    overflow: visible !important;
+}
+
+/* 모바일에서 사진 그리드 최적화 */
+@media (max-width: 768px) {
+    .photo-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important;
+        gap: var(--space-md) !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .photo-grid {
+        grid-template-columns: repeat(3, 1fr) !important; /* 3개 사진을 강제로 가로 배열 */
+        gap: 8px !important;
+        width: 100% !important;
+    }
+}
+
+/* 아주 작은 화면에서도 3개 사진 표시 */
+@media (max-width: 360px) {
+    .photo-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 4px !important;
+        width: 100% !important;
+    }
+    
+    .photo-item {
+        padding: 4px !important;
+        min-height: 120px !important;
+        display: block !important;
+    }
+    
+    .photo-item img {
+        height: 80px !important;
+        width: 100% !important;
+        display: block !important;
+    }
+    
+    .photo-label {
+        font-size: 10px !important;
+    }
+    
+    .photo-download-btn {
+        font-size: 10px !important;
+        padding: 2px 4px !important;
+    }
 }
 
 .photo-item {
-    position: relative;
-    background: linear-gradient(145deg, #ffffff, #f8fafc);
-    border-radius: var(--radius-lg);
-    padding: var(--space-md);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    border: 2px solid var(--secondary-200);
-    transition: all var(--transition-fast);
+    position: relative !important;
+    background: linear-gradient(145deg, #ffffff, #f8fafc) !important;
+    border-radius: var(--radius-lg) !important;
+    padding: var(--space-md) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    border: 2px solid var(--secondary-200) !important;
+    transition: all var(--transition-fast) !important;
+    display: block !important;
+    width: 100% !important;
+    min-height: 200px !important;
 }
 
 .photo-item:hover {
@@ -1079,12 +1135,27 @@
 }
 
 .photo-item img {
-    width: 100%;
-    height: 150px;
-    object-fit: cover;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: transform var(--transition-fast);
+    width: 100% !important;
+    height: 150px !important;
+    object-fit: cover !important;
+    border-radius: var(--radius-md) !important;
+    cursor: pointer !important;
+    transition: transform var(--transition-fast) !important;
+    display: block !important;
+    max-width: 100% !important;
+}
+
+/* 모바일에서 사진 아이템 크기 조정 */
+@media (max-width: 768px) {
+    .photo-item img {
+        height: 120px;
+    }
+}
+
+@media (max-width: 480px) {
+    .photo-item img {
+        height: 100px;
+    }
 }
 
 .photo-item img:hover {
@@ -1226,6 +1297,19 @@
 [data-theme="dark"] .photo-section {
     background: linear-gradient(145deg, var(--surface), var(--surface-elevated)) !important;
     border-color: var(--secondary-600) !important;
+}
+
+/* 모바일에서 사진 섹션 패딩 조정 */
+@media (max-width: 768px) {
+    .photo-section {
+        padding: var(--space-lg);
+    }
+}
+
+@media (max-width: 480px) {
+    .photo-section {
+        padding: var(--space-md);
+    }
 }
 
 [data-theme="dark"] .photo-item {
