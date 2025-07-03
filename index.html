@@ -543,11 +543,79 @@
         </div>
     </div>
 
+    <!-- Monthly Estimate Download Modal -->
+    <div id="monthlyEstimateModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-download"></i>
+                    월별 견적서 다운로드
+                </h2>
+                <button class="modal-close" onclick="closeMonthlyEstimateModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="downloadYear">📅 연도</label>
+                    <select id="downloadYear" class="form-control">
+                        <!-- Will be populated dynamically -->
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="downloadMonth">📅 월</label>
+                    <select id="downloadMonth" class="form-control">
+                        <option value="1">1월</option>
+                        <option value="2">2월</option>
+                        <option value="3">3월</option>
+                        <option value="4">4월</option>
+                        <option value="5">5월</option>
+                        <option value="6">6월</option>
+                        <option value="7">7월</option>
+                        <option value="8">8월</option>
+                        <option value="9">9월</option>
+                        <option value="10">10월</option>
+                        <option value="11">11월</option>
+                        <option value="12">12월</option>
+                    </select>
+                </div>
+                
+                <div class="progress-container" id="downloadProgress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="downloadProgressBar"></div>
+                    </div>
+                    <p id="downloadStatusText" class="progress-text">견적서를 검색하고 있습니다...</p>
+                </div>
+                
+                <div class="download-preview" id="downloadPreview" style="display: none;">
+                    <h4>📋 다운로드 예정 목록</h4>
+                    <div id="downloadPreviewList"></div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeMonthlyEstimateModal()">
+                    <i class="fas fa-times"></i>
+                    취소
+                </button>
+                <button type="button" class="btn btn-primary" onclick="downloadMonthlyEstimates()">
+                    <i class="fas fa-download"></i>
+                    다운로드
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification Container -->
     <div id="notificationContainer" class="notification-container"></div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- JSZip for ZIP file generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
     <!-- Custom JavaScript -->
     <script src="app.js"></script>

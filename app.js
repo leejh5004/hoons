@@ -455,6 +455,12 @@ function showProfileOptions() {
         });
 
         options.unshift({ 
+            text: '월별 견적서 다운로드', 
+            action: () => showMonthlyEstimateModal(), 
+            icon: 'fas fa-download' 
+        });
+
+        options.unshift({ 
             text: '견적서 조회', 
             action: () => showEstimateSearchModal(), 
             icon: 'fas fa-search' 
@@ -4788,7 +4794,7 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
 }
 
 // 🎨 HTML을 PDF로 변환
-async function generatePDFFromHTML(htmlContent, customerName, carNumber) {
+async function generatePDFFromHTML(htmlContent, customerName, carNumber, returnBlob = false) {
     try {
         console.log('📄 PDF 생성 시작...');
         
@@ -4958,16 +4964,28 @@ async function generatePDFFromHTML(htmlContent, customerName, carNumber) {
             }
         }
         
-        // PDF 저장
-        const fileName = `견적서_${customerName}_${carNumber}_${new Date().toISOString().slice(0, 10)}.pdf`;
-        pdf.save(fileName);
-        
-        showNotification('PDF 견적서가 성공적으로 생성되었습니다! 🎉', 'success');
-        closeEstimateModal();
+        // PDF 저장 또는 Blob 반환
+        if (returnBlob) {
+            // 월별 다운로드용 - Blob 반환
+            return pdf.output('blob');
+        } else {
+            // 일반 견적서 생성용 - 파일 저장
+            const fileName = `견적서_${customerName}_${carNumber}_${new Date().toISOString().slice(0, 10)}.pdf`;
+            pdf.save(fileName);
+            
+            showNotification('PDF 견적서가 성공적으로 생성되었습니다! 🎉', 'success');
+            closeEstimateModal();
+        }
         
     } catch (error) {
         console.error('❌ PDF 생성 오류:', error);
-        showNotification('PDF 생성 중 오류가 발생했습니다.', 'error');
+        if (returnBlob) {
+            // 월별 다운로드용 - 오류 재전파
+            throw error;
+        } else {
+            // 일반 견적서 생성용 - 사용자에게 알림
+            showNotification('PDF 생성 중 오류가 발생했습니다.', 'error');
+        }
     }
 }
 
@@ -5353,3 +5371,248 @@ window.handleEstimateSearchSubmit = handleEstimateSearchSubmit;
 window.showEstimateDetailModal = showEstimateDetailModal;
 window.closeEstimateDetailModal = closeEstimateDetailModal;
 window.createEstimateDetailHTML = createEstimateDetailHTML;
+
+// =============================================
+// 💾 월별 견적서 다운로드 시스템
+// =============================================
+
+// 월별 견적서 다운로드 모달 표시
+function showMonthlyEstimateModal() {
+    // 🔒 관리자 권한 확인
+    if (!isAdmin) {
+        showNotification('관리자만 월별 다운로드를 사용할 수 있습니다.', 'error');
+        return;
+    }
+    
+    const modal = document.getElementById('monthlyEstimateModal');
+    if (!modal) {
+        showNotification('월별 다운로드 모달을 찾을 수 없습니다.', 'error');
+        return;
+    }
+    
+    // 연도 선택 옵션 초기화
+    const yearSelect = document.getElementById('downloadYear');
+    const monthSelect = document.getElementById('downloadMonth');
+    
+    // 현재 연도부터 3년 전까지 옵션 추가
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    
+    yearSelect.innerHTML = '';
+    for (let year = currentYear; year >= currentYear - 3; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year + '년';
+        yearSelect.appendChild(option);
+    }
+    
+    // 현재 월로 설정
+    monthSelect.value = currentMonth;
+    
+    // 진행률 및 미리보기 숨기기
+    document.getElementById('downloadProgress').style.display = 'none';
+    document.getElementById('downloadPreview').style.display = 'none';
+    
+    // 모달 표시
+    modal.classList.add('active');
+    
+    console.log('📅 월별 견적서 다운로드 모달 열림');
+}
+
+// 월별 견적서 다운로드 모달 닫기
+function closeMonthlyEstimateModal() {
+    const modal = document.getElementById('monthlyEstimateModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// 월별 견적서 다운로드 실행
+async function downloadMonthlyEstimates() {
+    try {
+        const year = parseInt(document.getElementById('downloadYear').value);
+        const month = parseInt(document.getElementById('downloadMonth').value);
+        
+        if (!year || !month) {
+            showNotification('연도와 월을 선택해주세요.', 'error');
+            return;
+        }
+        
+        // 진행률 표시
+        const progressContainer = document.getElementById('downloadProgress');
+        const progressBar = document.getElementById('downloadProgressBar');
+        const statusText = document.getElementById('downloadStatusText');
+        const previewContainer = document.getElementById('downloadPreview');
+        
+        progressContainer.style.display = 'block';
+        previewContainer.style.display = 'none';
+        
+        // 단계 1: 견적서 목록 조회
+        statusText.textContent = '견적서 목록을 조회하고 있습니다...';
+        progressBar.style.width = '10%';
+        
+        const estimates = await getEstimatesByMonth(year, month);
+        
+        if (estimates.length === 0) {
+            showNotification(`${year}년 ${month}월에 생성된 견적서가 없습니다.`, 'info');
+            progressContainer.style.display = 'none';
+            return;
+        }
+        
+        // 단계 2: 미리보기 표시
+        statusText.textContent = `${estimates.length}개의 견적서를 찾았습니다.`;
+        progressBar.style.width = '30%';
+        
+        showDownloadPreview(estimates, year, month);
+        
+        // 단계 3: PDF 생성
+        statusText.textContent = 'PDF 파일을 생성하고 있습니다...';
+        progressBar.style.width = '50%';
+        
+        const zip = new JSZip();
+        const totalEstimates = estimates.length;
+        
+        for (let i = 0; i < totalEstimates; i++) {
+            const estimate = estimates[i];
+            const progress = 50 + (i / totalEstimates) * 40;
+            
+            statusText.textContent = `PDF 생성 중... (${i + 1}/${totalEstimates})`;
+            progressBar.style.width = progress + '%';
+            
+            // PDF 생성 및 ZIP에 추가
+            const pdfBlob = await generateEstimatePDFBlob(estimate);
+            const fileName = `견적서_${estimate.estimateNumber}_${estimate.customerName}_${estimate.carNumber}.pdf`;
+            zip.file(fileName, pdfBlob);
+        }
+        
+        // 단계 4: ZIP 파일 생성 및 다운로드
+        statusText.textContent = 'ZIP 파일을 생성하고 있습니다...';
+        progressBar.style.width = '95%';
+        
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const zipFileName = `견적서_${year}년_${month}월_${estimates.length}건.zip`;
+        
+        // 다운로드 실행
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(zipBlob);
+        link.download = zipFileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // 완료
+        statusText.textContent = '다운로드가 완료되었습니다!';
+        progressBar.style.width = '100%';
+        
+        showNotification(`${estimates.length}개의 견적서가 다운로드되었습니다.`, 'success');
+        
+        // 3초 후 모달 닫기
+        setTimeout(() => {
+            closeMonthlyEstimateModal();
+        }, 3000);
+        
+    } catch (error) {
+        console.error('❌ 월별 다운로드 중 오류:', error);
+        showNotification(`다운로드 실패: ${error.message}`, 'error');
+        
+        // 진행률 숨기기
+        document.getElementById('downloadProgress').style.display = 'none';
+    }
+}
+
+// 월별 견적서 목록 조회
+async function getEstimatesByMonth(year, month) {
+    try {
+        console.log(`📅 ${year}년 ${month}월 견적서 조회 시작`);
+        
+        // 해당 월의 시작과 끝 날짜 설정
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59);
+        
+        console.log('📅 조회 기간:', startDate.toLocaleDateString('ko-KR'), '~', endDate.toLocaleDateString('ko-KR'));
+        
+        const snapshot = await db.collection('estimates')
+            .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(startDate))
+            .where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(endDate))
+            .orderBy('createdAt', 'desc')
+            .get();
+        
+        const estimates = [];
+        snapshot.forEach(doc => {
+            estimates.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+        
+        console.log(`✅ ${estimates.length}개의 견적서 조회 완료`);
+        return estimates;
+        
+    } catch (error) {
+        console.error('❌ 월별 견적서 조회 중 오류:', error);
+        throw error;
+    }
+}
+
+// 다운로드 미리보기 표시
+function showDownloadPreview(estimates, year, month) {
+    const previewContainer = document.getElementById('downloadPreview');
+    const previewList = document.getElementById('downloadPreviewList');
+    
+    let totalAmount = 0;
+    const previewHTML = estimates.map(estimate => {
+        totalAmount += estimate.totalAmount || 0;
+        return `
+            <div class="download-preview-item">
+                <div class="estimate-info">
+                    <div class="estimate-number">No. ${estimate.estimateNumber}</div>
+                    <div class="estimate-customer">${estimate.customerName} (${estimate.carNumber})</div>
+                </div>
+                <div class="estimate-amount">${(estimate.totalAmount || 0).toLocaleString()}원</div>
+            </div>
+        `;
+    }).join('');
+    
+    const summaryHTML = `
+        <div class="download-summary">
+            <h5>📊 ${year}년 ${month}월 견적서 요약</h5>
+            <p>총 ${estimates.length}건 / 총액 ${totalAmount.toLocaleString()}원</p>
+        </div>
+    `;
+    
+    previewList.innerHTML = previewHTML + summaryHTML;
+    previewContainer.style.display = 'block';
+}
+
+// 견적서 PDF Blob 생성
+async function generateEstimatePDFBlob(estimateData) {
+    try {
+        // HTML 생성
+        const htmlContent = createEstimateHTML(
+            estimateData.customerName,
+            estimateData.carNumber,
+            estimateData.title,
+            estimateData.items || [],
+            estimateData.totalAmount || 0,
+            estimateData.notes || '',
+            estimateData.bikeModel || '',
+            estimateData.bikeYear || '',
+            estimateData.mileage || '',
+            estimateData.managerName || '정비사',
+            estimateData.estimateNumber
+        );
+        
+        // 기존 generatePDFFromHTML 로직을 재사용하여 Blob 반환
+        return await generatePDFFromHTML(htmlContent, estimateData.customerName, estimateData.carNumber, true);
+        
+    } catch (error) {
+        console.error('❌ PDF 생성 중 오류:', error);
+        throw error;
+    }
+}
+
+// 월별 다운로드 관련 함수들을 전역으로 등록
+window.showMonthlyEstimateModal = showMonthlyEstimateModal;
+window.closeMonthlyEstimateModal = closeMonthlyEstimateModal;
+window.downloadMonthlyEstimates = downloadMonthlyEstimates;
+window.getEstimatesByMonth = getEstimatesByMonth;
