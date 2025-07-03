@@ -1718,8 +1718,8 @@ body {
 }
 
 .filter-chip:hover:not(.active) {
-    background: var(--secondary-100);
-    color: var(--text-primary);
+    background: var(--surface-elevated) !important;
+    color: var(--text-primary) !important;
 }
 
 /* Timeline Section */
@@ -3588,4 +3588,404 @@ button {
     background: linear-gradient(145deg, #ffffff, #f8fafc);
     border: 2px solid var(--primary-200);
     box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+}
+
+/* ==============================================
+   모바일 크기 최적화 - 상단바/하단바/버튼 크기 조정
+   ============================================== */
+
+/* 모바일에서 상단바 및 하단바 높이 줄이기 */
+@media (max-width: 768px) {
+    :root {
+        --header-height: 48px;          /* 기본 64px → 48px */
+        --bottom-nav-height: 60px;      /* 기본 80px → 60px */
+        --space-sm: 0.375rem;           /* 기본 0.5rem → 0.375rem */
+        --space-md: 0.75rem;            /* 기본 1rem → 0.75rem */
+        --space-lg: 1rem;               /* 기본 1.5rem → 1rem */
+        --font-size-sm: 0.8125rem;      /* 기본 0.875rem → 0.8125rem */
+        --font-size-base: 0.9375rem;    /* 기본 1rem → 0.9375rem */
+    }
+    
+    /* 상단바 스타일 조정 */
+    .top-header {
+        height: var(--header-height);
+        padding: 0 var(--space-sm);
+    }
+    
+    .header-content {
+        padding: 0 var(--space-sm);
+    }
+    
+    .header-logo {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .header-title {
+        font-size: var(--font-size-base);
+        font-weight: 600;
+    }
+    
+    .header-btn {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        font-size: 14px;
+    }
+    
+    .notification-badge {
+        width: 16px;
+        height: 16px;
+        font-size: 10px;
+        top: -6px;
+        right: -6px;
+    }
+    
+    /* 하단바 스타일 조정 */
+    .bottom-nav {
+        height: var(--bottom-nav-height);
+        padding: 8px 0;
+    }
+    
+    .nav-item {
+        padding: 6px 8px;
+        min-width: 60px;
+    }
+    
+    .nav-item i {
+        font-size: 16px;
+        margin-bottom: 2px;
+    }
+    
+    .nav-item span {
+        font-size: 11px;
+        font-weight: 500;
+    }
+    
+    /* 플로팅 액션 버튼 크기 조정 */
+    .fab {
+        width: 48px;
+        height: 48px;
+        bottom: calc(var(--bottom-nav-height) + 16px);
+        right: 16px;
+        font-size: 18px;
+    }
+    
+    /* 스크롤 투 탑 버튼 크기 조정 */
+    .scroll-to-top {
+        width: 40px;
+        height: 40px;
+        bottom: calc(var(--bottom-nav-height) + 16px);
+        right: 16px;
+        font-size: 14px;
+    }
+    
+    /* 일반 버튼들 크기 조정 */
+    .btn {
+        padding: 10px 16px;
+        font-size: var(--font-size-sm);
+        border-radius: var(--radius-sm);
+    }
+    
+    .auth-btn {
+        padding: 12px 20px;
+        font-size: var(--font-size-base);
+    }
+    
+    /* 액션 버튼 크기 조정 */
+    .action-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+        border-radius: var(--radius-sm);
+    }
+    
+    /* 모달 관련 버튼 크기 조정 */
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    .modal-footer button {
+        padding: 10px 16px;
+        font-size: var(--font-size-sm);
+        min-height: 44px;
+    }
+    
+    /* 필터 칩 크기 조정 */
+    .filter-chip {
+        padding: 6px 12px;
+        font-size: var(--font-size-sm);
+    }
+    
+    /* 타입 선택 옵션 크기 조정 */
+    .type-option {
+        padding: 12px 16px;
+        border-radius: var(--radius-sm);
+    }
+    
+    .type-option i {
+        font-size: 16px;
+    }
+    
+    .type-option span {
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+    }
+    
+    /* 통계 카드 크기 조정 */
+    .stat-card {
+        padding: 12px;
+        border-radius: var(--radius-sm);
+    }
+    
+    .stat-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    .stat-number {
+        font-size: 18px;
+        font-weight: 700;
+    }
+    
+    .stat-label {
+        font-size: 11px;
+        font-weight: 500;
+    }
+    
+    /* 검색바 크기 조정 */
+    .search-bar {
+        padding: 0 12px;
+        height: 40px;
+        border-radius: var(--radius-sm);
+    }
+    
+    .search-bar input {
+        font-size: var(--font-size-sm);
+        padding: 0 8px;
+    }
+    
+    .filter-toggle {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+    
+    /* 정비 카드 크기 조정 */
+    .maintenance-card {
+        padding: 12px;
+        border-radius: var(--radius-sm);
+    }
+    
+    .maintenance-card-header {
+        padding: 12px;
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    }
+    
+    .type-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    .type-title {
+        font-size: var(--font-size-base);
+        font-weight: 600;
+    }
+    
+    .type-date {
+        font-size: var(--font-size-sm);
+    }
+    
+    .status-badge {
+        padding: 4px 8px;
+        font-size: 11px;
+        border-radius: var(--radius-sm);
+    }
+    
+    .maintenance-card-body {
+        padding: 12px;
+    }
+    
+    .info-item {
+        font-size: var(--font-size-sm);
+    }
+    
+    .maintenance-description {
+        font-size: var(--font-size-sm);
+    }
+    
+    /* 앱 컨테이너 패딩 조정 */
+    .app-container {
+        padding-top: var(--header-height);
+        padding-bottom: var(--bottom-nav-height);
+    }
+    
+    /* 모달 헤더 크기 조정 */
+    .modal-header {
+        padding: 16px;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+    
+    .modal-title {
+        font-size: var(--font-size-lg);
+        font-weight: 600;
+    }
+    
+    .modal-body {
+        padding: 16px;
+    }
+    
+    .modal-footer {
+        padding: 16px;
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+    
+    /* 인증 화면 크기 조정 */
+    .auth-logo {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .auth-title {
+        font-size: var(--font-size-2xl);
+        font-weight: 700;
+    }
+    
+    .auth-subtitle {
+        font-size: var(--font-size-sm);
+    }
+    
+    .auth-tab {
+        padding: 10px 16px;
+        font-size: var(--font-size-sm);
+    }
+    
+    .input-group {
+        margin-bottom: 16px;
+    }
+    
+    .input-group input {
+        padding: 12px 16px 12px 40px;
+        font-size: var(--font-size-base);
+        border-radius: var(--radius-sm);
+    }
+    
+    .input-icon {
+        font-size: 16px;
+        left: 12px;
+    }
+    
+    /* 폼 요소 크기 조정 */
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    .form-group label {
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        margin-bottom: 6px;
+    }
+    
+    .form-group input,
+    .form-group textarea {
+        padding: 10px 12px;
+        font-size: var(--font-size-base);
+        border-radius: var(--radius-sm);
+    }
+    
+    .input-with-icon {
+        border-radius: var(--radius-sm);
+    }
+    
+    .input-with-icon input {
+        padding: 10px 12px 10px 36px;
+        font-size: var(--font-size-base);
+    }
+    
+    .input-with-icon i {
+        font-size: 16px;
+        left: 12px;
+    }
+    
+    /* 사진 업로드 영역 크기 조정 */
+    .photo-upload-area {
+        height: 120px;
+        border-radius: var(--radius-sm);
+    }
+    
+    .upload-placeholder i {
+        font-size: 24px;
+    }
+    
+    .upload-placeholder span {
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+    }
+    
+    .upload-placeholder small {
+        font-size: 11px;
+    }
+    
+    /* 단계 표시기 크기 조정 */
+    .step-indicator {
+        padding: 4px 8px;
+        font-size: 11px;
+        border-radius: var(--radius-sm);
+    }
+    
+    .step-header h3 {
+        font-size: var(--font-size-lg);
+        font-weight: 600;
+    }
+    
+    /* 알림 패널 크기 조정 */
+    .notification-panel {
+        top: var(--header-height);
+        max-height: calc(100vh - var(--header-height) - 16px);
+    }
+    
+    .notification-container {
+        top: calc(var(--header-height) + 16px);
+    }
+    
+    /* 뷰 토글 버튼 크기 조정 */
+    .view-toggle {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+    
+    /* 타임라인 제목 크기 조정 */
+    .timeline-title {
+        font-size: var(--font-size-lg);
+        font-weight: 600;
+    }
+    
+    /* 빈 상태 메시지 크기 조정 */
+    .empty-state i {
+        font-size: 36px;
+    }
+    
+    .empty-state h3 {
+        font-size: var(--font-size-lg);
+        font-weight: 600;
+    }
+    
+    .empty-state p {
+        font-size: var(--font-size-sm);
+    }
+    
+    /* 로딩 스피너 크기 조정 */
+    .loading-spinner p {
+        font-size: var(--font-size-sm);
+    }
+    
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border-width: 3px;
+    }
 }
