@@ -5212,6 +5212,24 @@ function createEstimateDetailHTML(estimateData) {
             minute: '2-digit'
         })
         : '';
+
+    // 견적 항목들 HTML 생성
+    const itemsHTML = (estimateData.items && estimateData.items.length > 0) 
+        ? estimateData.items.map((item, index) => `
+            <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f8f9fa'}; border-bottom: 1px solid #e9ecef;">
+                <td style="padding: 12px; font-size: var(--font-size-sm); font-weight: 600; color: #0f172a;">${item.name}</td>
+                <td style="padding: 12px; text-align: right; font-size: var(--font-size-sm); color: #475569;">${item.price?.toLocaleString()}원</td>
+                <td style="padding: 12px; text-align: center; font-size: var(--font-size-sm); color: #475569;">${item.quantity}</td>
+                <td style="padding: 12px; text-align: right; font-size: var(--font-size-sm); font-weight: bold; color: var(--primary-600);">${item.total?.toLocaleString()}원</td>
+            </tr>
+        `).join('')
+        : `
+            <tr>
+                <td colspan="4" style="padding: 20px; text-align: center; color: #64748b; font-style: italic;">
+                    견적 항목 정보가 없습니다.
+                </td>
+            </tr>
+        `;
     
     return `
         <div class="estimate-detail-card">
@@ -5258,6 +5276,30 @@ function createEstimateDetailHTML(estimateData) {
                         <i class="fas fa-calendar-alt"></i>
                         <span style="font-weight: 700; color: #0f172a;">${estimateData.bikeYear || '-'}년 / ${estimateData.mileage || '-'}km</span>
                     </div>
+                </div>
+            </div>
+            
+            <!-- 🔧 견적 항목 상세 -->
+            <div style="margin-bottom: var(--space-lg);">
+                <h4 style="margin: 0 0 var(--space-md) 0; color: #1e293b; font-weight: 700; font-size: var(--font-size-lg); display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-wrench" style="color: var(--primary-600);"></i>
+                    수리 항목 상세
+                </h4>
+                
+                <div style="background: linear-gradient(145deg, #ffffff, #f1f5f9); border: 2px solid var(--secondary-300); border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: linear-gradient(135deg, var(--primary-600), var(--primary-700)); color: white;">
+                                <th style="padding: var(--space-md); text-align: left; font-size: var(--font-size-sm); font-weight: bold;">항목명</th>
+                                <th style="padding: var(--space-md); text-align: right; font-size: var(--font-size-sm); font-weight: bold;">단가</th>
+                                <th style="padding: var(--space-md); text-align: center; font-size: var(--font-size-sm); font-weight: bold;">수량</th>
+                                <th style="padding: var(--space-md); text-align: right; font-size: var(--font-size-sm); font-weight: bold;">금액</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHTML}
+                        </tbody>
+                    </table>
                 </div>
             </div>
             
