@@ -2078,8 +2078,75 @@ function removePhoto(type) {
     showNotification(`${type} 사진이 제거되었습니다.`, 'info');
 }
 
+// URL에서 사진 미리보기 표시 함수 (수정 모드용)
+function showPhotoPreviewFromUrl(imageUrl, type) {
+    const uploadArea = document.querySelector(`[data-type="${type}"]`);
+    if (!uploadArea) return;
+    
+    const placeholder = uploadArea.querySelector('.upload-placeholder');
+    const preview = uploadArea.querySelector('.photo-preview');
+    
+    if (placeholder && preview) {
+        placeholder.style.display = 'none';
+        preview.style.display = 'block';
+        
+        const img = preview.querySelector('img');
+        if (img) {
+            img.src = imageUrl;
+        }
+        
+        // 기존 사진임을 표시하는 배지 추가
+        let badge = preview.querySelector('.existing-photo-badge');
+        if (!badge) {
+            badge = document.createElement('div');
+            badge.className = 'existing-photo-badge';
+            badge.innerHTML = '<i class="fas fa-clock"></i> 기존 사진';
+            badge.style.cssText = `
+                position: absolute;
+                top: 5px;
+                left: 5px;
+                background: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 10px;
+                z-index: 10;
+            `;
+            preview.style.position = 'relative';
+            preview.appendChild(badge);
+        }
+        
+        console.log(`🖼️ ${type} 기존 사진 미리보기 표시 완료`);
+    }
+}
+
+// 기존 사진 제거 함수 (수정 모드용)
+function removeExistingPhoto(type) {
+    // 기존 사진은 단순히 미리보기만 제거 (실제 삭제는 하지 않음)
+    const uploadArea = document.querySelector(`[data-type="${type}"]`);
+    if (uploadArea) {
+        const placeholder = uploadArea.querySelector('.upload-placeholder');
+        const preview = uploadArea.querySelector('.photo-preview');
+        
+        if (placeholder && preview) {
+            preview.style.display = 'none';
+            placeholder.style.display = 'flex';
+            
+            // 배지 제거
+            const badge = preview.querySelector('.existing-photo-badge');
+            if (badge) {
+                badge.remove();
+            }
+        }
+    }
+    
+    showNotification(`${type} 기존 사진을 제거했습니다. (새로 업로드하면 교체됩니다)`, 'info');
+    console.log(`🖼️ ${type} 기존 사진 미리보기 제거`);
+}
+
 // 전역 함수로 만들어서 HTML에서 호출 가능하게 함
 window.removePhoto = removePhoto;
+window.removeExistingPhoto = removeExistingPhoto;
 
 // 사진 업로드 리셋 함수
 function resetPhotoUploads() {
@@ -2969,14 +3036,20 @@ async function uploadMaintenancePhotos(maintenanceId) {
     console.log('📸 Photos to upload:', uploadedPhotos);
     console.log('📸 uploadedPhotos keys:', Object.keys(uploadedPhotos));
     
-    // 각 타입별로 명시적으로 확인
+    // 각 타입별로 명시적으로 확인 - 실제 유효한 데이터만 처리
     const photoTypes = ['before', 'during', 'after'];
     
     for (const type of photoTypes) {
         const base64Data = uploadedPhotos[type];
         console.log(`📸 Checking ${type} photo:`, !!base64Data, base64Data ? 'length: ' + base64Data.length : 'no data');
         
-        if (base64Data && base64Data.trim()) {
+        // 더 엄격한 검증: 실제 이미지 데이터가 있는지 확인
+        const isValidPhotoData = base64Data && 
+                                base64Data.trim() && 
+                                base64Data.includes('data:image') && 
+                                base64Data.length > 100;
+        
+        if (isValidPhotoData) {
             try {
                 console.log(`📸 Starting upload for ${type} photo...`);
                 
@@ -3507,6 +3580,35 @@ async function editMaintenance(maintenanceId) {
             document.getElementById('mileage').value = maintenance.mileage || '';
             document.getElementById('description').value = maintenance.description || '';
             
+            // 🖼️ 기존 사진들을 미리보기로 표시 (하지만 uploadedPhotos에는 추가하지 않음)
+            console.log('🖼️ 수정 모드: 기존 사진 미리보기 표시');
+            
+            if (maintenance.photos && maintenance.photos.length > 0) {
+                // 신규 방식: photos 배열
+                console.log('🖼️ 신규 방식 사진 로드:', maintenance.photos.length + '장');
+                maintenance.photos.forEach(photo => {
+                    if (photo.url && photo.type) {
+                        showPhotoPreviewFromUrl(photo.url, photo.type);
+                        console.log(`🖼️ ${photo.type} 사진 미리보기 표시:`, photo.url.substring(0, 50) + '...');
+                    }
+                });
+            } else {
+                // 기존 방식: 개별 필드
+                console.log('🖼️ 기존 방식 사진 확인');
+                if (maintenance.beforePhoto) {
+                    showPhotoPreviewFromUrl(maintenance.beforePhoto, 'before');
+                    console.log('🖼️ before 사진 미리보기 표시');
+                }
+                if (maintenance.duringPhoto) {
+                    showPhotoPreviewFromUrl(maintenance.duringPhoto, 'during');
+                    console.log('🖼️ during 사진 미리보기 표시');
+                }
+                if (maintenance.afterPhoto) {
+                    showPhotoPreviewFromUrl(maintenance.afterPhoto, 'after');
+                    console.log('🖼️ after 사진 미리보기 표시');
+                }
+            }
+            
             // 제출 버튼 텍스트 변경
             const submitBtn = document.querySelector('#maintenanceModal .btn-primary');
             if (submitBtn) {
@@ -3522,7 +3624,7 @@ async function editMaintenance(maintenanceId) {
             // 수정 모드 플래그 설정
             window.editingMaintenanceId = maintenanceId;
             
-            console.log('✅ Maintenance edit form populated');
+            console.log('✅ Maintenance edit form populated with photos');
         }, 100);
         
     } catch (error) {
