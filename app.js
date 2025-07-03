@@ -1874,42 +1874,53 @@ async function handleMaintenanceSubmit(e) {
             await db.collection('maintenance').doc(window.editingMaintenanceId).update(formData);
             console.log('✅ Maintenance updated successfully');
             
-            // 사진 업로드 (있는 경우)
-            if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
-                console.log('📸 Processing photos in edit mode...');
-                const newPhotos = await uploadMaintenancePhotos(window.editingMaintenanceId);
+            // 🔄 수정 모드에서는 항상 사진 병합 로직 실행
+            console.log('📸 Processing photos in edit mode (always check)...');
+            
+            // 새로 업로드한 사진이 있는지 확인
+            const hasNewPhotos = uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after;
+            console.log('📸 Has new photos:', hasNewPhotos);
+            
+            let newPhotos = [];
+            if (hasNewPhotos) {
+                // 새 사진 업로드
+                newPhotos = await uploadMaintenancePhotos(window.editingMaintenanceId);
                 console.log('📸 New photos uploaded:', newPhotos);
+            }
+            
+            // 🔄 기존 사진과 새 사진을 스마트하게 병합 (새 사진이 없어도 실행)
+            const currentDoc = await db.collection('maintenance').doc(window.editingMaintenanceId).get();
+            const currentPhotos = currentDoc.data().photos || [];
+            console.log('📸 Current photos before merge:', currentPhotos);
+            
+            if (newPhotos.length > 0) {
+                // 새 사진이 있는 경우: 교체 병합
+                const newPhotoTypes = newPhotos.map(p => p.type);
+                console.log('📸 New photo types:', newPhotoTypes);
                 
-                if (newPhotos.length > 0) {
-                    // 🔄 기존 사진과 새 사진을 스마트하게 병합
-                    const currentDoc = await db.collection('maintenance').doc(window.editingMaintenanceId).get();
-                    const currentPhotos = currentDoc.data().photos || [];
-                    console.log('📸 Current photos before merge:', currentPhotos);
-                    
-                    // 새로 업로드된 사진의 타입들 수집
-                    const newPhotoTypes = newPhotos.map(p => p.type);
-                    console.log('📸 New photo types:', newPhotoTypes);
-                    
-                    // 기존 사진에서 새로 업로드된 타입과 겹치지 않는 것들만 유지
-                    const filteredCurrentPhotos = currentPhotos.filter(existingPhoto => {
-                        const shouldKeep = !newPhotoTypes.includes(existingPhoto.type);
-                        if (!shouldKeep) {
-                            console.log(`📸 Replacing existing ${existingPhoto.type} photo`);
-                        }
-                        return shouldKeep;
-                    });
-                    
-                    // 필터링된 기존 사진 + 새 사진 = 최종 사진 배열
-                    const finalPhotos = [...filteredCurrentPhotos, ...newPhotos];
-                    console.log('📸 Final photos after merge:', finalPhotos);
-                    
-                    await db.collection('maintenance').doc(window.editingMaintenanceId).update({
-                        photos: finalPhotos
-                    });
-                    console.log('✅ Photos updated for maintenance record:', finalPhotos.length);
-                    showNotification(`${newPhotos.length}장의 사진이 업데이트되었습니다!`, 'success');
-                } else {
-                    console.log('📸 No new photos to update');
+                // 기존 사진에서 새로 업로드된 타입과 겹치지 않는 것들만 유지
+                const filteredCurrentPhotos = currentPhotos.filter(existingPhoto => {
+                    const shouldKeep = !newPhotoTypes.includes(existingPhoto.type);
+                    if (!shouldKeep) {
+                        console.log(`📸 Replacing existing ${existingPhoto.type} photo`);
+                    }
+                    return shouldKeep;
+                });
+                
+                // 필터링된 기존 사진 + 새 사진 = 최종 사진 배열
+                const finalPhotos = [...filteredCurrentPhotos, ...newPhotos];
+                console.log('📸 Final photos after merge:', finalPhotos);
+                
+                await db.collection('maintenance').doc(window.editingMaintenanceId).update({
+                    photos: finalPhotos
+                });
+                console.log('✅ Photos updated for maintenance record:', finalPhotos.length);
+                showNotification(`${newPhotos.length}장의 사진이 업데이트되었습니다!`, 'success');
+            } else {
+                // 새 사진이 없는 경우: 기존 사진 그대로 유지
+                console.log('📸 No new photos - keeping existing photos:', currentPhotos.length);
+                if (currentPhotos.length > 0) {
+                    showNotification(`기존 사진 ${currentPhotos.length}장이 유지되었습니다.`, 'info');
                 }
             }
             
