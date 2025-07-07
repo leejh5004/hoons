@@ -3326,14 +3326,7 @@ function showMaintenanceDetailModal(maintenance) {
                                     <h4 style="margin: 0 0 var(--space-lg) 0; color: #1e293b; font-size: var(--font-size-lg); font-weight: 800;">📸 사진 (${photos.length}장)</h4>
                                     ${photoDeleteInfo}
                                     
-                                    <!-- 디버깅 정보 -->
-                                    <div style="background: #f0f0f0; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-size: 12px; color: #333; border: 1px solid #ccc;">
-                                        <strong>🔍 디버그 정보:</strong><br>
-                                        신규방식 사진: ${maintenance.photos ? maintenance.photos.length : 0}장<br>
-                                        기존방식 사진: ${[maintenance.beforePhoto, maintenance.duringPhoto, maintenance.afterPhoto].filter(p => p).length}장<br>
-                                        최종 표시할 사진: ${photos.length}장<br>
-                                        사진 URL들: ${photos.map(p => p.url?.substring(0, 30) + '...').join(', ')}
-                                    </div>
+
                                     
                                     <div class="photo-grid">
                                         ${photos.map((photo, index) => {
