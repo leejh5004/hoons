@@ -1636,6 +1636,99 @@ body {
     transform: translateY(0);
 }
 
+/* Password Reset Styles */
+.auth-footer {
+    margin-top: var(--space-lg);
+    text-align: center;
+}
+
+.forgot-password-link {
+    background: none;
+    border: none;
+    color: var(--primary-600);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.forgot-password-link:hover {
+    color: var(--primary-700);
+    background: var(--primary-50);
+    text-decoration: none;
+}
+
+.forgot-password-link i {
+    font-size: 0.75rem;
+}
+
+.reset-info {
+    margin-bottom: var(--space-lg);
+}
+
+.reset-info p {
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.reset-success {
+    text-align: center;
+    padding: var(--space-xl);
+}
+
+.success-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.success-message i {
+    font-size: 3rem;
+    color: var(--success);
+    margin-bottom: var(--space-sm);
+}
+
+.success-message h4 {
+    color: var(--text-primary);
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+}
+
+.success-message p {
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Dark Theme - Password Reset */
+[data-theme="dark"] .forgot-password-link {
+    color: var(--primary-400);
+}
+
+[data-theme="dark"] .forgot-password-link:hover {
+    color: var(--primary-300);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+[data-theme="dark"] .reset-info p {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .success-message h4 {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .success-message p {
+    color: var(--text-secondary);
+}
+
 /* ==============================================
    Dashboard Components
    ============================================== */

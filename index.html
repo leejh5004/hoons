@@ -98,6 +98,12 @@
                         <i class="fas fa-sign-in-alt"></i>
                         로그인
                     </button>
+                    <div class="auth-footer">
+                        <button type="button" class="forgot-password-link" onclick="showPasswordResetModal()">
+                            <i class="fas fa-key"></i>
+                            비밀번호를 잊으셨나요?
+                        </button>
+                    </div>
                 </form>
                 
                 <!-- Register Form -->
@@ -603,6 +609,59 @@
                 <button type="button" class="btn btn-primary" onclick="downloadMonthlyEstimates()">
                     <i class="fas fa-download"></i>
                     다운로드
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Reset Modal -->
+    <div id="passwordResetModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-key"></i>
+                    비밀번호 재설정
+                </h2>
+                <button class="modal-close" onclick="closePasswordResetModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="reset-info">
+                    <p>가입하신 이메일 주소를 입력해주세요. 비밀번호 재설정 링크를 보내드립니다.</p>
+                </div>
+                
+                <form id="passwordResetForm">
+                    <div class="form-group">
+                        <label for="resetEmail">이메일 주소</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="resetEmail" placeholder="등록된 이메일을 입력하세요" required>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="reset-success" id="resetSuccess" style="display: none;">
+                    <div class="success-message">
+                        <i class="fas fa-check-circle"></i>
+                        <h4>이메일을 보냈습니다!</h4>
+                        <p>입력하신 이메일로 비밀번호 재설정 링크를 보냈습니다. 이메일을 확인해주세요.</p>
+                        <small style="color: var(--text-tertiary); margin-top: 8px; display: block;">
+                            💡 이메일이 보이지 않으면 스팸함을 확인해보세요
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closePasswordResetModal()">
+                    <i class="fas fa-times"></i>
+                    취소
+                </button>
+                <button type="submit" class="btn btn-primary" form="passwordResetForm" id="sendResetBtn">
+                    <i class="fas fa-paper-plane"></i>
+                    재설정 링크 보내기
                 </button>
             </div>
         </div>

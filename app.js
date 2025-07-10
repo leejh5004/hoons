@@ -185,6 +185,120 @@ async function handleRegister(e) {
     }
 }
 
+// =============================================
+// Password Reset System
+// =============================================
+
+function showPasswordResetModal() {
+    console.log('🔐 Password reset modal opening...');
+    const modal = document.getElementById('passwordResetModal');
+    const form = document.getElementById('passwordResetForm');
+    const resetSuccess = document.getElementById('resetSuccess');
+    const sendBtn = document.getElementById('sendResetBtn');
+    
+    if (modal) {
+        // 초기화
+        if (form) form.style.display = 'block';
+        if (resetSuccess) resetSuccess.style.display = 'none';
+        if (sendBtn) sendBtn.style.display = 'block';
+        
+        const emailInput = document.getElementById('resetEmail');
+        if (emailInput) emailInput.value = '';
+        
+        modal.classList.add('active');
+        console.log('✅ Modal activated');
+        
+        // 폼 제출 이벤트 리스너 추가
+        if (form && !form.hasAttribute('data-listener-added')) {
+            form.addEventListener('submit', handlePasswordReset);
+            form.setAttribute('data-listener-added', 'true');
+            console.log('✅ Form listener added');
+        }
+    } else {
+        console.error('❌ Password reset modal not found');
+        showNotification('모달을 찾을 수 없습니다. 페이지를 새로고침해주세요.', 'error');
+    }
+}
+
+// 전역으로 함수 노출
+window.showPasswordResetModal = showPasswordResetModal;
+
+function closePasswordResetModal() {
+    console.log('🔐 Closing password reset modal...');
+    const modal = document.getElementById('passwordResetModal');
+    if (modal) {
+        modal.classList.remove('active');
+        console.log('✅ Modal closed');
+    }
+}
+
+// 전역으로 함수 노출
+window.closePasswordResetModal = closePasswordResetModal;
+
+async function handlePasswordReset(e) {
+    e.preventDefault();
+    
+    const email = document.getElementById('resetEmail').value.trim();
+    const sendBtn = document.getElementById('sendResetBtn');
+    const form = document.getElementById('passwordResetForm');
+    const resetSuccess = document.getElementById('resetSuccess');
+    
+    if (!email) {
+        showNotification('이메일을 입력해주세요.', 'error');
+        return;
+    }
+    
+    // 이메일 형식 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showNotification('올바른 이메일 형식을 입력해주세요.', 'error');
+        return;
+    }
+    
+    try {
+        // 버튼 비활성화 및 로딩 상태
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 전송 중...';
+        
+        // Firebase에서 비밀번호 재설정 이메일 발송
+        await firebase.auth().sendPasswordResetEmail(email);
+        
+        // 성공 시 UI 업데이트
+        form.style.display = 'none';
+        resetSuccess.style.display = 'block';
+        sendBtn.style.display = 'none';
+        
+        console.log('✅ Password reset email sent to:', email);
+        
+        // 5초 후 모달 자동 닫기
+        setTimeout(() => {
+            closePasswordResetModal();
+        }, 5000);
+        
+    } catch (error) {
+        console.error('❌ Password reset error:', error);
+        let errorMessage = '비밀번호 재설정 이메일 전송에 실패했습니다.';
+        
+        switch (error.code) {
+            case 'auth/user-not-found':
+                errorMessage = '등록되지 않은 이메일입니다.';
+                break;
+            case 'auth/invalid-email':
+                errorMessage = '올바른 이메일 형식을 입력해주세요.';
+                break;
+            case 'auth/too-many-requests':
+                errorMessage = '너무 많은 요청이 있었습니다. 잠시 후 다시 시도해주세요.';
+                break;
+        }
+        
+        showNotification(errorMessage, 'error');
+        
+        // 버튼 원상복구
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> 재설정 링크 보내기';
+    }
+}
+
 async function handleAuthStateChange(user) {
     if (user) {
         console.log('✅ User authenticated:', user.email);
@@ -1659,6 +1773,27 @@ function renderListView(maintenances) {
 function initializeModals() {
     initializeMaintenanceModal();
     initializeSearchAndFilters();
+    initializePasswordResetModal();
+}
+
+function initializePasswordResetModal() {
+    const modal = document.getElementById('passwordResetModal');
+    
+    if (modal) {
+        // 백드롭 클릭 이벤트
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closePasswordResetModal();
+            }
+        });
+        
+        // ESC 키 이벤트
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+                closePasswordResetModal();
+            }
+        });
+    }
 }
 
 function initializeMaintenanceModal() {
