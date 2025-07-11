@@ -35,23 +35,27 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Initialize app components
+    // Initialize critical components only
     initializeAuthSystem();
     initializeThemeSystem();
-    initializeNavigation();
-    initializeModals();
-    initializeEventListeners();
-    initializeSearchAndFilters();
-    loadViewMode();
     
     // Check authentication state
     firebase.auth().onAuthStateChanged(handleAuthStateChange);
     
-    // 📸 사진 정리 시스템 시작 (5초 후 실행 - 앱 로딩 완료 후)
-    setTimeout(() => {
-        schedulePhotoCleanup();
-        checkPhotoWarnings(); // 삭제 임박 사진 경고 체크
-    }, 5000);
+    // Initialize other components after user login
+    window.addEventListener('user-authenticated', () => {
+        initializeNavigation();
+        initializeModals();
+        initializeEventListeners();
+        initializeSearchAndFilters();
+        loadViewMode();
+        
+        // 📸 사진 정리 시스템 시작 (로그인 후 5초 후 실행)
+        setTimeout(() => {
+            schedulePhotoCleanup();
+            checkPhotoWarnings(); // 삭제 임박 사진 경고 체크
+        }, 5000);
+    });
     
     console.log('✅ Application initialized successfully');
 });
@@ -361,6 +365,9 @@ async function handleAuthStateChange(user) {
                 // Initialize notification system after user is loaded
                 initializeNotificationSystem();
                 
+                // 🚀 사용자 인증 완료 이벤트 발생
+                window.dispatchEvent(new CustomEvent('user-authenticated'));
+                
                 showNotification(`환영합니다, ${currentUser.name}님!`, 'success');
             } else {
                 console.log('📄 User document not found, creating new user...');
@@ -425,6 +432,9 @@ async function handleAuthStateChange(user) {
                 
                 // Initialize notification system after user is loaded
                 initializeNotificationSystem();
+                
+                // 🚀 사용자 인증 완료 이벤트 발생
+                window.dispatchEvent(new CustomEvent('user-authenticated'));
             }
             
         } catch (error) {
