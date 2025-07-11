@@ -1,42 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // 사용자 컬렉션 규칙
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read: if isAdmin(); // 관리자는 모든 사용자 정보 조회 가능
-    }
-
-    // 정비 이력 컬렉션 규칙
-    match /maintenance/{maintenanceId} {
+    // 🚨 임시 테스트용 - 모든 접근 허용 🚨
+    match /{document=**} {
       allow read, write: if request.auth != null;
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-    }
-
-    // 기존 고객 컬렉션 (호환성)
-    match /customers/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // 기존 작업 컬렉션 (호환성)  
-    match /jobs/{jobId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.customerUid;
-      allow write: if isAdmin();
-    }
-
-    // 견적서 컬렉션 규칙
-    match /estimates/{estimateId} {
-      allow read, write: if isAdmin(); // 관리자만 견적서 생성/조회 가능
-    }
-
-    function isAdmin() {
-      return request.auth != null && request.auth.token.email in [
-        "admin@admin.com",
-        "admin1@admin.com", 
-        "admin2@admin.com"
-      ];
     }
   }
 } 

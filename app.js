@@ -13,6 +13,9 @@ let currentStep = 1;
 let currentTheme = 'light';
 let currentViewMode = 'card'; // 'card' or 'list'
 
+// 관리자 이메일 목록 (전역 상수) - 이정훈, 황태훈만
+const ADMIN_EMAILS = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
+
 // 📸 사진 보존 기간 설정 (30일)
 const PHOTO_RETENTION_DAYS = 30;
 
@@ -311,19 +314,29 @@ async function handleAuthStateChange(user) {
                 const userData = userDoc.data();
                 
                 // 관리자 이메일 체크
-                const adminEmails = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
-                const isAdminEmail = adminEmails.includes(user.email);
+                const isAdminEmail = ADMIN_EMAILS.includes(user.email);
                 
                 currentUser = {
                     uid: user.uid,
                     email: user.email,
                     name: userData.name || (isAdminEmail ? '관리자' : '사용자'),
                     carNumber: userData.carNumber || (isAdminEmail ? 'admin1' : ''),
-                    role: userData.role || (isAdminEmail ? 'admin' : 'user')
+                    role: isAdminEmail ? 'admin' : 'user' // 🔒 이메일 기반으로만 role 결정
                 };
                 
-                // 관리자 권한 부여
-                isAdmin = isAdminEmail || currentUser.role === 'admin';
+                // 관리자 권한 부여 (이메일 기반으로만)
+                isAdmin = isAdminEmail;
+                
+                // 🔒 사용자 role 보안 검증 및 수정
+                const correctRole = isAdminEmail ? 'admin' : 'user';
+                if (userData.role !== correctRole) {
+                    console.log(`🔧 Correcting user role from '${userData.role}' to '${correctRole}'`);
+                    await db.collection('users').doc(user.uid).update({
+                        role: correctRole,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    currentUser.role = correctRole;
+                }
                 
                 // 관리자 계정이지만 이름이 없는 경우 자동으로 업데이트
                 if (isAdminEmail && !userData.name) {
@@ -337,7 +350,7 @@ async function handleAuthStateChange(user) {
                 }
                 
                 console.log('👤 User role:', currentUser.role);
-                console.log('🔧 Is admin (email check):', adminEmails.includes(user.email));
+                console.log('🔧 Is admin (email check):', ADMIN_EMAILS.includes(user.email));
                 console.log('🔧 Is admin (final):', isAdmin);
                 
                 // Switch to dashboard
@@ -353,8 +366,7 @@ async function handleAuthStateChange(user) {
                 console.log('📄 User document not found, creating new user...');
                 
                 // 관리자 이메일 체크
-                const adminEmails = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
-                const isAdminEmail = adminEmails.includes(user.email);
+                const isAdminEmail = ADMIN_EMAILS.includes(user.email);
                 
                 if (isAdminEmail) {
                     // 관리자 계정 생성
@@ -380,12 +392,39 @@ async function handleAuthStateChange(user) {
                     console.log('✅ Admin user document created');
                     
                 } else {
-                    // 일반 사용자는 문서가 없으면 로그아웃
-                    console.error('❌ User document not found');
-                    showNotification('사용자 정보를 찾을 수 없습니다.', 'error');
-                    await firebase.auth().signOut();
-                    return;
+                    // 일반 사용자 계정 자동 생성
+                    console.log('📄 Creating user document for general user...');
+                    
+                    const userData = {
+                        name: user.displayName || user.email.split('@')[0], // 이메일 앞부분을 이름으로 사용
+                        email: user.email,
+                        carNumber: '', // 나중에 설정 가능
+                        role: 'user',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    
+                    await db.collection('users').doc(user.uid).set(userData);
+                    
+                    currentUser = {
+                        uid: user.uid,
+                        email: user.email,
+                        name: userData.name,
+                        carNumber: '',
+                        role: 'user'
+                    };
+                    
+                    isAdmin = false;
+                    console.log('✅ User document created automatically');
+                    showNotification(`환영합니다! 계정이 자동으로 생성되었습니다.`, 'success');
                 }
+                
+                // 공통 처리: 로그인 완료 후 대시보드 이동
+                showScreen('dashboardScreen');
+                updateUI();
+                loadDashboardData();
+                
+                // Initialize notification system after user is loaded
+                initializeNotificationSystem();
             }
             
         } catch (error) {
@@ -3943,10 +3982,8 @@ async function setupAdminUser() {
         return;
     }
     
-    try {
-        const adminEmails = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
-        
-        if (adminEmails.includes(currentUser.email)) {
+    try {        
+        if (ADMIN_EMAILS.includes(currentUser.email)) {
             // 관리자 사용자 데이터 업데이트
             await db.collection('users').doc(currentUser.uid).set({
                 name: '관리자',
