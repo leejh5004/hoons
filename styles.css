@@ -1730,6 +1730,309 @@ body {
 }
 
 /* ==============================================
+   오토바이 번호 입력 개선 스타일
+   ============================================== */
+
+/* 오토바이 번호 입력 그룹 */
+.motorcycle-number-group {
+    margin-bottom: var(--space-xl) !important;
+}
+
+.motorcycle-number-group .help-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--primary-100);
+    border: 2px solid var(--primary-300);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    z-index: 3;
+}
+
+.motorcycle-number-group .help-btn:hover {
+    background: var(--primary-200);
+    border-color: var(--primary-500);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.motorcycle-number-group .help-btn i {
+    color: var(--primary-600);
+    font-size: 16px;
+}
+
+/* 예시 텍스트 */
+.motorcycle-number-examples {
+    margin-top: var(--space-sm);
+    padding: var(--space-md);
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border-radius: var(--radius-lg);
+    border-left: 4px solid var(--primary-500);
+}
+
+.motorcycle-number-examples .example-text {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    color: var(--primary-700);
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.motorcycle-number-examples .example-text i {
+    color: var(--primary-500);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* 입력 검증 */
+.input-validation {
+    margin-top: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+    border-radius: var(--radius-lg);
+    border-left: 4px solid var(--error);
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    animation: fadeIn 0.3s ease-out;
+}
+
+.input-validation i {
+    color: var(--error);
+    flex-shrink: 0;
+}
+
+.input-validation span {
+    color: var(--error);
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+}
+
+.input-validation.valid {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border-left-color: var(--success);
+}
+
+.input-validation.valid i {
+    color: var(--success);
+}
+
+.input-validation.valid span {
+    color: var(--success);
+}
+
+/* 다크 테마 지원 */
+[data-theme="dark"] .motorcycle-number-group .help-btn {
+    background: var(--primary-900);
+    border-color: var(--primary-700);
+}
+
+[data-theme="dark"] .motorcycle-number-group .help-btn:hover {
+    background: var(--primary-800);
+    border-color: var(--primary-600);
+}
+
+[data-theme="dark"] .motorcycle-number-examples {
+    background: linear-gradient(135deg, #1e3a8a, #1e40af);
+    border-left-color: var(--primary-400);
+}
+
+[data-theme="dark"] .motorcycle-number-examples .example-text {
+    color: var(--primary-200);
+}
+
+[data-theme="dark"] .motorcycle-number-examples .example-text i {
+    color: var(--primary-400);
+}
+
+[data-theme="dark"] .input-validation {
+    background: linear-gradient(135deg, #7f1d1d, #991b1b);
+    border-left-color: var(--error);
+}
+
+[data-theme="dark"] .input-validation.valid {
+    background: linear-gradient(135deg, #14532d, #166534);
+    border-left-color: var(--success);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 도움말 모달 스타일 */
+.help-section {
+    margin-bottom: var(--space-xl);
+    padding: var(--space-lg);
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border-radius: var(--radius-lg);
+    border-left: 4px solid var(--primary-500);
+}
+
+.help-section h3 {
+    color: var(--primary-700);
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    margin-bottom: var(--space-md);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.help-section h3 i {
+    color: var(--primary-500);
+}
+
+.help-section p {
+    color: var(--text-secondary);
+    margin-bottom: var(--space-sm);
+    line-height: 1.6;
+}
+
+.help-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.help-list li {
+    padding: var(--space-sm) 0;
+    padding-left: var(--space-lg);
+    position: relative;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.help-list li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: var(--success);
+    font-weight: bold;
+}
+
+.format-examples {
+    display: grid;
+    gap: var(--space-lg);
+}
+
+.format-item {
+    background: white;
+    padding: var(--space-lg);
+    border-radius: var(--radius-md);
+    border: 2px solid var(--secondary-200);
+}
+
+.format-item h4 {
+    color: var(--text-primary);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    margin-bottom: var(--space-md);
+}
+
+.examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.example-badge {
+    display: inline-block;
+    padding: var(--space-sm) var(--space-md);
+    background: linear-gradient(135deg, var(--primary-100), var(--primary-200));
+    color: var(--primary-800);
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    border: 2px solid var(--primary-300);
+    transition: all var(--transition-fast);
+}
+
+.example-badge:hover {
+    background: linear-gradient(135deg, var(--primary-200), var(--primary-300));
+    transform: scale(1.05);
+}
+
+/* 다크 테마 지원 */
+[data-theme="dark"] .help-section {
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border-left-color: var(--primary-400);
+}
+
+[data-theme="dark"] .help-section h3 {
+    color: var(--primary-300);
+}
+
+[data-theme="dark"] .help-section h3 i {
+    color: var(--primary-400);
+}
+
+[data-theme="dark"] .help-section p {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .help-list li {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .format-item {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-600);
+}
+
+[data-theme="dark"] .format-item h4 {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .example-badge {
+    background: linear-gradient(135deg, var(--primary-900), var(--primary-800));
+    color: var(--primary-200);
+    border-color: var(--primary-700);
+}
+
+[data-theme="dark"] .example-badge:hover {
+    background: linear-gradient(135deg, var(--primary-800), var(--primary-700));
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+    .help-section {
+        padding: var(--space-md);
+        margin-bottom: var(--space-lg);
+    }
+    
+    .format-examples {
+        gap: var(--space-md);
+    }
+    
+    .format-item {
+        padding: var(--space-md);
+    }
+    
+    .examples {
+        gap: var(--space-xs);
+    }
+    
+    .example-badge {
+        padding: var(--space-xs) var(--space-sm);
+        font-size: var(--font-size-sm);
+    }
+}
+
+/* ==============================================
    Dashboard Components
    ============================================== */
 

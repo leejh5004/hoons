@@ -1,9 +1,29 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 🚨 임시 테스트용 - 모든 접근 허용 🚨
-    match /{document=**} {
+    // 🔐 사용자 컬렉션 - 자신의 문서만 접근 가능
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 🔧 정비 컬렉션 - 로그인된 사용자만 접근
+    match /maintenance/{maintenanceId} {
       allow read, write: if request.auth != null;
+    }
+    
+    // 📄 견적서 컬렉션 - 로그인된 사용자만 접근 
+    match /estimates/{estimateId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 🔔 알림 컬렉션 - 로그인된 사용자만 접근
+    match /notifications/{notificationId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 🚫 기타 모든 접근 차단
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 } 

@@ -98,7 +98,168 @@ function initializeAuthSystem() {
     if (registerForm) {
         registerForm.addEventListener('submit', handleRegister);
     }
+    
+    // 오토바이 번호 도움말 시스템 초기화
+    initializeMotorcycleNumberHelper();
 }
+
+// 오토바이 번호 도움말 시스템 초기화
+function initializeMotorcycleNumberHelper() {
+    const helpBtn = document.getElementById('motorcycleHelpBtn');
+    const carNumberInput = document.getElementById('registerCarNumber');
+    
+    if (helpBtn) {
+        helpBtn.addEventListener('click', showMotorcycleNumberHelp);
+    }
+    
+    if (carNumberInput) {
+        // 실시간 검증
+        carNumberInput.addEventListener('input', validateMotorcycleNumber);
+        carNumberInput.addEventListener('blur', validateMotorcycleNumber);
+        
+        // 한글 입력 지원
+        carNumberInput.addEventListener('compositionend', validateMotorcycleNumber);
+    }
+}
+
+// 오토바이 번호 도움말 모달 표시
+function showMotorcycleNumberHelp() {
+    // 기존 모달 제거
+    const existingModal = document.getElementById('motorcycleHelpModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modalHTML = `
+        <div id="motorcycleHelpModal" class="modal-overlay active">
+            <div class="modal-container" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <i class="fas fa-motorcycle"></i>
+                        오토바이 번호 입력 가이드
+                    </h2>
+                    <button class="modal-close" onclick="closeMotorcycleHelpModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="help-section">
+                        <h3><i class="fas fa-info-circle"></i> 오토바이 번호판 위치</h3>
+                        <p>오토바이 번호판은 다음 위치에서 확인할 수 있습니다:</p>
+                        <ul class="help-list">
+                            <li><strong>뒷번호판:</strong> 오토바이 뒷부분 (메인 번호판)</li>
+                            <li><strong>등록증:</strong> 이륜차 등록증에서도 확인 가능</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="help-section">
+                        <h3><i class="fas fa-list-ul"></i> 오토바이 번호 형식</h3>
+                        <div class="format-examples">
+                            <div class="format-item">
+                                <h4>🌍 지역형 (지역명+차종+숫자)</h4>
+                                <div class="examples">
+                                    <span class="example-badge">제주서귀포차3107</span>
+                                    <span class="example-badge">부산해운대바1234</span>
+                                    <span class="example-badge">경기수원가5678</span>
+                                    <span class="example-badge">인천중구나9012</span>
+                                    <span class="example-badge">서울강남차2468</span>
+                                    <span class="example-badge">대구달서바1357</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="help-section">
+                        <h3><i class="fas fa-exclamation-triangle"></i> 입력 시 주의사항</h3>
+                        <ul class="help-list">
+                            <li>띄어쓰기 없이 붙여서 입력해주세요</li>
+                            <li>한글과 숫자를 정확히 입력해주세요</li>
+                            <li>영문자가 아닌 한글을 사용해주세요 (가나다라마 등)</li>
+                            <li>번호판에 표시된 그대로 입력해주세요</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="help-section">
+                        <h3><i class="fas fa-search"></i> 번호를 모르시겠다면</h3>
+                        <ul class="help-list">
+                            <li>이륜차 등록증을 확인해보세요</li>
+                            <li>보험증서에서도 확인 가능합니다</li>
+                            <li>오토바이 뒷부분 번호판을 직접 확인해보세요</li>
+                            <li>가입 후에도 프로필에서 수정 가능합니다</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button class="btn btn-primary" onclick="closeMotorcycleHelpModal()">
+                        <i class="fas fa-check"></i>
+                        이해했습니다
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// 오토바이 번호 도움말 모달 닫기
+function closeMotorcycleHelpModal() {
+    const modal = document.getElementById('motorcycleHelpModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 오토바이 번호 실시간 검증
+function validateMotorcycleNumber() {
+    const input = document.getElementById('registerCarNumber');
+    const validationDiv = document.getElementById('motorcycleValidation');
+    const validationMessage = document.getElementById('validationMessage');
+    
+    if (!input || !validationDiv || !validationMessage) return;
+    
+    const value = input.value.trim();
+    
+    if (!value) {
+        validationDiv.style.display = 'none';
+        return;
+    }
+    
+    // 오토바이 번호 패턴 검증 (지역형만)
+    const patterns = [
+        /^[가-힣]{2,}[가-힣]\d{4}$/, // 지역형: 제주서귀포차3107
+        /^[가-힣]{3,}[가-힣]\d{4}$/, // 기타 지역형 패턴
+    ];
+    
+    const isValid = patterns.some(pattern => pattern.test(value));
+    
+    validationDiv.style.display = 'flex';
+    
+    if (isValid) {
+        validationDiv.className = 'input-validation valid';
+        validationDiv.querySelector('i').className = 'fas fa-check-circle';
+        validationMessage.textContent = '올바른 오토바이 번호 형식입니다!';
+    } else {
+        validationDiv.className = 'input-validation';
+        validationDiv.querySelector('i').className = 'fas fa-exclamation-triangle';
+        
+        if (value.length < 5) {
+            validationMessage.textContent = '번호가 너무 짧습니다. 다시 확인해주세요.';
+        } else if (!/[가-힣]/.test(value)) {
+            validationMessage.textContent = '한글이 포함되어야 합니다. (예: 가, 나, 다, 차, 바 등)';
+        } else if (!/\d/.test(value)) {
+            validationMessage.textContent = '숫자가 포함되어야 합니다.';
+        } else {
+            validationMessage.textContent = '올바른 형식이 아닙니다. 도움말을 참고해주세요.';
+        }
+    }
+}
+
+// 전역 함수로 등록
+window.showMotorcycleNumberHelp = showMotorcycleNumberHelp;
+window.closeMotorcycleHelpModal = closeMotorcycleHelpModal;
 
 async function handleLogin(e) {
     e.preventDefault();
@@ -684,8 +845,7 @@ function showCarNumberModal() {
                             <label for="newCarNumber">새 오토바이 번호</label>
                             <div class="input-with-icon">
                                 <i class="fas fa-motorcycle"></i>
-                                <input type="text" id="newCarNumber" value="${currentCarNumber}" 
-                                       placeholder="예: 12가3456" required>
+                                <input type="text" id="newCarNumber" value="${currentCarNumber}" placeholder="예: 제주서귀포차3107" required>
                             </div>
                             <small style="color: #666; font-size: 12px; margin-top: 8px; display: block;">
                                 현재: ${currentCarNumber || '없음'}
@@ -708,12 +868,29 @@ function showCarNumberModal() {
     
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    // 입력 필드에 포커스
+    // 폼 이벤트 리스너 추가
     setTimeout(() => {
         const input = document.getElementById('newCarNumber');
+        const form = document.getElementById('carNumberForm');
+        
         if (input) {
             input.focus();
             input.select();
+            
+            // Enter 키로 제출 가능
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCarNumberUpdate();
+                }
+            });
+        }
+        
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                handleCarNumberUpdate();
+            });
         }
     }, 100);
 }
@@ -3065,9 +3242,26 @@ function formatDate(dateString) {
 
 // 차량번호 수정 함수 추가
 async function updateCarNumber(newCarNumber) {
-    if (!currentUser) return;
+    console.log('🔧 updateCarNumber 시작');
+    console.log('📊 currentUser:', currentUser);
+    console.log('🔐 firebase.auth().currentUser:', firebase.auth().currentUser);
+    console.log('📝 newCarNumber:', newCarNumber);
     
-    const trimmedCarNumber = newCarNumber.trim().toLowerCase().replace(/\s+/g, '');
+    if (!currentUser) {
+        console.error('❌ currentUser가 없습니다!');
+        showNotification('로그인 상태를 확인할 수 없습니다.', 'error');
+        return;
+    }
+    
+    const firebaseUser = firebase.auth().currentUser;
+    if (!firebaseUser) {
+        console.error('❌ Firebase 인증 사용자가 없습니다!');
+        showNotification('Firebase 인증이 필요합니다.', 'error');
+        return;
+    }
+    
+    const trimmedCarNumber = newCarNumber.trim().replace(/\s+/g, '');
+    console.log('🔄 정리된 차량번호:', trimmedCarNumber);
     
     try {
         // 현재 사용자의 차량번호와 동일한 경우 업데이트 불필요
@@ -3076,26 +3270,78 @@ async function updateCarNumber(newCarNumber) {
             return;
         }
         
+        console.log('🔍 중복 체크 시작...');
         // 차량번호 중복 체크
         const duplicateCheck = await db.collection('users')
             .where('carNumber', '==', trimmedCarNumber)
             .get();
+            
+        console.log('📊 중복 체크 결과:', duplicateCheck.size, '개 문서 발견');
             
         if (!duplicateCheck.empty) {
             showNotification('이미 등록된 차량번호입니다.', 'error');
             return;
         }
         
+        console.log('💾 사용자 문서 업데이트 시작...');
+        console.log('🎯 업데이트할 UID:', currentUser.uid);
+        console.log('🎯 Firebase Auth UID:', firebaseUser.uid);
+        console.log('🔄 UID 일치 여부:', currentUser.uid === firebaseUser.uid);
+        
+        // 토큰 새로고침 시도
+        console.log('🔑 토큰 새로고침 시도...');
+        await firebaseUser.getIdToken(true);
+        console.log('✅ 토큰 새로고침 완료');
+        
+        // 문서 존재 여부 확인
+        console.log('📄 사용자 문서 존재 여부 확인...');
+        const userDocRef = db.collection('users').doc(currentUser.uid);
+        const userDoc = await userDocRef.get();
+        console.log('📄 사용자 문서 존재:', userDoc.exists);
+        console.log('📄 사용자 문서 데이터:', userDoc.data());
+        
         // 중복이 없는 경우에만 업데이트 진행
-        await db.collection('users').doc(currentUser.uid)
-            .update({
+        console.log('🚀 실제 업데이트 시작...');
+        
+        try {
+            // 방법 1: Firebase Admin SDK 방식 시도
+            console.log('🔄 방법 1: 표준 update() 시도...');
+            await userDocRef.update({
                 carNumber: trimmedCarNumber,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
+            console.log('✅ update() 방식 성공!');
+        } catch (updateError) {
+            console.error('❌ update() 실패:', updateError);
             
+            try {
+                console.log('🔄 방법 2: set() with merge 시도...');
+                await userDocRef.set({
+                    carNumber: trimmedCarNumber,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                console.log('✅ set() 방식 성공!');
+            } catch (setError) {
+                console.error('❌ set() 실패:', setError);
+                
+                console.log('🔄 방법 3: 재인증 후 재시도...');
+                // 강제 토큰 갱신
+                await firebase.auth().currentUser.getIdToken(true);
+                
+                // 새로운 참조로 재시도
+                const newUserRef = firebase.firestore().collection('users').doc(currentUser.uid);
+                await newUserRef.update({
+                    carNumber: trimmedCarNumber,
+                    updatedAt: new Date()  // 서버 타임스탬프 대신 클라이언트 시간 사용
+                });
+                console.log('✅ 재인증 후 성공!');
+            }
+        }
+            
+        console.log('✅ Firestore 업데이트 성공!');
+        
         currentUser.carNumber = trimmedCarNumber;
         
-        // UI 업데이트 - 사용자 정보가 표시되는 곳이 있다면 업데이트
         console.log('✅ Car number updated in currentUser:', currentUser.carNumber);
         
         showNotification('오토바이 번호가 수정되었습니다.', 'success');
@@ -3104,8 +3350,15 @@ async function updateCarNumber(newCarNumber) {
         loadDashboardData();
         
     } catch (error) {
-        console.error('Error updating car number:', error);
-        showNotification('오토바이 번호 수정 실패: ' + error.message, 'error');
+        console.error('❌ Error updating car number:', error);
+        console.error('❌ Error code:', error.code);
+        console.error('❌ Error message:', error.message);
+        
+        if (error.code === 'permission-denied') {
+            showNotification('권한이 없습니다. 다시 로그인해주세요.', 'error');
+        } else {
+            showNotification('오토바이 번호 수정 실패: ' + error.message, 'error');
+        }
     }
 }
 
