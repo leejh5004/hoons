@@ -16,6 +16,11 @@ const auth = firebase.auth();
 const storage = firebase.storage();
 // db는 app.js에서 초기화됩니다
 
+// Firebase 연결 상태 확인
+console.log('🔥 Firebase 초기화 완료');
+console.log('📱 프로젝트 ID:', firebaseConfig.projectId);
+console.log('🌐 인증 도메인:', firebaseConfig.authDomain);
+
 // 한국어 설정
 auth.languageCode = 'ko';
 

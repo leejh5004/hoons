@@ -13,6 +13,85 @@ let currentStep = 1;
 let currentTheme = 'light';
 let currentViewMode = 'card'; // 'card' or 'list'
 
+// Firebase 리스너 관리용 전역 변수
+let activeListeners = {
+    todayStats: null,
+    pendingStats: null,
+    monthStats: null,
+    averageStats: null,
+    notifications: null,
+    maintenanceTimeline: null
+};
+
+// 로딩 상태 관리용 전역 변수
+let isLoadingStats = {
+    today: false,
+    pending: false,
+    month: false,
+    average: false,
+    notifications: false,
+    timeline: false
+};
+
+// Firebase 쿼리 실행 큐 (중복 방지)
+let queryQueue = new Set();
+
+// 강제 지연 시간 (ms)
+const QUERY_DELAY = 200;
+
+// 🚀 클라이언트 사이드 캐싱 시스템 (무료플랜 최적화)
+const dataCache = {
+    maintenanceTimeline: { data: null, timestamp: null, ttl: 2 * 60 * 1000 }, // 2분
+    todayStats: { data: null, timestamp: null, ttl: 5 * 60 * 1000 }, // 5분
+    pendingStats: { data: null, timestamp: null, ttl: 3 * 60 * 1000 }, // 3분
+    monthStats: { data: null, timestamp: null, ttl: 10 * 60 * 1000 }, // 10분
+    averageStats: { data: null, timestamp: null, ttl: 15 * 60 * 1000 }, // 15분
+    notifications: { data: null, timestamp: null, ttl: 1 * 60 * 1000 }, // 1분
+    recentTransactions: { data: null, timestamp: null, ttl: 5 * 60 * 1000 } // 5분
+};
+
+// 캐시 유틸리티 함수들
+function getCachedData(key) {
+    const cached = dataCache[key];
+    if (!cached || !cached.data || !cached.timestamp) return null;
+    
+    const now = Date.now();
+    if (now - cached.timestamp > cached.ttl) {
+        // TTL 만료시 캐시 삭제
+        cached.data = null;
+        cached.timestamp = null;
+        return null;
+    }
+    
+    console.log(`📦 Cache HIT: ${key} (${Math.round((now - cached.timestamp) / 1000)}초 전)`);
+    return cached.data;
+}
+
+function setCachedData(key, data) {
+    if (dataCache[key]) {
+        dataCache[key].data = data;
+        dataCache[key].timestamp = Date.now();
+        console.log(`💾 Cache SET: ${key}`);
+    }
+}
+
+function clearCachedData(key = null) {
+    if (key) {
+        if (dataCache[key]) {
+            dataCache[key].data = null;
+            dataCache[key].timestamp = null;
+            console.log(`🗑️ Cache CLEAR: ${key}`);
+        }
+    } else {
+        // 전체 캐시 클리어
+        Object.keys(dataCache).forEach(k => {
+            dataCache[k].data = null;
+            dataCache[k].timestamp = null;
+        });
+        console.log(`🗑️ Cache CLEAR: ALL`);
+    }
+}
+
 // 관리자 이메일 목록 (전역 상수) - 이정훈, 황태훈만
 const ADMIN_EMAILS = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
 
@@ -26,14 +105,73 @@ const DELETE_WARNING_DAYS = 5;
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 TWOHOONS GARAGE - Starting application...');
     
-    // Initialize Firebase
+    // Initialize Firebase with enhanced error handling
     if (typeof firebase !== 'undefined') {
-        db = firebase.firestore();
-        console.log('✅ Firebase initialized');
+        try {
+            db = firebase.firestore();
+            console.log('✅ Firebase initialized');
+            console.log('📊 Firestore 연결 완료');
+            
+            // 페이지 초기화 시 기존 리스너 정리
+            cleanupFirebaseListeners();
+            
+            // Target ID 충돌 방지를 위한 네트워크 재설정
+            console.log('🔄 Target ID 충돌 방지를 위한 초기 설정...');
+            db.disableNetwork()
+                .then(() => {
+                    return new Promise(resolve => setTimeout(resolve, 500));
+                })
+                .then(() => {
+                    return db.enableNetwork();
+                })
+                .then(() => {
+                    console.log('🌐 Firebase 네트워크 연결 활성화');
+                    // 연결 테스트
+                    return db.collection('test').limit(1).get();
+                })
+                .then(() => {
+                    console.log('✅ Firebase 연결 테스트 성공');
+                })
+                .catch(err => {
+                    console.warn('⚠️ Firebase 연결 테스트 실패:', err);
+                                // 연결 실패 시 오프라인 상태 확인
+            if (!navigator.onLine) {
+                handleOfflineMode();
+            } else {
+                // 온라인 상태에서 연결 실패 시 자동 재시도
+                setTimeout(() => {
+                    attemptFirebaseReconnection();
+                }, 2000);
+            }
+                });
+            
+        } catch (error) {
+            console.error('❌ Firebase 초기화 실패:', error);
+            showNotification('Firebase 연결 실패. 페이지를 새로고침해주세요.', 'error');
+            // 자동 재시도 로직 추가
+            setTimeout(() => {
+                location.reload();
+            }, 3000);
+            return;
+        }
     } else {
-        console.error('❌ Firebase not loaded');
+        console.error('❌ Firebase 라이브러리 로드 실패');
+        showNotification('Firebase 라이브러리 로드 실패. 페이지를 새로고침해주세요.', 'error');
+        // 자동 재시도 로직 추가
+        setTimeout(() => {
+            location.reload();
+        }, 3000);
         return;
     }
+    
+    // 네트워크 상태 초기 확인 및 모니터링 시작
+    console.log('🌐 네트워크 상태 확인:', navigator.onLine ? '온라인' : '오프라인');
+    if (!navigator.onLine) {
+        handleOfflineMode();
+    }
+    
+    // 네트워크 상태 변화 감지 시작
+    updateNetworkStatusDisplay();
     
     // Initialize critical components only
     initializeAuthSystem();
@@ -50,6 +188,9 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeSearchAndFilters();
         loadViewMode();
         
+        // Firebase 연결 상태 모니터링 시작
+        monitorFirebaseConnection();
+        
         // 📸 사진 정리 시스템 시작 (로그인 후 5초 후 실행)
         setTimeout(() => {
             schedulePhotoCleanup();
@@ -58,6 +199,25 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     console.log('✅ Application initialized successfully');
+    console.log('💡 개발자 도구 명령어를 보려면 showConsoleHelp() 를 실행하세요');
+    
+    // PDF 라이브러리 상태 초기 확인 (백그라운드에서)
+    setTimeout(() => {
+        console.log('🔍 PDF 라이브러리 상태 백그라운드 확인');
+        checkPDFLibraryStatus();
+        
+        // PDF 라이브러리가 로드되지 않은 경우 미리 로드 시도
+        if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+            console.log('⚠️ PDF 라이브러리 미로드 감지, 사전 로드 시도');
+            waitForJsPDFLibrary(5000, false).then(success => {
+                if (success) {
+                    console.log('✅ PDF 라이브러리 사전 로드 성공');
+                } else {
+                    console.warn('⚠️ PDF 라이브러리 사전 로드 실패 - 세무 리포트 사용 시 수동 로드됩니다');
+                }
+            });
+        }
+    }, 3000); // 앱 로딩 후 3초 뒤 체크
 });
 
 // =============================================
@@ -472,10 +632,66 @@ async function handleAuthStateChange(user) {
         console.log('✅ User authenticated:', user.email);
         
         try {
-            // Get user data from Firestore
-            const userDoc = await db.collection('users').doc(user.uid).get();
+            // 네트워크 연결 상태 확인
+            if (!navigator.onLine) {
+                console.warn('⚠️ 오프라인 상태에서 인증됨 - 기본 사용자 정보로 진행');
+                handleOfflineMode();
+                
+                // 오프라인 모드에서 기본 사용자 정보 설정
+                const isAdminEmail = ADMIN_EMAILS.includes(user.email);
+                currentUser = {
+                    uid: user.uid,
+                    email: user.email,
+                    name: isAdminEmail ? '관리자' : '사용자',
+                    carNumber: isAdminEmail ? 'admin1' : '',
+                    role: isAdminEmail ? 'admin' : 'user'
+                };
+                isAdmin = isAdminEmail;
+                
+                showScreen('dashboard');
+                showNotification('오프라인 모드로 실행 중입니다.', 'warning');
+                return;
+            }
             
-            if (userDoc.exists) {
+            // Firebase 재연결 시도 (오프라인 에러 방지)
+            console.log('🔄 Firebase 연결 상태 확인 및 복구 시도');
+            try {
+                await db.enableNetwork();
+                console.log('✅ Firebase 네트워크 활성화됨');
+            } catch (networkError) {
+                console.warn('⚠️ Firebase 네트워크 활성화 실패, 재시도:', networkError);
+                await attemptFirebaseReconnection();
+            }
+            
+            // Get user data from Firestore with retry logic
+            console.log('📄 사용자 데이터 로딩 시작...');
+            let userDoc;
+            let retryCount = 0;
+            const maxRetries = 3;
+            
+            while (retryCount < maxRetries) {
+                try {
+                    userDoc = await db.collection('users').doc(user.uid).get();
+                    console.log('✅ 사용자 데이터 로딩 성공');
+                    break;
+                } catch (error) {
+                    console.warn(`⚠️ 사용자 데이터 로딩 실패 (${retryCount + 1}/${maxRetries}):`, error);
+                    
+                    if (error.code === 'unavailable' || error.message.includes('offline')) {
+                        console.log('🔄 오프라인 에러 감지 - Firebase 재연결 시도');
+                        await attemptFirebaseReconnection();
+                    }
+                    
+                    retryCount++;
+                    if (retryCount < maxRetries) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // 점진적 지연
+                    } else {
+                        throw error; // 최대 재시도 후에도 실패하면 에러 던지기
+                    }
+                }
+            }
+            
+            if (userDoc && userDoc.exists) {
                 const userData = userDoc.data();
                 
                 // 관리자 이메일 체크
@@ -613,6 +829,9 @@ async function handleAuthStateChange(user) {
 
 async function handleLogout() {
     try {
+        // Firebase 리스너 정리
+        cleanupFirebaseListeners();
+        
         await firebase.auth().signOut();
         
         // 🔒 모든 사용자 데이터 완전 초기화
@@ -725,6 +944,15 @@ function initializeNavigation() {
                     break;
                 case 'add':
                     openMaintenanceModal();
+                    break;
+                case 'taxation':
+                    // 🔒 세무 화면 접근 권한 확인 - 관리자만 허용
+                    if (!isAdmin) {
+                        showNotification('관리자만 세무 화면에 접근할 수 있습니다.', 'error');
+                        return;
+                    }
+                    showScreen('taxationScreen');
+                    loadTaxationData();
                     break;
                 case 'search':
                     focusSearchInput();
@@ -1105,6 +1333,11 @@ function addNotification(title, message, type = 'info') {
 async function saveNotificationToFirebase(notification) {
     if (!currentUser) return;
     
+    if (!db) {
+        console.error('❌ Firebase 데이터베이스 연결 없음');
+        return;
+    }
+    
     try {
         await db.collection('notifications').add({
             ...notification,
@@ -1114,6 +1347,13 @@ async function saveNotificationToFirebase(notification) {
         console.log('✅ Notification saved to Firebase');
     } catch (error) {
         console.error('❌ Error saving notification:', error);
+        
+        // Firebase 오류 상세 처리
+        if (error.code === 'unavailable') {
+            console.warn('⚠️ 네트워크 연결 불안정으로 알림 저장 실패');
+        } else if (error.code === 'permission-denied') {
+            console.warn('⚠️ 권한 없음으로 알림 저장 실패');
+        }
     }
 }
 
@@ -1121,25 +1361,50 @@ async function saveNotificationToFirebase(notification) {
 async function loadNotifications() {
     if (!currentUser) return;
     
+    if (!db) {
+        console.error('❌ Firebase 데이터베이스 연결 없음');
+        return;
+    }
+    
     try {
+        // 기존 알림 리스너 정리
+        if (activeListeners.notifications) {
+            console.log('🧹 기존 알림 리스너 정리 중...');
+            activeListeners.notifications();
+            activeListeners.notifications = null;
+        }
+        
+        // Firebase 인덱스 오류 방지를 위해 단순 쿼리 사용 - 최적화: 최신 100개만
         const snapshot = await db.collection('notifications')
             .where('userId', '==', currentUser.uid)
             .orderBy('createdAt', 'desc')
-            .limit(50)
+            .limit(100)
             .get();
         
         notifications = [];
         unreadCount = 0;
         
+        // 클라이언트 측에서 정렬 및 제한
+        const notificationData = [];
         snapshot.forEach(doc => {
             const data = doc.data();
             const notification = {
                 id: doc.id,
                 ...data,
-                createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+                createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+                createdAtTimestamp: data.createdAt ? data.createdAt.toDate().getTime() : new Date().getTime()
             };
-            
-            notifications.push(notification);
+            notificationData.push(notification);
+        });
+        
+        // 클라이언트 측에서 날짜순 정렬 (최신순)
+        notificationData.sort((a, b) => b.createdAtTimestamp - a.createdAtTimestamp);
+        
+        // 최대 50개로 제한
+        notifications = notificationData.slice(0, 50);
+        
+        // 읽지 않은 알림 수 계산
+        notifications.forEach(notification => {
             if (!notification.read) {
                 unreadCount++;
             }
@@ -1150,6 +1415,13 @@ async function loadNotifications() {
         
     } catch (error) {
         console.error('❌ Error loading notifications:', error);
+        
+        // Firebase 오류 상세 처리
+        if (error.code === 'unavailable') {
+            console.warn('⚠️ 네트워크 연결 불안정으로 알림 로딩 실패');
+        } else if (error.code === 'permission-denied') {
+            console.warn('⚠️ 권한 없음으로 알림 로딩 실패');
+        }
     }
 }
 
@@ -1322,6 +1594,592 @@ function showContextMenu(options) {
 }
 
 // =============================================
+// Firebase Connection System
+// =============================================
+
+// Firebase 쿼리 안전 실행 함수
+async function safeFirebaseQuery(queryId, queryFunction, retryCount = 0) {
+    const maxRetries = 3;
+    
+    try {
+        // 중복 실행 방지
+        if (queryQueue.has(queryId)) {
+            console.log(`⚠️ Query ${queryId} already in progress, skipping...`);
+            return null;
+        }
+        
+        // 쿼리 큐에 추가
+        queryQueue.add(queryId);
+        
+        // 지연 실행 (Target ID 충돌 방지)
+        if (retryCount === 0) {
+            await new Promise(resolve => setTimeout(resolve, QUERY_DELAY));
+        }
+        
+        console.log(`🔄 Executing Firebase query: ${queryId}`);
+        
+        // 실제 쿼리 실행
+        const result = await queryFunction();
+        
+        console.log(`✅ Query ${queryId} completed successfully`);
+        return result;
+        
+            } catch (error) {
+        console.error(`❌ Query ${queryId} failed:`, error);
+        
+        // 오프라인 에러 처리
+        if (error.code === 'unavailable' || error.message?.includes('offline') || error.message?.includes('client is offline')) {
+            console.warn(`⚠️ 오프라인 에러 감지 - ${queryId}`);
+            
+            if (retryCount < maxRetries) {
+                console.log(`🔄 오프라인 에러 재시도 - ${queryId} (${retryCount + 1}/${maxRetries})`);
+                
+                // 오프라인 상태 표시
+                if (!navigator.onLine) {
+                    handleOfflineMode();
+                    throw error; // 브라우저가 오프라인이면 재시도하지 않고 바로 종료
+                }
+                
+                // Firebase 재연결 시도
+                await attemptFirebaseReconnection();
+                
+                // 재시도 전 지연
+                await new Promise(resolve => setTimeout(resolve, QUERY_DELAY * (retryCount + 2)));
+                
+                // 큐에서 제거 후 재시도
+                queryQueue.delete(queryId);
+                return await safeFirebaseQuery(queryId, queryFunction, retryCount + 1);
+            } else {
+                console.error(`❌ 오프라인 에러 최대 재시도 초과 - ${queryId}`);
+                showNotification('네트워크 연결을 확인해주세요.', 'error');
+                throw error;
+            }
+        }
+        
+        // Target ID already exists 오류 처리
+        if (error.code === 'already-exists' && retryCount < maxRetries) {
+            console.log(`🔄 Target ID 충돌 감지 - ${queryId} 재시도 (${retryCount + 1}/${maxRetries})`);
+            
+            // Firebase 네트워크 재설정으로 Target ID 충돌 해결
+            if (db && retryCount === 0) {
+                console.log('🔄 Firebase 네트워크 재설정으로 Target ID 충돌 해결 시도');
+                try {
+                    await db.disableNetwork();
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    await db.enableNetwork();
+                    console.log('✅ Firebase 네트워크 재설정 완료');
+                } catch (networkError) {
+                    console.warn('⚠️ 네트워크 재설정 실패:', networkError);
+                }
+            }
+            
+            // 재시도 전 추가 지연 (점진적 증가)
+            await new Promise(resolve => setTimeout(resolve, QUERY_DELAY * (retryCount + 2)));
+            
+            // 큐에서 제거 후 재시도
+            queryQueue.delete(queryId);
+            return await safeFirebaseQuery(queryId, queryFunction, retryCount + 1);
+        }
+        
+        throw error;
+        
+    } finally {
+        // 쿼리 큐에서 제거
+        queryQueue.delete(queryId);
+    }
+}
+
+// Firebase 리스너 정리 함수
+function cleanupFirebaseListeners() {
+    console.log('🧹 Firebase 리스너 정리 시작...');
+    
+    try {
+        // 모든 활성 리스너 정리
+        Object.keys(activeListeners).forEach(key => {
+            if (activeListeners[key]) {
+                console.log(`🧹 ${key} 리스너 정리 중...`);
+                try {
+                    activeListeners[key](); // 리스너 해제
+                    activeListeners[key] = null;
+                    console.log(`✅ ${key} 리스너 정리 완료`);
+                } catch (error) {
+                    console.error(`❌ ${key} 리스너 정리 실패:`, error);
+                }
+            }
+        });
+        
+        // 로딩 상태 초기화
+        Object.keys(isLoadingStats).forEach(key => {
+            isLoadingStats[key] = false;
+        });
+        
+        // 쿼리 큐 정리
+        queryQueue.clear();
+        
+        // Firebase 네트워크 연결 재설정 (Target ID 충돌 해결)
+        if (db) {
+            console.log('🔄 Firebase 네트워크 연결 재설정 중...');
+            // 네트워크 비활성화 후 다시 활성화하여 Target ID 충돌 해결
+            db.disableNetwork()
+                .then(() => {
+                    return new Promise(resolve => setTimeout(resolve, 300));
+                })
+                .then(() => {
+                    return db.enableNetwork();
+                })
+                .then(() => {
+                    console.log('✅ Firebase 네트워크 연결 재설정 완료');
+                })
+                .catch(error => {
+                    console.warn('⚠️ Firebase 네트워크 재설정 실패:', error);
+                });
+        }
+        
+        console.log('✅ 모든 Firebase 리스너 정리 완료');
+        
+    } catch (error) {
+        console.error('❌ Firebase 리스너 정리 중 오류:', error);
+    }
+}
+
+// 페이지 언로드 시 리스너 정리
+window.addEventListener('beforeunload', () => {
+    cleanupFirebaseListeners();
+});
+
+// 페이지 포커스 시 Target ID 충돌 해결
+window.addEventListener('focus', () => {
+    console.log('🔍 페이지 포커스 감지 - Target ID 충돌 체크');
+    // 짧은 지연 후 리스너 정리 (다른 탭에서 돌아온 경우)
+    setTimeout(() => {
+        if (db) {
+            cleanupFirebaseListeners();
+        }
+    }, 100);
+});
+
+// 네비게이션 시 리스너 정리
+window.addEventListener('popstate', () => {
+    console.log('🔍 네비게이션 감지 - 리스너 정리');
+    cleanupFirebaseListeners();
+});
+
+// Firebase 연결 상태 체크 함수
+function checkFirebaseConnection() {
+    if (!db) {
+        console.error('❌ Firebase 데이터베이스 연결 없음');
+        showNotification('데이터베이스 연결 오류. 페이지를 새로고침해주세요.', 'error');
+        return false;
+    }
+    
+    if (!currentUser) {
+        console.error('❌ 사용자 인증 정보 없음');
+        showNotification('로그인이 필요합니다.', 'error');
+        return false;
+    }
+    
+    return true;
+}
+
+// 오프라인 상태 감지 및 처리
+function handleOfflineMode() {
+    console.log('📱 오프라인 모드 감지');
+    showNotification('오프라인 상태입니다. 네트워크 연결을 확인해주세요.', 'warning');
+    
+    // 기존 오프라인 표시가 있다면 제거
+    const existingIndicator = document.getElementById('offlineIndicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+    
+    // 오프라인 상태 UI 표시 (연결 복구 버튼 포함)
+    const offlineIndicator = document.createElement('div');
+    offlineIndicator.id = 'offlineIndicator';
+    offlineIndicator.style.cssText = `
+        position: fixed;
+        top: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #ff9800, #f57c00);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 25px;
+        font-size: 14px;
+        z-index: 9999;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 90vw;
+        animation: slideDown 0.3s ease-out;
+    `;
+    
+    offlineIndicator.innerHTML = `
+        <span>🌐 오프라인 모드</span>
+        <button onclick="manualNetworkReconnect()" style="
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+            🔄 재연결
+        </button>
+    `;
+    
+    // CSS 애니메이션 추가
+    if (!document.getElementById('offlineIndicatorStyles')) {
+        const style = document.createElement('style');
+        style.id = 'offlineIndicatorStyles';
+        style.textContent = `
+            @keyframes slideDown {
+                from {
+                    transform: translateX(-50%) translateY(-100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(-50%) translateY(0);
+                    opacity: 1;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(offlineIndicator);
+}
+
+// 온라인 상태 복구 처리
+function handleOnlineMode() {
+    console.log('🌐 온라인 모드 복구');
+    showNotification('네트워크 연결이 복구되었습니다.', 'success');
+    
+    // 오프라인 표시 제거
+    const offlineIndicator = document.getElementById('offlineIndicator');
+    if (offlineIndicator) {
+        offlineIndicator.remove();
+    }
+    
+    // Firebase 재연결 시도
+    if (db) {
+        attemptFirebaseReconnection();
+    }
+}
+
+// 네트워크 상태 감지 이벤트 리스너
+window.addEventListener('online', handleOnlineMode);
+window.addEventListener('offline', handleOfflineMode);
+
+// 수동 네트워크 연결 복구 함수
+async function manualNetworkReconnect() {
+    console.log('👆 수동 네트워크 연결 복구 시도');
+    showNotification('네트워크 연결을 복구하고 있습니다...', 'info');
+    
+    try {
+        // 1. 브라우저 네트워크 상태 확인
+        if (!navigator.onLine) {
+            showNotification('인터넷 연결을 확인해주세요.', 'warning');
+            return false;
+        }
+        
+        // 2. Firebase 재연결 시도
+        const reconnected = await attemptFirebaseReconnection();
+        
+        if (reconnected) {
+            // 3. 성공 시 데이터 다시 로드
+            if (currentUser) {
+                console.log('🔄 데이터 다시 로딩...');
+                await loadDashboardData();
+                showNotification('연결이 복구되어 데이터를 다시 불러왔습니다.', 'success');
+            }
+            return true;
+        } else {
+            showNotification('연결 복구에 실패했습니다. 잠시 후 다시 시도해주세요.', 'error');
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ 수동 연결 복구 실패:', error);
+        showNotification('연결 복구 중 오류가 발생했습니다.', 'error');
+        return false;
+    }
+}
+
+// 전역에서 접근 가능하도록 설정
+window.manualNetworkReconnect = manualNetworkReconnect;
+
+// 개발자용 디버깅 함수들
+window.debugFirebaseConnection = async function() {
+    console.log('🔍 Firebase 연결 상태 디버깅 시작');
+    console.log('📊 현재 상태:', {
+        browserOnline: navigator.onLine,
+        firebaseDb: !!db,
+        currentUser: currentUser?.email || 'null',
+        activeListeners: Object.keys(activeListeners).filter(key => activeListeners[key] !== null)
+    });
+    
+    if (db) {
+        try {
+            console.log('🔄 Firebase 연결 테스트 중...');
+            await db.doc('test/connection').get();
+            console.log('✅ Firebase 연결 정상');
+        } catch (error) {
+            console.error('❌ Firebase 연결 실패:', error);
+        }
+    }
+};
+
+window.forceFirebaseReconnect = async function() {
+    console.log('🔧 강제 Firebase 재연결 시작');
+    cleanupFirebaseListeners();
+    return await attemptFirebaseReconnection();
+};
+
+window.clearOfflineIndicator = function() {
+    const indicator = document.getElementById('offlineIndicator');
+    if (indicator) {
+        indicator.remove();
+        console.log('🧹 오프라인 표시 제거됨');
+    }
+};
+
+// PDF 라이브러리 문제 해결 도구 함수들
+window.fixPDFLibraryIssue = async function() {
+    console.log('🔧 PDF 라이브러리 문제 해결 시작');
+    
+    // 1. 현재 상태 확인
+    const status = checkPDFLibraryStatus();
+    console.log('📊 현재 PDF 라이브러리 상태:', status);
+    
+    // 2. 수동 로드 시도
+    showNotification('PDF 라이브러리를 수동으로 로드하는 중...', 'info');
+    const manualLoadSuccess = await tryLoadJsPDFManually();
+    
+    if (manualLoadSuccess) {
+        showNotification('PDF 라이브러리 로드 성공! 🎉', 'success');
+        console.log('✅ PDF 라이브러리 문제 해결 완료');
+    } else {
+        showNotification('PDF 라이브러리 로드에 실패했습니다. 페이지를 새로고침해주세요.', 'error');
+        console.log('❌ PDF 라이브러리 문제 해결 실패');
+    }
+    
+    return manualLoadSuccess;
+};
+
+window.showPDFLibraryHelp = function() {
+    const helpModal = document.createElement('div');
+    helpModal.className = 'modal-overlay';
+    helpModal.innerHTML = `
+        <div class="modal-container" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-file-pdf"></i>
+                    PDF 라이브러리 문제 해결
+                </h2>
+                <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 20px;">
+                    <h4>🔍 현재 상태 확인</h4>
+                    <button onclick="checkPDFLibraryStatus()" class="btn btn-secondary" style="margin: 5px;">
+                        상태 확인
+                    </button>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4>🔧 자동 해결 시도</h4>
+                    <button onclick="fixPDFLibraryIssue()" class="btn btn-primary" style="margin: 5px;">
+                        자동 해결
+                    </button>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4>📱 수동 해결 방법</h4>
+                    <ol style="margin: 10px 0; padding-left: 20px;">
+                        <li>페이지를 새로고침하세요</li>
+                        <li>브라우저 캐시를 삭제하세요</li>
+                        <li>다른 브라우저를 시도해보세요</li>
+                        <li>인터넷 연결을 확인하세요</li>
+                    </ol>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h4>🚀 개발자 도구</h4>
+                    <p style="font-size: 12px; color: #666; margin: 5px 0;">
+                        브라우저 콘솔에서 다음 함수들을 사용할 수 있습니다:
+                    </p>
+                    <div style="background: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px;">
+                        checkPDFLibraryStatus()<br/>
+                        waitForJsPDFLibrary()<br/>
+                        tryLoadJsPDFManually()<br/>
+                        fixPDFLibraryIssue()
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">
+                    닫기
+                </button>
+                <button class="btn btn-success" onclick="location.reload()" style="margin-left: 8px;">
+                    페이지 새로고침
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(helpModal);
+    console.log('📖 PDF 라이브러리 도움말 표시됨');
+};
+
+// 콘솔 명령어 도움말 출력
+window.showConsoleHelp = function() {
+    console.log(`
+🚀 TWOHOONS GARAGE - 개발자 도구 명령어
+
+📄 PDF 라이브러리 관련:
+  checkPDFLibraryStatus()      - PDF 라이브러리 상태 확인
+  waitForJsPDFLibrary()        - PDF 라이브러리 로딩 대기
+  tryLoadJsPDFManually()       - PDF 라이브러리 수동 로드
+  fixPDFLibraryIssue()         - PDF 라이브러리 문제 자동 해결
+  showPDFLibraryHelp()         - PDF 문제 해결 도움말 표시
+
+🌐 네트워크 연결 관련:
+  debugFirebaseConnection()    - Firebase 연결 상태 디버깅
+  forceFirebaseReconnect()     - 강제 Firebase 재연결
+  manualNetworkReconnect()     - 수동 네트워크 재연결
+  clearOfflineIndicator()      - 오프라인 표시 제거
+
+🔧 시스템 관리:
+  verifyAndFixAdminStatus()    - 관리자 권한 확인/수정
+  setupAdminUser()             - 관리자 사용자 설정
+  cleanupFirebaseListeners()   - Firebase 리스너 정리
+  fixTargetIdConflict()        - Target ID 충돌 해결
+
+📊 데이터 관리:
+  clearFirebaseCache()         - Firebase 캐시 정리
+  debugPhotoIssue()            - 사진 관리 디버그
+
+💡 도움말:
+  showConsoleHelp()            - 이 도움말 표시
+  
+사용 예시:
+  checkPDFLibraryStatus()      // PDF 상태 확인
+  fixPDFLibraryIssue()         // PDF 문제 해결
+  debugFirebaseConnection()    // 연결 상태 확인
+`);
+};
+
+// 네트워크 상태 표시 업데이트 함수
+function updateNetworkStatusDisplay() {
+    const isOnline = navigator.onLine;
+    const statusElement = document.getElementById('networkStatus');
+    
+    if (statusElement) {
+        statusElement.textContent = isOnline ? '온라인' : '오프라인';
+        statusElement.className = `network-status ${isOnline ? 'online' : 'offline'}`;
+    }
+    
+    // 오프라인/온라인 상태에 따른 UI 업데이트
+    if (isOnline) {
+        handleOnlineMode();
+    } else {
+        handleOfflineMode();
+    }
+}
+
+// Firebase 네트워크 연결 복구 시도
+async function attemptFirebaseReconnection() {
+    if (!db) return false;
+    
+    try {
+        console.log('🔄 Firebase 재연결 시도...');
+        
+        // 브라우저 네트워크 상태 확인
+        if (!navigator.onLine) {
+            console.warn('⚠️ 브라우저가 오프라인 상태입니다.');
+            showNotification('인터넷 연결을 확인해주세요.', 'warning');
+            return false;
+        }
+        
+        // Firebase 네트워크 재설정 (단계별 진행)
+        console.log('1️⃣ Firebase 네트워크 비활성화...');
+        await db.disableNetwork();
+        
+        console.log('2️⃣ 잠시 대기 중...');
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        console.log('3️⃣ Firebase 네트워크 활성화...');
+        await db.enableNetwork();
+        
+        console.log('4️⃣ 연결 테스트 중...');
+        // 더 간단한 연결 테스트
+        await db.doc('test/connection').get();
+        
+        console.log('✅ Firebase 재연결 성공');
+        showNotification('네트워크 연결이 복구되었습니다.', 'success');
+        
+        // 온라인 상태 표시 업데이트
+        const offlineIndicator = document.getElementById('offlineIndicator');
+        if (offlineIndicator) {
+            offlineIndicator.remove();
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('❌ Firebase 재연결 실패:', error);
+        
+        // 에러 타입별 세분화된 메시지
+        let errorMessage = '네트워크 연결 복구 실패';
+        if (error.code === 'unavailable') {
+            errorMessage = 'Firebase 서버에 연결할 수 없습니다';
+        } else if (error.code === 'permission-denied') {
+            errorMessage = '접근 권한이 없습니다';
+        } else if (error.message && error.message.includes('offline')) {
+            errorMessage = '오프라인 상태입니다';
+            handleOfflineMode(); // 오프라인 모드 처리
+        }
+        
+        showNotification(`${errorMessage}. 잠시 후 다시 시도됩니다.`, 'warning');
+        return false;
+    }
+}
+
+// Firebase 연결 상태 실시간 모니터링
+function monitorFirebaseConnection() {
+    if (!db) return;
+    
+    // 연결 상태 모니터링
+    db.enableNetwork().then(() => {
+        console.log('🌐 Firebase 연결 활성화');
+    }).catch(error => {
+        console.warn('⚠️ Firebase 연결 문제:', error);
+        showNotification('네트워크 연결 불안정', 'warning');
+    });
+    
+    // 주기적으로 연결 상태 체크 (5분마다)
+    setInterval(async () => {
+        try {
+            await db.enableNetwork();
+            console.log('💓 Firebase 연결 상태 양호');
+        } catch (error) {
+            console.warn('⚠️ Firebase 연결 상태 불안정:', error);
+            
+            // 재연결 시도
+            const reconnected = await attemptFirebaseReconnection();
+            if (reconnected) {
+                showNotification('네트워크 연결 복구됨', 'success');
+            } else {
+                showNotification('네트워크 연결 불안정', 'warning');
+            }
+        }
+    }, 300000); // 5분 = 300000ms
+}
+
+// =============================================
 // Dashboard System
 // =============================================
 
@@ -1336,9 +2194,19 @@ async function loadDashboardData() {
         return;
     }
     
+    // Firebase 연결 상태 체크
+    if (!db) {
+        console.error('❌ Firebase 데이터베이스 연결 없음');
+        showNotification('데이터베이스 연결 오류. 페이지를 새로고침해주세요.', 'error');
+        return;
+    }
+    
     try {
         // Show loading
         showLoadingSpinner(true);
+        
+        // Firebase 네트워크 연결 확인
+        await db.enableNetwork();
         
         // Load statistics
         await Promise.all([
@@ -1353,7 +2221,24 @@ async function loadDashboardData() {
         
     } catch (error) {
         console.error('❌ Error loading dashboard:', error);
-        showNotification('대시보드 로딩 실패', 'error');
+        
+        // Firebase 특정 오류 처리
+        if (error.code === 'unavailable') {
+            showNotification('네트워크 연결을 확인해주세요.', 'error');
+        } else if (error.code === 'permission-denied') {
+            showNotification('데이터 접근 권한이 없습니다.', 'error');
+        } else if (error.code === 'already-exists') {
+            console.log('🔄 Target ID already exists, cleaning up and retrying...');
+            cleanupFirebaseListeners();
+            // 짧은 지연 후 재시도
+            setTimeout(() => {
+                loadDashboardData();
+            }, 1000);
+            return;
+        } else {
+            showNotification('대시보드 로딩 실패: ' + error.message, 'error');
+        }
+        
         showLoadingSpinner(false);
     }
 }
@@ -1366,23 +2251,49 @@ async function updateTodayStats() {
             return;
         }
         
-        const today = new Date().toISOString().split('T')[0];
-        let query = db.collection('maintenance').where('date', '==', today);
-        
-        if (isAdmin) {
-            query = query.where('adminEmail', '==', currentUser.email);
-        } else {
-            query = query.where('carNumber', '==', currentUser.carNumber);
+        // 📦 캐시 확인 먼저
+        const cachedData = getCachedData('todayStats');
+        if (cachedData !== null) {
+            updateStatCard('todayCount', cachedData);
+            return;
         }
         
-        const snapshot = await query.get();
-        const count = snapshot.size;
+        // 중복 실행 방지
+        if (isLoadingStats.today) {
+            console.log('⚠️ Today stats already loading, skipping...');
+            return;
+        }
         
-        updateStatCard('todayCount', count);
+        isLoadingStats.today = true;
+        
+        // 안전한 Firebase 쿼리 실행
+        const result = await safeFirebaseQuery('todayStats', async () => {
+            const today = new Date().toISOString().split('T')[0];
+            let query = db.collection('maintenance').where('date', '==', today);
+            
+            if (isAdmin) {
+                query = query.where('adminEmail', '==', currentUser.email);
+            } else {
+                query = query.where('carNumber', '==', currentUser.carNumber);
+            }
+            
+            const snapshot = await query.get();
+            return snapshot.size;
+        });
+        
+        if (result !== null) {
+            updateStatCard('todayCount', result);
+            setCachedData('todayStats', result); // 📦 캐시에 저장
+        } else {
+            updateStatCard('todayCount', 0);
+            setCachedData('todayStats', 0); // 📦 캐시에 저장
+        }
         
     } catch (error) {
         console.error('❌ Error updating today stats:', error);
         updateStatCard('todayCount', 0);
+    } finally {
+        isLoadingStats.today = false;
     }
 }
 
@@ -1394,22 +2305,39 @@ async function updatePendingStats() {
             return;
         }
         
-        let query = db.collection('maintenance').where('status', '==', 'pending');
-        
-        if (isAdmin) {
-            query = query.where('adminEmail', '==', currentUser.email);
-        } else {
-            query = query.where('carNumber', '==', currentUser.carNumber);
+        // 중복 실행 방지
+        if (isLoadingStats.pending) {
+            console.log('⚠️ Pending stats already loading, skipping...');
+            return;
         }
         
-        const snapshot = await query.get();
-        const count = snapshot.size;
+        isLoadingStats.pending = true;
         
-        updateStatCard('pendingCount', count);
+        // 안전한 Firebase 쿼리 실행
+        const result = await safeFirebaseQuery('pendingStats', async () => {
+            let query = db.collection('maintenance').where('status', '==', 'pending');
+            
+            if (isAdmin) {
+                query = query.where('adminEmail', '==', currentUser.email);
+            } else {
+                query = query.where('carNumber', '==', currentUser.carNumber);
+            }
+            
+            const snapshot = await query.get();
+            return snapshot.size;
+        });
+        
+        if (result !== null) {
+            updateStatCard('pendingCount', result);
+        } else {
+            updateStatCard('pendingCount', 0);
+        }
         
     } catch (error) {
         console.error('❌ Error updating pending stats:', error);
         updateStatCard('pendingCount', 0);
+    } finally {
+        isLoadingStats.pending = false;
     }
 }
 
@@ -1421,40 +2349,60 @@ async function updateMonthStats() {
             return;
         }
         
-        // 단순한 쿼리로 변경 - 인덱스 오류 방지
-        let query = db.collection('maintenance');
-        
-        // 권한별 필터링
-        if (!isAdmin && currentUser && currentUser.carNumber) {
-            query = query.where('carNumber', '==', currentUser.carNumber);
-        } else if (isAdmin && currentUser) {
-            query = query.where('adminEmail', '==', currentUser.email);
+        // 중복 실행 방지
+        if (isLoadingStats.month) {
+            console.log('⚠️ Month stats already loading, skipping...');
+            return;
         }
         
-        const snapshot = await query.get();
+        isLoadingStats.month = true;
         
-        // 클라이언트 측에서 월간 필터링
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-        
-        let monthCount = 0;
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.date) {
-                const maintenanceDate = new Date(data.date);
-                if (maintenanceDate.getMonth() === currentMonth && 
-                    maintenanceDate.getFullYear() === currentYear) {
-                    monthCount++;
-                }
+        // 안전한 Firebase 쿼리 실행 (최적화: 최신 200개만 조회)
+        const result = await safeFirebaseQuery('monthStats', async () => {
+            let query = db.collection('maintenance');
+            
+            // 권한별 필터링
+            if (!isAdmin && currentUser && currentUser.carNumber) {
+                query = query.where('carNumber', '==', currentUser.carNumber);
+            } else if (isAdmin && currentUser) {
+                query = query.where('adminEmail', '==', currentUser.email);
             }
+            
+            // 최적화: 최신 200개만 조회하여 월간 통계 계산
+            query = query.orderBy('createdAt', 'desc').limit(200);
+            const snapshot = await query.get();
+            
+            // 클라이언트 측에서 월간 필터링
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+            
+            let monthCount = 0;
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.date) {
+                    const maintenanceDate = new Date(data.date);
+                    if (maintenanceDate.getMonth() === currentMonth && 
+                        maintenanceDate.getFullYear() === currentYear) {
+                        monthCount++;
+                    }
+                }
+            });
+            
+            return monthCount;
         });
         
-        updateStatCard('monthCount', monthCount);
+        if (result !== null) {
+            updateStatCard('monthCount', result);
+        } else {
+            updateStatCard('monthCount', 0);
+        }
         
     } catch (error) {
         console.error('❌ Error updating month stats:', error);
         updateStatCard('monthCount', 0);
+    } finally {
+        isLoadingStats.month = false;
     }
 }
 
@@ -1466,40 +2414,58 @@ async function updateAverageStats() {
             return;
         }
         
-        // 단순한 쿼리로 변경 - 인덱스 오류 방지
-        let query = db.collection('maintenance');
-        
-        // 권한별 필터링
-        if (!isAdmin && currentUser && currentUser.carNumber) {
-            query = query.where('carNumber', '==', currentUser.carNumber);
-        } else if (isAdmin && currentUser) {
-            query = query.where('adminEmail', '==', currentUser.email);
+        // 중복 실행 방지
+        if (isLoadingStats.average) {
+            console.log('⚠️ Average stats already loading, skipping...');
+            return;
         }
         
-        const snapshot = await query.get();
+        isLoadingStats.average = true;
         
-        if (snapshot.size > 1) {
-            // 클라이언트 측에서 날짜순 정렬 및 계산
-            const dates = snapshot.docs
-                .map(doc => doc.data().date)
-                .filter(date => date)
-                .map(date => new Date(date))
-                .sort((a, b) => b - a) // 내림차순 정렬
-                .slice(0, 10); // 최근 10개만
+        // 안전한 Firebase 쿼리 실행 (최적화: 최신 50개만 조회)
+        const result = await safeFirebaseQuery('averageStats', async () => {
+            let query = db.collection('maintenance');
             
-            if (dates.length > 1) {
-                let totalDays = 0;
-                
-                for (let i = 0; i < dates.length - 1; i++) {
-                    const diff = (dates[i] - dates[i + 1]) / (1000 * 60 * 60 * 24);
-                    totalDays += diff;
-                }
-                
-                const averageDays = Math.round(totalDays / (dates.length - 1));
-                updateStatCard('averageDays', `${averageDays}일`);
-            } else {
-                updateStatCard('averageDays', '-');
+            // 권한별 필터링
+            if (!isAdmin && currentUser && currentUser.carNumber) {
+                query = query.where('carNumber', '==', currentUser.carNumber);
+            } else if (isAdmin && currentUser) {
+                query = query.where('adminEmail', '==', currentUser.email);
             }
+            
+            // 최적화: 평균 계산용 최신 50개만 조회 (충분한 표본)
+            query = query.orderBy('createdAt', 'desc').limit(50);
+            const snapshot = await query.get();
+            
+            if (snapshot.size > 1) {
+                // 클라이언트 측에서 날짜순 정렬 및 계산
+                const dates = snapshot.docs
+                    .map(doc => doc.data().date)
+                    .filter(date => date)
+                    .map(date => new Date(date))
+                    .sort((a, b) => b - a) // 내림차순 정렬
+                    .slice(0, 10); // 최근 10개만
+                
+                if (dates.length > 1) {
+                    let totalDays = 0;
+                    
+                    for (let i = 0; i < dates.length - 1; i++) {
+                        const diff = (dates[i] - dates[i + 1]) / (1000 * 60 * 60 * 24);
+                        totalDays += diff;
+                    }
+                    
+                    const averageDays = Math.round(totalDays / (dates.length - 1));
+                    return `${averageDays}일`;
+                } else {
+                    return '-';
+                }
+            } else {
+                return '-';
+            }
+        });
+        
+        if (result !== null) {
+            updateStatCard('averageDays', result);
         } else {
             updateStatCard('averageDays', '-');
         }
@@ -1507,6 +2473,8 @@ async function updateAverageStats() {
     } catch (error) {
         console.error('❌ Error updating average stats:', error);
         updateStatCard('averageDays', '-');
+    } finally {
+        isLoadingStats.average = false;
     }
 }
 
@@ -1528,6 +2496,15 @@ function showLoadingSpinner(show) {
     if (content) {
         content.style.display = show ? 'none' : 'block';
     }
+    
+    // 로딩 중일 때 사용자 피드백 강화
+    if (show) {
+        console.log('🔄 로딩 시작...');
+        // 일시적인 알림
+        showNotification('데이터를 불러오고 있습니다...', 'info');
+    } else {
+        console.log('✅ 로딩 완료');
+    }
 }
 
 // =============================================
@@ -1538,6 +2515,7 @@ async function loadMaintenanceTimeline(searchTerm = '') {
     console.log('📋 Loading maintenance timeline...');
     console.log('👤 Current user:', currentUser);
     console.log('🔧 Is admin:', isAdmin);
+    console.log('🔍 Search term:', searchTerm);
     
     // 🔒 로그인 상태 체크 - 보안 강화
     if (!currentUser) {
@@ -1550,16 +2528,72 @@ async function loadMaintenanceTimeline(searchTerm = '') {
         return;
     }
     
+    // Firebase 연결 상태 체크 - 추가 디버깅
+    if (!db) {
+        console.error('❌ Firebase 데이터베이스 연결 없음');
+        showNotification('데이터베이스 연결 오류. 페이지를 새로고침해주세요.', 'error');
+        showLoadingSpinner(false);
+        return;
+    }
+    
+    console.log('✅ Firebase 연결 상태 확인됨');
+    
     // 로딩 스피너 표시
     showLoadingSpinner(true);
     
     try {
-        // 간단한 쿼리로 시작 (orderBy 제거)
-        let query = db.collection('maintenance');
+        // 네트워크 연결 상태 확인 및 복구
+        console.log('🌐 네트워크 연결 상태 확인 중...');
+        try {
+            await db.enableNetwork();
+            console.log('✅ 네트워크 연결 활성화됨');
+        } catch (networkError) {
+            console.warn('⚠️ 네트워크 연결 문제, 재연결 시도:', networkError);
+            const reconnected = await attemptFirebaseReconnection();
+            if (!reconnected) {
+                throw new Error('네트워크 연결 복구 실패');
+            }
+        }
         
-        console.log('🔍 Executing simple query...');
-        const snapshot = await query.get();
+        // 중복 실행 방지
+        if (isLoadingStats.timeline) {
+            console.log('⚠️ Timeline already loading, skipping...');
+            return;
+        }
+        
+        isLoadingStats.timeline = true;
+        
+        // 안전한 Firebase 쿼리 실행 (최적화: 최신 50개만 조회)
+        const snapshot = await safeFirebaseQuery('maintenanceTimeline', async () => {
+            let query = db.collection('maintenance')
+                .orderBy('createdAt', 'desc')
+                .limit(50); // 최신 50개만 조회하여 읽기 횟수 대폭 감소
+            console.log('🔍 Executing optimized maintenance timeline query (limit: 50)...');
+            return await query.get();
+        });
+        
+        if (!snapshot) {
+            console.log('❌ Query returned null, skipping...');
+            return;
+        }
+        
         console.log('📊 Found documents:', snapshot.size);
+        
+        // 빈 결과 처리
+        if (snapshot.empty) {
+            console.log('📋 정비 이력이 비어있음');
+            const timelineContent = document.getElementById('timelineContent');
+            if (timelineContent) {
+                timelineContent.innerHTML = `
+                    <div style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #8b4513; padding: 40px; text-align: center; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                        <h3 style="margin: 0 0 15px 0; font-size: 24px;">📋 정비 이력이 없습니다</h3>
+                        <p style="margin: 0; opacity: 0.8;">첫 번째 정비를 등록해보세요!</p>
+                    </div>
+                `;
+            }
+            showLoadingSpinner(false);
+            return;
+        }
         
         const maintenances = [];
         
@@ -1583,21 +2617,38 @@ async function loadMaintenanceTimeline(searchTerm = '') {
             return dateB - dateA; // 최신순
         });
         
-        // 권한별 필터링
+        // 권한별 필터링 - 디버깅 강화
         let filteredMaintenances = maintenances;
+        console.log('🔍 권한별 필터링 시작...');
+        console.log('📊 필터링 전 정비 이력 수:', maintenances.length);
+        console.log('👤 현재 사용자:', {
+            email: currentUser.email,
+            carNumber: currentUser.carNumber,
+            role: currentUser.role
+        });
+        console.log('🔧 관리자 권한:', isAdmin);
+        
         if (!isAdmin && currentUser && currentUser.carNumber) {
             // 일반 사용자: 자신의 차량번호만
-            filteredMaintenances = maintenances.filter(m => 
-                m.carNumber === currentUser.carNumber
-            );
+            console.log('🚗 일반 사용자 필터링 적용 중...');
+            filteredMaintenances = maintenances.filter(m => {
+                console.log(`📋 정비 이력 체크: ${m.id} - 차량번호: ${m.carNumber} vs 사용자: ${currentUser.carNumber}`);
+                return m.carNumber === currentUser.carNumber;
+            });
             console.log('🚗 User filtered by car number:', currentUser.carNumber, filteredMaintenances.length);
         } else if (isAdmin && currentUser) {
             // 관리자: 자신이 작업한 정비만
-            filteredMaintenances = maintenances.filter(m => 
-                m.adminEmail === currentUser.email
-            );
+            console.log('👨‍💼 관리자 필터링 적용 중...');
+            filteredMaintenances = maintenances.filter(m => {
+                console.log(`📋 정비 이력 체크: ${m.id} - 관리자: ${m.adminEmail} vs 사용자: ${currentUser.email}`);
+                return m.adminEmail === currentUser.email;
+            });
             console.log('👨‍💼 Admin filtered by email:', currentUser.email, filteredMaintenances.length);
+        } else {
+            console.log('⚠️ 권한 필터링 조건에 맞지 않음');
         }
+        
+        console.log('📊 필터링 후 정비 이력 수:', filteredMaintenances.length);
         
         // 상태별 필터 적용
         const currentFilter = window.currentFilter || 'all';
@@ -1636,21 +2687,67 @@ async function loadMaintenanceTimeline(searchTerm = '') {
             console.log('🔍 Filtered by search term:', filteredMaintenances.length);
         }
         
+        // 최종 결과 확인
+        console.log('📊 최종 렌더링할 정비 이력 수:', filteredMaintenances.length);
+        
+        // 빈 결과 처리
+        if (filteredMaintenances.length === 0) {
+            console.log('📋 필터링 후 결과가 비어있음');
+            const timelineContent = document.getElementById('timelineContent');
+            if (timelineContent) {
+                timelineContent.innerHTML = `
+                    <div style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #8b4513; padding: 40px; text-align: center; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                        <h3 style="margin: 0 0 15px 0; font-size: 24px;">📋 정비 이력이 없습니다</h3>
+                        <p style="margin: 0; opacity: 0.8;">조건에 맞는 정비 이력이 없습니다.</p>
+                        ${!isAdmin ? '<p style="margin: 10px 0 0 0; font-size: 14px;">차량번호를 확인하거나 관리자에게 문의하세요.</p>' : ''}
+                    </div>
+                `;
+            }
+            showLoadingSpinner(false);
+            return;
+        }
+        
         console.log('✅ About to render', filteredMaintenances.length, 'maintenances');
         await renderRealMaintenanceTimeline(filteredMaintenances);
         
         // 로딩 완료 후 스피너 숨기기
         showLoadingSpinner(false);
         
+        console.log('✅ Timeline loaded successfully with', filteredMaintenances.length, 'items');
+        
     } catch (error) {
         console.error('❌ Error loading timeline:', error);
-        showNotification('정비 이력 로딩 실패: ' + error.message, 'error');
+        console.error('❌ Error details:', {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+        });
+        
+        // Firebase 오류 상세 처리
+        if (error.code === 'unavailable') {
+            showNotification('네트워크 연결을 확인해주세요.', 'error');
+        } else if (error.code === 'permission-denied') {
+            showNotification('데이터 접근 권한이 없습니다.', 'error');
+        } else {
+            showNotification('정비 이력 로딩 실패: ' + error.message, 'error');
+        }
         
         // 오류 발생 시에도 스피너 숨기기
         showLoadingSpinner(false);
         
-        // 오류 시 테스트 데이터라도 보여주기
-        await renderRealMaintenanceTimeline([]);
+        // 오류 시 에러 메시지 표시
+        const timelineContent = document.getElementById('timelineContent');
+        if (timelineContent) {
+            timelineContent.innerHTML = `
+                <div style="background: linear-gradient(135deg, #ffcccc 0%, #ff9999 100%); color: #cc0000; padding: 40px; text-align: center; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    <h3 style="margin: 0 0 15px 0; font-size: 24px;">❌ 정비 이력 로딩 실패</h3>
+                    <p style="margin: 0; opacity: 0.8;">네트워크 연결을 확인하고 다시 시도해주세요.</p>
+                    <button onclick="loadMaintenanceTimeline()" style="margin-top: 15px; padding: 10px 20px; background: #cc0000; color: white; border: none; border-radius: 5px; cursor: pointer;">다시 시도</button>
+                </div>
+            `;
+        }
+    } finally {
+        isLoadingStats.timeline = false;
     }
 }
 
@@ -2325,6 +3422,13 @@ async function handleMaintenanceSubmit(e) {
         
         closeMaintenanceModal();
         
+        // 🗑️ 관련 캐시 무효화 (데이터 변경으로 인한)
+        clearCachedData('maintenanceTimeline');
+        clearCachedData('todayStats');
+        clearCachedData('pendingStats');
+        clearCachedData('monthStats');
+        clearCachedData('averageStats');
+        
         // 대시보드 데이터 새로고침
         loadDashboardData();
         
@@ -2628,13 +3732,21 @@ async function loadMaintenanceHistory(search = '') {
     }
 
     try {
-        const snapshot = await query.orderBy('createdAt', 'desc').get();
+        // Firebase 쿼리 최적화: 최신 100개만 조회 후 클라이언트에서 검색 필터링
+        const snapshot = await query.orderBy('createdAt', 'desc').limit(100).get();
         maintenanceItems.innerHTML = '';
         let maintenances = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            maintenances.push({ ...data, id: doc.id });
+            maintenances.push({ 
+                ...data, 
+                id: doc.id,
+                createdAtTimestamp: data.createdAt ? data.createdAt.toDate().getTime() : new Date().getTime()
+            });
         });
+        
+        // 클라이언트 측에서 날짜순 정렬 (최신순)
+        maintenances.sort((a, b) => b.createdAtTimestamp - a.createdAtTimestamp);
 
         if (search && search.trim() !== '') {
             const searchTerms = search.trim().toLowerCase().split(/\s+/);
@@ -2923,6 +4035,12 @@ function updateUI() {
         fab.style.display = isAdmin ? 'flex' : 'none';
     }
     
+    // 🔒 세무 탭 권한 제어 - 관리자만 표시
+    const taxationNavItem = document.getElementById('taxationNavItem');
+    if (taxationNavItem) {
+        taxationNavItem.style.display = isAdmin ? 'block' : 'none';
+    }
+    
     // Update notification badge
     updateNotificationBadge();
 }
@@ -2979,27 +4097,7 @@ function applyFilter(filter) {
     loadMaintenanceTimeline(searchTerm);
 }
 
-// 대시보드 데이터 로딩 함수 (완전 구현)
-function loadDashboardData() {
-    console.log('📊 Loading dashboard data...');
-    
-    // 🔒 로그인 상태 체크 - 보안 강화
-    if (!currentUser) {
-        console.log('🚫 Not logged in - redirecting to auth screen');
-        showNotification('로그인이 필요합니다.', 'error');
-        showScreen('auth');
-        return;
-    }
-    
-    // 통계 업데이트
-    updateTodayStats();
-    updatePendingStats(); 
-    updateMonthStats();
-    updateAverageStats();
-    
-    // 정비 이력 로딩
-    loadMaintenanceTimeline();
-}
+// 중복된 함수 정의 제거됨 - 위에 async 버전이 메인 함수임
 
 // 이벤트 리스너 초기화 함수
 function initializeEventListeners() {
@@ -3365,7 +4463,7 @@ async function updateCarNumber(newCarNumber) {
 // 이미지 리사이즈 함수 (toBlob 실패 시 toDataURL로 fallback, PNG도 지원)
 async function resizeImage(file) {
     return new Promise((resolve, reject) => {
-        if (file.size <= 1024 * 1024) {
+        if (file.size <= 512 * 1024) { // 1MB → 512KB로 낮춰서 더 많은 이미지 최적화
             resolve(file);
             return;
         }
@@ -3376,7 +4474,7 @@ async function resizeImage(file) {
                 try {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
-                    const maxSize = 800;
+                    const maxSize = 600; // 800px → 600px로 축소하여 용량 절약
                     let { width, height } = img;
                     if (width > height) {
                         if (width > maxSize) {
@@ -3415,7 +4513,7 @@ async function resizeImage(file) {
                                 })
                                 .catch(() => resolve(file));
                         }
-                    }, 'image/jpeg', 0.8);
+                    }, 'image/jpeg', 0.7); // 80% → 70%로 압축률 개선
                     setTimeout(() => {
                         if (!called) {
                             called = true;
@@ -4904,9 +6002,21 @@ function showEstimateModal() {
                             
                             <!-- 총액 표시 -->
                             <div class="estimate-total-section-modal">
-                                <h4>
-                                    💰 총 견적액: <span id="totalAmount" class="estimate-total-amount-modal">0</span>원
-                                </h4>
+                                <div class="estimate-amount-breakdown">
+                                    <div class="estimate-breakdown-item">
+                                        <span class="estimate-breakdown-label">공급가액:</span>
+                                        <span id="supplyAmount" class="estimate-breakdown-amount">0</span>원
+                                    </div>
+                                    <div class="estimate-breakdown-item">
+                                        <span class="estimate-breakdown-label">부가세 (10%):</span>
+                                        <span id="vatAmount" class="estimate-breakdown-amount">0</span>원
+                                    </div>
+                                    <div class="estimate-breakdown-separator"></div>
+                                    <div class="estimate-breakdown-total">
+                                        <span class="estimate-breakdown-label">합계:</span>
+                                        <span id="totalAmount" class="estimate-total-amount-modal">0</span>원
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
@@ -4983,18 +6093,38 @@ function removeEstimateItem(button) {
     }
 }
 
-// 총액 계산
+// 총액 계산 (부가세 포함)
 function calculateTotal() {
     const items = document.querySelectorAll('.estimate-item-card');
-    let total = 0;
+    let supplyAmount = 0;
     
     items.forEach(item => {
         const price = parseFloat(item.querySelector('.item-price').value) || 0;
         const quantity = parseInt(item.querySelector('.item-quantity').value) || 0;
-        total += price * quantity;
+        supplyAmount += price * quantity;
     });
     
-    document.getElementById('totalAmount').textContent = total.toLocaleString();
+    // 부가세 10% 계산
+    const vatAmount = Math.round(supplyAmount * 0.1);
+    const totalAmount = supplyAmount + vatAmount;
+    
+    // 공급가액 표시
+    const supplyAmountElement = document.getElementById('supplyAmount');
+    if (supplyAmountElement) {
+        supplyAmountElement.textContent = supplyAmount.toLocaleString();
+    }
+    
+    // 부가세 표시
+    const vatAmountElement = document.getElementById('vatAmount');
+    if (vatAmountElement) {
+        vatAmountElement.textContent = vatAmount.toLocaleString();
+    }
+    
+    // 합계 표시
+    const totalAmountElement = document.getElementById('totalAmount');
+    if (totalAmountElement) {
+        totalAmountElement.textContent = totalAmount.toLocaleString();
+    }
 }
 
 // 🎨 전문적인 PDF 견적서 생성
@@ -5035,7 +6165,13 @@ async function generateEstimatePDF() {
         const bikeModel = document.getElementById('estimateBikeModel').value.trim();
         const bikeYear = document.getElementById('estimateBikeYear').value.trim();
         const mileage = document.getElementById('estimateMileage').value.trim();
-        const totalAmount = items.reduce((sum, item) => sum + item.total, 0);
+        
+        // 공급가액 계산
+        const supplyAmount = items.reduce((sum, item) => sum + item.total, 0);
+        // 부가세 계산 (10%)
+        const vatAmount = Math.round(supplyAmount * 0.1);
+        // 총액 계산 (공급가액 + 부가세)
+        const totalAmount = supplyAmount + vatAmount;
         
         showNotification('PDF 견적서를 생성하는 중...', 'info');
         
@@ -5047,7 +6183,7 @@ async function generateEstimatePDF() {
         const estimateNumber = Date.now().toString().slice(-6);
         
         // 🎨 HTML 견적서 템플릿 생성
-        const estimateHTML = createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel, bikeYear, mileage, currentManagerName, estimateNumber);
+        const estimateHTML = createEstimateHTML(customerName, carNumber, title, items, supplyAmount, notes, bikeModel, bikeYear, mileage, currentManagerName, estimateNumber);
         
         // 📁 견적서 데이터 Firebase에 저장
         console.log('💾 견적서 저장 시도:', estimateNumber);
@@ -5058,6 +6194,8 @@ async function generateEstimatePDF() {
             carNumber,
             title,
             items,
+            supplyAmount,
+            vatAmount,
             totalAmount,
             notes,
             bikeModel,
@@ -5135,7 +6273,7 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
         ">
             <!-- 🎨 헤더 -->
             <div style="
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: linear-gradient(135deg, #333 0%, #111 100%);
                 color: white;
                 padding: 20px;
                 border-radius: 10px;
@@ -5163,8 +6301,8 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                         </svg>
                     </div>
                     <div>
-                        <h1 style="margin: 0; font-size: 28px; font-weight: bold;">TWOHOONS GARAGE</h1>
-                        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">이륜차 정비소</p>
+                        <h1 style="margin: 0; font-size: 28px; font-weight: bold;">투훈스 게러지</h1>
+                        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">서비스업 · 이륜차정비</p>
                     </div>
                 </div>
                 <div style="text-align: right;">
@@ -5285,7 +6423,7 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                     </tbody>
                 </table>
                 
-                <!-- 총액 - 편지 스타일 -->
+                <!-- 총액 - 편지 스타일 (부가세 포함) -->
                 <div style="
                     margin-top: 12px;
                     padding: 12px 15px;
@@ -5295,9 +6433,18 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                     text-align: center;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
                 ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 13px; font-weight: 500;">공급가액</span>
+                        <span style="font-size: 14px; font-weight: bold;">${totalAmount.toLocaleString()}원</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 13px; font-weight: 500;">부가세 (10%)</span>
+                        <span style="font-size: 14px; font-weight: bold;">${Math.round(totalAmount * 0.1).toLocaleString()}원</span>
+                    </div>
+                    <div style="height: 1px; background: rgba(255,255,255,0.3); margin: 8px 0;"></div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 15px; font-weight: 600;">총 견적액</span>
-                        <span style="font-size: 18px; font-weight: bold;">${totalAmount.toLocaleString()}원</span>
+                        <span style="font-size: 16px; font-weight: 700;">합계</span>
+                        <span style="font-size: 18px; font-weight: bold;">${(totalAmount + Math.round(totalAmount * 0.1)).toLocaleString()}원</span>
                     </div>
                 </div>
             </div>
@@ -5660,6 +6807,11 @@ window.debugPhotoIssue = debugPhotoIssue;
 
 // 💾 견적서 데이터를 Firebase에 저장
 async function saveEstimateToFirebase(estimateData) {
+    // Firebase 연결 상태 체크
+    if (!checkFirebaseConnection()) {
+        return;
+    }
+    
     try {
         console.log('💾 견적서 저장 시작:', {
             estimateNumber: estimateData.estimateNumber,
@@ -5679,13 +6831,27 @@ async function saveEstimateToFirebase(estimateData) {
             code: error.code,
             message: error.message
         });
-        showNotification(`견적서 저장 실패: ${error.message}`, 'error');
+        
+        // Firebase 오류 상세 처리
+        if (error.code === 'unavailable') {
+            showNotification('네트워크 연결을 확인해주세요.', 'error');
+        } else if (error.code === 'permission-denied') {
+            showNotification('데이터 저장 권한이 없습니다.', 'error');
+        } else {
+            showNotification(`견적서 저장 실패: ${error.message}`, 'error');
+        }
+        
         throw error; // 에러를 다시 던져서 상위에서 처리하도록
     }
 }
 
 // 🔍 견적서 번호로 조회
 async function searchEstimateByNumber(estimateNumber) {
+    // Firebase 연결 상태 체크
+    if (!checkFirebaseConnection()) {
+        return null;
+    }
+    
     try {
         console.log('🔍 견적서 조회 시작:', {
             estimateNumber,
@@ -5726,8 +6892,16 @@ async function searchEstimateByNumber(estimateNumber) {
             message: error.message,
             stack: error.stack
         });
-        alert(`견적서 조회 실패: ${error.message}`);
-        showNotification(`견적서 조회 실패: ${error.message}`, 'error');
+        
+        // Firebase 오류 상세 처리
+        if (error.code === 'unavailable') {
+            showNotification('네트워크 연결을 확인해주세요.', 'error');
+        } else if (error.code === 'permission-denied') {
+            showNotification('데이터 조회 권한이 없습니다.', 'error');
+        } else {
+            showNotification(`견적서 조회 실패: ${error.message}`, 'error');
+        }
+        
         return null;
     }
 }
@@ -5953,9 +7127,20 @@ function createEstimateDetailHTML(estimateData) {
             </div>
             
             <div class="estimate-total-section">
-                <div class="estimate-total-label">총 견적 금액</div>
-                <div class="estimate-total-amount">
-                    ${(estimateData.totalAmount || 0).toLocaleString()}원
+                <div class="estimate-breakdown-detail">
+                    <div class="estimate-breakdown-detail-item">
+                        <span class="estimate-breakdown-detail-label">공급가액:</span>
+                        <span class="estimate-breakdown-detail-amount">${(estimateData.supplyAmount || estimateData.totalAmount || 0).toLocaleString()}원</span>
+                    </div>
+                    <div class="estimate-breakdown-detail-item">
+                        <span class="estimate-breakdown-detail-label">부가세 (10%):</span>
+                        <span class="estimate-breakdown-detail-amount">${(estimateData.vatAmount || Math.round((estimateData.supplyAmount || estimateData.totalAmount || 0) * 0.1)).toLocaleString()}원</span>
+                    </div>
+                    <div class="estimate-breakdown-detail-separator"></div>
+                    <div class="estimate-breakdown-detail-total">
+                        <span class="estimate-total-label">합계</span>
+                        <span class="estimate-total-amount">${(estimateData.totalAmount || 0).toLocaleString()}원</span>
+                    </div>
                 </div>
             </div>
             
@@ -6162,19 +7347,24 @@ async function getEstimatesByMonth(year, month) {
         
         console.log('📅 조회 기간:', startDate.toLocaleDateString('ko-KR'), '~', endDate.toLocaleDateString('ko-KR'));
         
+        // Firebase 인덱스 오류 방지를 위해 단순 range 쿼리 사용
         const snapshot = await db.collection('estimates')
             .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(startDate))
             .where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(endDate))
-            .orderBy('createdAt', 'desc')
             .get();
         
         const estimates = [];
         snapshot.forEach(doc => {
+            const data = doc.data();
             estimates.push({
                 id: doc.id,
-                ...doc.data()
+                ...data,
+                createdAtTimestamp: data.createdAt ? data.createdAt.toDate().getTime() : 0
             });
         });
+        
+        // 클라이언트 측에서 날짜순 정렬 (최신순)
+        estimates.sort((a, b) => b.createdAtTimestamp - a.createdAtTimestamp);
         
         console.log(`✅ ${estimates.length}개의 견적서 조회 완료`);
         return estimates;
@@ -6218,13 +7408,14 @@ function showDownloadPreview(estimates, year, month) {
 // 견적서 PDF Blob 생성
 async function generateEstimatePDFBlob(estimateData) {
     try {
-        // HTML 생성
+        // HTML 생성 (공급가액 기준)
+        const supplyAmount = estimateData.supplyAmount || (estimateData.totalAmount ? Math.round(estimateData.totalAmount / 1.1) : 0);
         const htmlContent = createEstimateHTML(
             estimateData.customerName,
             estimateData.carNumber,
             estimateData.title,
             estimateData.items || [],
-            estimateData.totalAmount || 0,
+            supplyAmount,
             estimateData.notes || '',
             estimateData.bikeModel || '',
             estimateData.bikeYear || '',
@@ -6233,7 +7424,7 @@ async function generateEstimatePDFBlob(estimateData) {
             estimateData.estimateNumber
         );
         
-        // 기존 generatePDFFromHTML 로직을 재사용하여 Blob 반환
+        // 기존 generatePDFFromHTML 로직을 재사용하여 Blob 반환 (공급가액 기준)
         return await generatePDFFromHTML(htmlContent, estimateData.customerName, estimateData.carNumber, true);
         
     } catch (error) {
@@ -6242,8 +7433,5042 @@ async function generateEstimatePDFBlob(estimateData) {
     }
 }
 
+// ===============================================
+// TAXATION MANAGEMENT SYSTEM
+// ===============================================
+
+// 세무관리 데이터 로딩
+async function loadTaxationData() {
+    console.log('📊 세무관리 데이터 로딩 중...');
+    
+    // 🔒 로그인 상태 체크
+    if (!currentUser) {
+        console.log('🚫 로그인 필요 - 인증 화면으로 이동');
+        showNotification('로그인이 필요합니다.', 'error');
+        showScreen('loginScreen');
+        return;
+    }
+    
+    // 🔒 관리자 권한 확인 및 자동 수정
+    const hasAdminAccess = verifyAndFixAdminStatus();
+    if (!hasAdminAccess) {
+        console.log('🚫 관리자 권한 필요 - 접근 거부');
+        showNotification('세무 화면은 관리자만 접근할 수 있습니다.', 'error');
+        showScreen('dashboardScreen');
+        return;
+    }
+    
+    try {
+        // 현재 연도/분기 설정
+        const currentYear = new Date().getFullYear();
+        const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3);
+        
+        document.getElementById('taxationYear').value = currentYear;
+        document.getElementById('taxationQuarter').value = currentQuarter;
+        
+        // 세무 데이터 로딩 (관리자만) - 안정성을 위해 개별 로딩
+        let loadedCount = 0;
+        let totalTasks = isAdmin ? 3 : 2;
+        
+        // 1. 세무 요약 로딩
+        try {
+            await loadTaxationSummary(currentYear, currentQuarter);
+            loadedCount++;
+            console.log('✅ 세무 요약 로딩 완료');
+        } catch (error) {
+            console.error('❌ 세무 요약 로딩 실패:', error);
+            showNotification('세무 요약 로딩에 실패했습니다.', 'warning');
+        }
+        
+        // 2. 세무 분류 로딩
+        try {
+            await loadTaxationCategories();
+            loadedCount++;
+            console.log('✅ 세무 분류 로딩 완료');
+        } catch (error) {
+            console.error('❌ 세무 분류 로딩 실패:', error);
+            showNotification('세무 분류 로딩에 실패했습니다.', 'warning');
+        }
+        
+        // 3. 최근 거래 로딩 (관리자만)
+        if (isAdmin) {
+            try {
+                await loadRecentTransactions();
+                loadedCount++;
+                console.log('✅ 최근 거래 로딩 완료');
+            } catch (error) {
+                console.error('❌ 최근 거래 로딩 실패:', error);
+                showNotification('최근 거래 로딩에 실패했습니다.', 'warning');
+            }
+        }
+        
+        // 로딩 결과 알림
+        if (loadedCount === totalTasks) {
+            showNotification('세무 데이터가 성공적으로 로딩되었습니다.', 'success');
+        } else if (loadedCount > 0) {
+            showNotification(`세무 데이터 일부 로딩 완료 (${loadedCount}/${totalTasks})`, 'warning');
+        } else {
+            showNotification('세무 데이터 로딩에 실패했습니다.', 'error');
+        }
+        
+        console.log('✅ 세무관리 데이터 로딩 완료');
+        
+    } catch (error) {
+        console.error('❌ 세무관리 데이터 로딩 실패:', error);
+        showNotification('세무 데이터 로딩에 실패했습니다: ' + error.message, 'error');
+    }
+}
+
+// 세무 요약 정보 로딩
+async function loadTaxationSummary(year, quarter) {
+    try {
+        console.log(`📊 ${year}년 ${quarter}분기 세무 요약 로딩...`);
+        
+        // 분기별 기간 계산
+        const quarterStartMonth = (quarter - 1) * 3 + 1;
+        const quarterEndMonth = quarter * 3;
+        
+        // 매출 데이터 조회 (기존 견적서 활용)
+        const incomeData = await calculateIncomeFromEstimates(year, quarterStartMonth, quarterEndMonth);
+        
+        // 매입/경비 데이터 조회
+        const expenseData = await loadExpenseData(year, quarterStartMonth, quarterEndMonth);
+        
+        // 부가세 계산
+        const vatData = calculateVAT(incomeData, expenseData);
+        
+        // UI 업데이트
+        updateTaxationSummaryUI(incomeData, expenseData, vatData);
+        
+        console.log('✅ 세무 요약 로딩 완료');
+        
+    } catch (error) {
+        console.error('❌ 세무 요약 로딩 실패:', error);
+        throw error;
+    }
+}
+
+// 견적서 데이터와 직접 입력된 매출 데이터 계산
+async function calculateIncomeFromEstimates(year, startMonth, endMonth) {
+    try {
+        console.log(`💰 ${year}년 ${startMonth}-${endMonth}월 매출 계산 중...`);
+        
+        let totalIncome = 0;
+        let totalSupply = 0;
+        let totalVat = 0;
+        let count = 0;
+        
+        // 견적서 매출 세부 데이터
+        let estimateSupply = 0;
+        let estimateVat = 0;
+        let estimateCount = 0;
+        
+        // 직접 매출 세부 데이터
+        let directSupply = 0;
+        let directVat = 0;
+        let directCount = 0;
+        
+        // 1. 견적서 데이터에서 매출 계산
+        console.log('📄 견적서 데이터 조회 중...');
+        let estimateQuery = db.collection('estimates');
+        
+        if (isAdmin) {
+            estimateQuery = estimateQuery.where('createdBy', '==', currentUser.email);
+        }
+        
+        const estimateSnapshot = await estimateQuery.get();
+        
+        estimateSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.createdAt) {
+                const createdDate = data.createdAt.toDate();
+                if (createdDate.getFullYear() === year && 
+                    createdDate.getMonth() + 1 >= startMonth && 
+                    createdDate.getMonth() + 1 <= endMonth) {
+                    
+                    const supplyAmount = data.supplyAmount || 0;
+                    const vatAmount = data.vatAmount || 0;
+                    const totalAmount = data.totalAmount || 0;
+                    
+                    totalSupply += supplyAmount;
+                    totalVat += vatAmount;
+                    totalIncome += totalAmount;
+                    
+                    estimateSupply += supplyAmount;
+                    estimateVat += vatAmount;
+                    estimateCount++;
+                    count++;
+                }
+            }
+        });
+        
+        console.log(`📄 견적서 매출: ${estimateCount}건, ${(estimateSupply + estimateVat).toLocaleString()}원`);
+        
+        // 2. 직접 입력된 매출 데이터 계산
+        console.log('💰 직접 입력 매출 데이터 조회 중...');
+        let incomeQuery = db.collection('income');
+        
+        if (isAdmin) {
+            incomeQuery = incomeQuery.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const incomeSnapshot = await incomeQuery.get();
+        
+        incomeSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.date) {
+                const incomeDate = new Date(data.date);
+                if (incomeDate.getFullYear() === year && 
+                    incomeDate.getMonth() + 1 >= startMonth && 
+                    incomeDate.getMonth() + 1 <= endMonth) {
+                    
+                    const supplyAmount = data.supplyAmount || 0;
+                    const vatAmount = data.vatAmount || 0;
+                    const totalAmount = data.totalAmount || 0;
+                    
+                    totalSupply += supplyAmount;
+                    totalVat += vatAmount;
+                    totalIncome += totalAmount;
+                    
+                    directSupply += supplyAmount;
+                    directVat += vatAmount;
+                    directCount++;
+                    count++;
+                }
+            }
+        });
+        
+        console.log(`💰 직접 입력 매출: ${directCount}건, ${(directSupply + directVat).toLocaleString()}원`);
+        
+        const totalCount = count;
+        console.log(`✅ 총 매출 계산 완료: ${totalCount}건, 총액 ${totalIncome.toLocaleString()}원`);
+        
+        return {
+            totalIncome,
+            totalSupply,
+            totalVat,
+            count: totalCount,
+            // 세부 분류 데이터 추가
+            estimateSupply,
+            estimateVat,
+            directSupply,
+            directVat
+        };
+        
+    } catch (error) {
+        console.error('❌ 매출 계산 실패:', error);
+        return { 
+            totalIncome: 0, 
+            totalSupply: 0, 
+            totalVat: 0, 
+            count: 0,
+            estimateSupply: 0,
+            estimateVat: 0,
+            directSupply: 0,
+            directVat: 0
+        };
+    }
+}
+
+// 매입/경비 데이터 로딩
+async function loadExpenseData(year, startMonth, endMonth) {
+    try {
+        console.log(`💳 ${year}년 ${startMonth}-${endMonth}월 경비 로딩 중...`);
+        
+        // 관리자별 데이터 필터링 - 인덱스 오류 방지를 위해 where만 사용
+        let query = db.collection('expense');
+        
+        if (isAdmin) {
+            query = query.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const snapshot = await query.get();
+        
+        let totalExpense = 0;
+        let totalSupply = 0;
+        let totalVat = 0;
+        let totalDeductibleVat = 0;
+        let count = 0;
+        
+        // 세부 분류 데이터
+        let generalSupply = 0;
+        let generalVat = 0;
+        let simpleSupply = 0;
+        let simpleVat = 0;
+        let noTaxSupply = 0;
+        let deductibleVat = 0;
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.date) {
+                const expenseDate = new Date(data.date);
+                if (expenseDate.getFullYear() === year && 
+                    expenseDate.getMonth() + 1 >= startMonth && 
+                    expenseDate.getMonth() + 1 <= endMonth) {
+                    
+                    const supplyAmount = data.supplyAmount || 0;
+                    const vatAmount = data.vatAmount || 0;
+                    const vatType = data.vatType || 'vat';
+                    const deductibleVatAmount = data.deductibleVat || 0;
+                    
+                    totalSupply += supplyAmount;
+                    totalVat += vatAmount;
+                    totalDeductibleVat += deductibleVatAmount;
+                    totalExpense += data.totalAmount || 0;
+                    deductibleVat += deductibleVatAmount;
+                    
+                    // 세금계산서 유형별 분류
+                    if (vatType === 'vat') {
+                        generalSupply += supplyAmount;
+                        generalVat += vatAmount;
+                    } else if (vatType === 'simple') {
+                        simpleSupply += supplyAmount;
+                        simpleVat += vatAmount;
+                    } else if (vatType === 'none') {
+                        noTaxSupply += supplyAmount;
+                    }
+                    
+                    count++;
+                }
+            }
+        });
+        
+        console.log(`✅ 경비 계산 완료: ${count}건, 총액 ${totalExpense.toLocaleString()}원`);
+        
+        return {
+            totalExpense,
+            totalSupply,
+            totalVat: totalDeductibleVat, // 매입세액공제 가능한 부가세만
+            count,
+            // 세부 분류 데이터 추가
+            generalSupply,
+            generalVat,
+            simpleSupply,
+            simpleVat,
+            noTaxSupply,
+            deductibleVat
+        };
+        
+    } catch (error) {
+        console.error('❌ 경비 로딩 실패:', error);
+        
+        // 구체적인 에러 정보 로깅
+        if (error.code) {
+            console.error('📋 에러 코드:', error.code);
+        }
+        if (error.message) {
+            console.error('📋 에러 메시지:', error.message);
+        }
+        
+        // 사용자에게 알림
+        let userMessage = '경비 데이터 로딩에 실패했습니다.';
+        if (error.code === 'unavailable') {
+            userMessage = '네트워크 연결을 확인해주세요.';
+        } else if (error.code === 'permission-denied') {
+            userMessage = '경비 데이터 접근 권한이 없습니다.';
+        }
+        
+        showNotification(userMessage, 'error');
+        
+        return { 
+            totalExpense: 0, 
+            totalSupply: 0, 
+            totalVat: 0, 
+            count: 0,
+            generalSupply: 0,
+            generalVat: 0,
+            simpleSupply: 0,
+            simpleVat: 0,
+            noTaxSupply: 0,
+            deductibleVat: 0
+        };
+    }
+}
+
+// 부가세 계산
+function calculateVAT(incomeData, expenseData) {
+    const incomeVat = incomeData.totalVat || 0;
+    const expenseVat = expenseData.totalVat || 0;
+    const vatToPay = incomeVat - expenseVat;
+    
+    return {
+        incomeVat,
+        expenseVat,
+        vatToPay: Math.max(0, vatToPay), // 음수면 0으로 처리
+        refundAmount: Math.max(0, -vatToPay) // 환급액
+    };
+}
+
+// 세무 요약 UI 업데이트
+function updateTaxationSummaryUI(incomeData, expenseData, vatData) {
+    console.log('🖥️ 세무 요약 UI 업데이트 중...');
+    
+    // 매출 카드 업데이트
+    document.getElementById('totalIncome').textContent = `${incomeData.totalIncome.toLocaleString()}원`;
+    document.getElementById('incomeSupply').textContent = `${incomeData.totalSupply.toLocaleString()}원`;
+    document.getElementById('incomeVat').textContent = `${incomeData.totalVat.toLocaleString()}원`;
+    
+    // 매입 카드 업데이트
+    document.getElementById('totalExpense').textContent = `${expenseData.totalExpense.toLocaleString()}원`;
+    document.getElementById('expenseSupply').textContent = `${expenseData.totalSupply.toLocaleString()}원`;
+    document.getElementById('expenseVat').textContent = `${expenseData.totalVat.toLocaleString()}원`;
+    
+    // 부가세 카드 업데이트
+    document.getElementById('vatToPay').textContent = `${vatData.vatToPay.toLocaleString()}원`;
+    
+    // 부가세 상태 업데이트
+    const vatStatus = document.getElementById('vatStatus');
+    if (vatData.vatToPay > 0) {
+        vatStatus.textContent = '납부';
+        vatStatus.style.background = '#fef3c7';
+        vatStatus.style.color = '#92400e';
+    } else if (vatData.refundAmount > 0) {
+        vatStatus.textContent = '환급';
+        vatStatus.style.background = '#dcfce7';
+        vatStatus.style.color = '#166534';
+    } else {
+        vatStatus.textContent = '해당없음';
+        vatStatus.style.background = '#f3f4f6';
+        vatStatus.style.color = '#6b7280';
+    }
+    
+    console.log('✅ 세무 요약 UI 업데이트 완료');
+}
+
+// 세무 분류 로딩
+async function loadTaxationCategories() {
+    console.log('📊 세무 분류 로딩 중...');
+    
+    try {
+        // 카테고리별 집계를 위한 맵
+        const categoryData = new Map();
+        
+        // 1. 매출 카테고리 집계 - 인덱스 오류 방지를 위해 where만 사용
+        let incomeQuery = db.collection('income');
+        if (isAdmin) {
+            incomeQuery = incomeQuery.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const incomeSnapshot = await incomeQuery.get();
+        incomeSnapshot.forEach(doc => {
+            const data = doc.data();
+            const category = data.category || '기타';
+            const current = categoryData.get(category) || { income: 0, expense: 0 };
+            current.income += data.totalAmount || 0;
+            categoryData.set(category, current);
+        });
+        
+        // 2. 경비 카테고리 집계 - 인덱스 오류 방지를 위해 where만 사용
+        let expenseQuery = db.collection('expense');
+        if (isAdmin) {
+            expenseQuery = expenseQuery.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const expenseSnapshot = await expenseQuery.get();
+        expenseSnapshot.forEach(doc => {
+            const data = doc.data();
+            const category = data.category || '기타';
+            const current = categoryData.get(category) || { income: 0, expense: 0 };
+            current.expense += data.totalAmount || 0;
+            categoryData.set(category, current);
+        });
+        
+        // 3. 카테고리별 순 손익 계산
+        const categories = [];
+        categoryData.forEach((amounts, category) => {
+            const netAmount = amounts.income - amounts.expense;
+            const color = netAmount >= 0 ? '#10b981' : '#ef4444';
+            const type = netAmount >= 0 ? '수익' : '손실';
+            
+            categories.push({
+                name: category,
+                amount: Math.abs(netAmount),
+                netAmount: netAmount,
+                income: amounts.income,
+                expense: amounts.expense,
+                color: color,
+                type: type
+            });
+        });
+        
+        // 금액순 정렬
+        categories.sort((a, b) => Math.abs(b.netAmount) - Math.abs(a.netAmount));
+        
+        // 상위 4개만 표시
+        const topCategories = categories.slice(0, 4);
+        
+        // 기본 카테고리가 없으면 기본 카테고리들 추가
+        if (topCategories.length === 0) {
+            topCategories.push(
+                { name: '정비서비스', amount: 0, color: '#10b981', type: '매출' },
+                { name: '부품구매', amount: 0, color: '#ef4444', type: '경비' },
+                { name: '운영비용', amount: 0, color: '#f59e0b', type: '경비' },
+                { name: '기타수익', amount: 0, color: '#6366f1', type: '매출' }
+            );
+        }
+        
+        // 분류 그리드 업데이트
+        const categoryGrid = document.getElementById('categoryGrid');
+        categoryGrid.innerHTML = topCategories.map(category => `
+            <div class="category-card" style="border-left: 4px solid ${category.color}; background: white; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h4 style="margin: 0; font-weight: 700; color: #1f2937; font-size: 14px;">${category.name}</h4>
+                    <span style="font-size: 12px; padding: 2px 8px; border-radius: 12px; background: ${category.color}20; color: ${category.color}; font-weight: 600;">${category.type}</span>
+                </div>
+                <p style="margin: 0; font-size: 18px; font-weight: 800; color: ${category.color};">${category.amount.toLocaleString()}원</p>
+                ${category.amount === 0 ? '<p style="margin: 4px 0 0 0; font-size: 11px; color: #9ca3af;">아직 데이터가 없습니다</p>' : ''}
+            </div>
+        `).join('');
+        
+        console.log('✅ 세무 분류 로딩 완료');
+        
+    } catch (error) {
+        console.error('❌ 세무 분류 로딩 실패:', error);
+        
+        // 구체적인 에러 메시지 표시
+        let errorMessage = '분류 데이터를 불러올 수 없습니다.';
+        if (error.code === 'unavailable') {
+            errorMessage = '네트워크 연결을 확인해주세요.';
+        } else if (error.code === 'permission-denied') {
+            errorMessage = '데이터 접근 권한이 없습니다.';
+        } else if (error.message) {
+            errorMessage = `오류: ${error.message}`;
+        }
+        
+        // 에러 시 기본 카테고리 표시 (재시도 버튼 포함)
+        const categoryGrid = document.getElementById('categoryGrid');
+        categoryGrid.innerHTML = `
+            <div class="category-card" style="border-left: 4px solid #ef4444; background: white; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
+                <p style="margin: 0 0 8px 0; color: #ef4444; font-weight: 600;">⚠️ 분류 로딩 실패</p>
+                <p style="margin: 0 0 12px 0; color: #6b7280; font-size: 14px;">${errorMessage}</p>
+                <button onclick="loadTaxationCategories()" style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">다시 시도</button>
+            </div>
+        `;
+        
+        // 사용자에게 알림
+        showNotification('세무 분류 로딩에 실패했습니다. 다시 시도해주세요.', 'error');
+    }
+}
+
+// 최근 거래 로딩 (관리자만 접근 가능)
+async function loadRecentTransactions() {
+    console.log('📝 최근 거래 로딩 중...');
+    
+    const recentList = document.getElementById('recentTransactions');
+    
+    // 🔒 관리자만 최근 거래 접근 가능
+    if (!isAdmin) {
+        console.log('🚫 일반 사용자는 최근 거래에 접근할 수 없습니다.');
+        recentList.innerHTML = `
+            <div class="access-denied" style="text-align: center; padding: 40px; color: #f59e0b;">
+                <i class="fas fa-lock" style="font-size: 48px; margin-bottom: 16px; opacity: 0.7;"></i>
+                <p style="margin: 0; font-size: 16px; font-weight: 600;">관리자만 접근 가능합니다</p>
+                <p style="margin: 8px 0 0 0; font-size: 14px; color: #6b7280;">최근 거래는 관리자 권한이 필요합니다.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    try {
+        const allTransactions = [];
+        
+        // 1. 견적서 데이터 조회 (관리자별 필터링) - 인덱스 안전 버전
+        const estimateSnapshot = await db.collection('estimates').get();
+        estimateSnapshot.forEach(doc => {
+            const data = doc.data();
+            // 클라이언트 측에서 필터링
+            if (data.createdBy === currentUser.email) {
+                allTransactions.push({
+                    id: doc.id,
+                    type: '매출',
+                    description: `${data.customerName} - ${data.title}`,
+                    amount: data.totalAmount || 0,
+                    date: data.createdAt ? data.createdAt.toDate() : new Date(),
+                    icon: 'fa-plus',
+                    color: '#10b981',
+                    timestamp: data.createdAt ? data.createdAt.toDate().getTime() : 0
+                });
+            }
+        });
+        
+        // 2. 직접 입력 매출 데이터 조회 (관리자별 필터링) - 인덱스 안전 버전
+        const incomeSnapshot = await db.collection('income').get();
+        incomeSnapshot.forEach(doc => {
+            const data = doc.data();
+            // 클라이언트 측에서 필터링
+            if (data.adminEmail === currentUser.email) {
+                const incomeDate = data.createdAt ? data.createdAt.toDate() : new Date(data.date);
+                allTransactions.push({
+                    id: doc.id,
+                    type: '매출',
+                    description: `${data.client} - ${data.description}`,
+                    amount: data.totalAmount || 0,
+                    date: incomeDate,
+                    icon: 'fa-plus',
+                    color: '#10b981',
+                    timestamp: incomeDate.getTime()
+                });
+            }
+        });
+        
+        // 3. 경비 데이터 조회 (관리자별 필터링) - 인덱스 안전 버전  
+        const expenseSnapshot = await db.collection('expense').get();
+        expenseSnapshot.forEach(doc => {
+            const data = doc.data();
+            // 클라이언트 측에서 필터링
+            if (data.adminEmail === currentUser.email) {
+                const expenseDate = data.createdAt ? data.createdAt.toDate() : new Date(data.date);
+                allTransactions.push({
+                    id: doc.id,
+                    type: '경비',
+                    description: `${data.vendor} - ${data.description}`,
+                    amount: data.totalAmount || 0,
+                    date: expenseDate,
+                    icon: 'fa-minus',
+                    color: '#ef4444',
+                    timestamp: expenseDate.getTime()
+                });
+            }
+        });
+        
+        // 날짜순 정렬 및 최근 5건만 선택
+        const transactions = allTransactions
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 5);
+        
+        // 최근 거래 UI 업데이트
+        if (transactions.length > 0) {
+            recentList.innerHTML = transactions.map(tx => `
+                <div class="transaction-item" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <div class="transaction-icon" style="width: 32px; height: 32px; background: ${tx.color}; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white;">
+                        <i class="fas ${tx.icon}"></i>
+                    </div>
+                    <div class="transaction-content" style="flex: 1;">
+                        <div class="transaction-desc" style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">${tx.description}</div>
+                        <div class="transaction-date" style="font-size: 12px; color: #6b7280;">${tx.date.toLocaleDateString('ko-KR')}</div>
+                    </div>
+                    <div class="transaction-amount" style="font-weight: 700; color: ${tx.color};">
+                        ${tx.amount.toLocaleString()}원
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            recentList.innerHTML = `
+                <div class="empty-transactions" style="text-align: center; padding: 40px; color: #6b7280;">
+                    <i class="fas fa-receipt" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+                    <p style="margin: 0; font-size: 16px;">최근 거래가 없습니다.</p>
+                </div>
+            `;
+        }
+        
+        console.log(`✅ 최근 거래 로딩 완료: ${transactions.length}건 (관리자: ${currentUser.email})`);
+        
+    } catch (error) {
+        console.error('❌ 최근 거래 로딩 실패:', error);
+        recentList.innerHTML = `
+            <div class="error-transactions" style="text-align: center; padding: 40px; color: #ef4444;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+                <p style="margin: 0;">거래 내역을 불러오는데 실패했습니다.</p>
+            </div>
+        `;
+    }
+}
+
+// 세무관리 액션 함수들
+function showIncomeModal() {
+    // 🔒 관리자 권한 확인
+    if (!isAdmin) {
+        showNotification('관리자만 매출을 등록할 수 있습니다.', 'error');
+        return;
+    }
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('incomeModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 오늘 날짜 기본값
+    const today = new Date().toISOString().split('T')[0];
+    
+    const modalHTML = `
+        <div id="incomeModal" class="modal-overlay active">
+            <div class="modal-container" style="max-width: min(600px, 95vw); max-height: 85vh; margin: 10px auto;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <i class="fas fa-arrow-up" style="color: #059669;"></i> 매출 등록
+                    </h2>
+                    <button class="modal-close" onclick="closeIncomeModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body" style="padding: 20px; overflow-y: auto;">
+                    <form id="incomeForm" onsubmit="saveIncomeData(event)">
+                        <!-- 기본 정보 -->
+                        <div class="info-section-unified">
+                            <h3>📋 매출 정보</h3>
+                            <div class="info-form-grid">
+                                <div class="info-form-row">
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">📅 거래일자</label>
+                                        <input type="date" id="incomeDate" value="${today}" required class="info-form-input">
+                                    </div>
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">🏢 거래처</label>
+                                        <input type="text" id="incomeClient" placeholder="고객명 또는 업체명" required class="info-form-input">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="info-form-label">📝 거래 내용</label>
+                                    <input type="text" id="incomeDescription" placeholder="예: 엔진 오일 교체 및 점검" required class="info-form-input">
+                                </div>
+                                <div class="info-form-row">
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">📂 카테고리</label>
+                                        <select id="incomeCategory" required class="info-form-input">
+                                            <option value="">카테고리 선택</option>
+                                            <option value="정비서비스">정비서비스</option>
+                                            <option value="부품판매">부품판매</option>
+                                            <option value="점검서비스">점검서비스</option>
+                                            <option value="기타">기타</option>
+                                        </select>
+                                    </div>
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">
+                                            💰 공급가액
+                                            <button type="button" class="tax-term-help" onclick="showTaxTermPopup('공급가액')" title="공급가액이란?">
+                                                <i class="fas fa-question-circle"></i>
+                                            </button>
+                                        </label>
+                                        <input type="number" id="incomeSupplyAmount" placeholder="0" min="0" required class="info-form-input" oninput="calculateIncomeTotal()">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 세금 정보 -->
+                        <div class="info-section-unified">
+                            <h3>💸 세금 정보</h3>
+                            <div class="income-tax-breakdown">
+                                <div class="tax-row">
+                                    <span class="tax-label">공급가액:</span>
+                                    <span id="incomeSupplyDisplay" class="tax-value">0원</span>
+                                </div>
+                                <div class="tax-row">
+                                    <span class="tax-label">부가세 (10%):</span>
+                                    <span id="incomeVatDisplay" class="tax-value">0원</span>
+                                </div>
+                                <div class="tax-row tax-total">
+                                    <span class="tax-label">합계:</span>
+                                    <span id="incomeTotalDisplay" class="tax-value total">0원</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 메모 -->
+                        <div class="info-section-unified">
+                            <h3>📝 메모</h3>
+                            <textarea id="incomeMemo" placeholder="추가 메모 (선택사항)" rows="3" class="info-form-input"></textarea>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeIncomeModal()">
+                        <i class="fas fa-times"></i> 취소
+                    </button>
+                    <button type="submit" form="incomeForm" class="btn btn-primary">
+                        <i class="fas fa-save"></i> 저장
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // 거래처 입력 시 자동 완성 기능
+    setupIncomeAutoComplete();
+    
+    // 포커스 설정
+    setTimeout(() => {
+        document.getElementById('incomeClient').focus();
+    }, 100);
+}
+
+// 매출 등록 모달 닫기
+function closeIncomeModal() {
+    const modal = document.getElementById('incomeModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 매출 총액 계산
+function calculateIncomeTotal() {
+    const supplyAmount = parseFloat(document.getElementById('incomeSupplyAmount').value) || 0;
+    const vatAmount = Math.round(supplyAmount * 0.1);
+    const totalAmount = supplyAmount + vatAmount;
+    
+    // 화면에 표시
+    document.getElementById('incomeSupplyDisplay').textContent = supplyAmount.toLocaleString() + '원';
+    document.getElementById('incomeVatDisplay').textContent = vatAmount.toLocaleString() + '원';
+    document.getElementById('incomeTotalDisplay').textContent = totalAmount.toLocaleString() + '원';
+}
+
+// 거래처 자동 완성 및 카테고리 추천 설정
+async function setupIncomeAutoComplete() {
+    try {
+        console.log('💡 매출 자동 완성 기능 초기화 중...');
+        
+        const clientInput = document.getElementById('incomeClient');
+        const categorySelect = document.getElementById('incomeCategory');
+        
+        if (!clientInput || !categorySelect) return;
+        
+        // 거래처 입력 시 실시간 카테고리 추천
+        clientInput.addEventListener('input', async (e) => {
+            const clientName = e.target.value.trim();
+            if (clientName.length >= 2) {
+                const suggestedCategory = await suggestIncomeCategory(clientName);
+                if (suggestedCategory && categorySelect.value === '') {
+                    categorySelect.value = suggestedCategory;
+                    // 추천된 카테고리 시각적 표시
+                    showCategorySuggestion(categorySelect, suggestedCategory);
+                }
+            }
+        });
+        
+        // 자동 완성 데이터 로드
+        await loadIncomeAutoCompleteData(clientInput);
+        
+        console.log('✅ 매출 자동 완성 설정 완료');
+        
+    } catch (error) {
+        console.error('❌ 매출 자동 완성 설정 실패:', error);
+    }
+}
+
+// 매출 데이터 저장
+async function saveIncomeData(event) {
+    event.preventDefault();
+    
+    try {
+        showLoadingSpinner(true);
+        
+        // 폼 데이터 수집
+        const incomeData = {
+            date: document.getElementById('incomeDate').value,
+            client: document.getElementById('incomeClient').value.trim(),
+            description: document.getElementById('incomeDescription').value.trim(),
+            category: document.getElementById('incomeCategory').value,
+            supplyAmount: parseFloat(document.getElementById('incomeSupplyAmount').value) || 0,
+            vatAmount: Math.round((parseFloat(document.getElementById('incomeSupplyAmount').value) || 0) * 0.1),
+            totalAmount: (parseFloat(document.getElementById('incomeSupplyAmount').value) || 0) + Math.round((parseFloat(document.getElementById('incomeSupplyAmount').value) || 0) * 0.1),
+            memo: document.getElementById('incomeMemo').value.trim(),
+            adminEmail: currentUser.email,
+            adminName: currentUser.name,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // 필수 값 검증
+        if (!incomeData.client || !incomeData.description || !incomeData.category || incomeData.supplyAmount <= 0) {
+            showNotification('모든 필수 항목을 입력해주세요.', 'error');
+            showLoadingSpinner(false);
+            return;
+        }
+        
+        // Firebase에 저장
+        await db.collection('income').add(incomeData);
+        
+        // 학습 데이터 저장 (카테고리 패턴 학습)
+        await saveClientCategoryLearning(incomeData.client, incomeData.category, 'income');
+        
+        showNotification('매출이 성공적으로 등록되었습니다.', 'success');
+        
+        // 모달 닫기
+        closeIncomeModal();
+        
+        // 세무 대시보드 새로고침
+        await loadTaxationData();
+        
+        showLoadingSpinner(false);
+        
+    } catch (error) {
+        console.error('❌ 매출 저장 실패:', error);
+        showNotification('매출 등록에 실패했습니다.', 'error');
+        showLoadingSpinner(false);
+    }
+}
+
+function showExpenseModal() {
+    // 🔒 관리자 권한 확인
+    if (!isAdmin) {
+        showNotification('관리자만 경비를 등록할 수 있습니다.', 'error');
+        return;
+    }
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('expenseModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 오늘 날짜 기본값
+    const today = new Date().toISOString().split('T')[0];
+    
+    const modalHTML = `
+        <div id="expenseModal" class="modal-overlay active">
+            <div class="modal-container" style="max-width: min(600px, 95vw); max-height: 85vh; margin: 10px auto;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <i class="fas fa-arrow-down" style="color: #dc2626;"></i> 경비 등록
+                    </h2>
+                    <button class="modal-close" onclick="closeExpenseModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body" style="padding: 20px; overflow-y: auto;">
+                    <form id="expenseForm" onsubmit="saveExpenseData(event)">
+                        <!-- 기본 정보 -->
+                        <div class="info-section-unified">
+                            <h3>📋 경비 정보</h3>
+                            <div class="info-form-grid">
+                                <div class="info-form-row">
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">📅 지출일자</label>
+                                        <input type="date" id="expenseDate" value="${today}" required class="info-form-input">
+                                    </div>
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">🏪 거래처</label>
+                                        <input type="text" id="expenseVendor" placeholder="업체명 또는 상호" required class="info-form-input">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="info-form-label">📝 지출 내용</label>
+                                    <input type="text" id="expenseDescription" placeholder="예: 엔진 오일 구매, 공구 구매" required class="info-form-input">
+                                </div>
+                                <div class="info-form-row">
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">📂 카테고리</label>
+                                        <select id="expenseCategory" required class="info-form-input">
+                                            <option value="">카테고리 선택</option>
+                                            <option value="부품구매">부품구매</option>
+                                            <option value="공구구매">공구구매</option>
+                                            <option value="사무용품">사무용품</option>
+                                            <option value="임대료">임대료</option>
+                                            <option value="전기료">전기료</option>
+                                            <option value="통신료">통신료</option>
+                                            <option value="연료비">연료비</option>
+                                            <option value="광고선전비">광고선전비</option>
+                                            <option value="기타">기타</option>
+                                        </select>
+                                    </div>
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">
+                                            💳 공급가액
+                                            <button type="button" class="tax-term-help" onclick="showTaxTermPopup('공급가액')" title="공급가액이란?">
+                                                <i class="fas fa-question-circle"></i>
+                                            </button>
+                                        </label>
+                                        <input type="number" id="expenseSupplyAmount" placeholder="0" min="0" required class="info-form-input" oninput="calculateExpenseTotal()">
+                                    </div>
+                                </div>
+                                <div class="info-form-row">
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">
+                                            🧾 세금계산서
+                                            <button type="button" class="tax-term-help" onclick="showTaxTermPopup('매입세액공제')" title="매입세액공제란?">
+                                                <i class="fas fa-question-circle"></i>
+                                            </button>
+                                        </label>
+                                        <select id="expenseVatType" class="info-form-input" onchange="calculateExpenseTotal()">
+                                            <option value="vat">부가세 포함 (10%)</option>
+                                            <option value="simple">간이세금계산서 (매입세액공제 불가)</option>
+                                            <option value="none">세금계산서 없음</option>
+                                        </select>
+                                    </div>
+                                    <div class="info-form-col">
+                                        <label class="info-form-label">📄 증빙</label>
+                                        <select id="expenseProof" class="info-form-input">
+                                            <option value="receipt">영수증</option>
+                                            <option value="invoice">세금계산서</option>
+                                            <option value="card">카드내역</option>
+                                            <option value="other">기타</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 세금 정보 -->
+                        <div class="info-section-unified">
+                            <h3>💸 세금 정보</h3>
+                            <div class="expense-tax-breakdown">
+                                <div class="tax-row">
+                                    <span class="tax-label">공급가액:</span>
+                                    <span id="expenseSupplyDisplay" class="tax-value">0원</span>
+                                </div>
+                                <div class="tax-row">
+                                    <span class="tax-label">부가세 (10%):</span>
+                                    <span id="expenseVatDisplay" class="tax-value">0원</span>
+                                </div>
+                                <div class="tax-row tax-deduction">
+                                    <span class="tax-label">매입세액공제:</span>
+                                    <span id="expenseDeductionDisplay" class="tax-value deduction">0원</span>
+                                </div>
+                                <div class="tax-row tax-total">
+                                    <span class="tax-label">합계:</span>
+                                    <span id="expenseTotalDisplay" class="tax-value total">0원</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 메모 -->
+                        <div class="info-section-unified">
+                            <h3>📝 메모</h3>
+                            <textarea id="expenseMemo" placeholder="추가 메모 (선택사항)" rows="3" class="info-form-input"></textarea>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">
+                        <i class="fas fa-times"></i> 취소
+                    </button>
+                    <button type="submit" form="expenseForm" class="btn btn-primary">
+                        <i class="fas fa-save"></i> 저장
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // 거래처 입력 시 자동 완성 기능
+    setupExpenseAutoComplete();
+    
+    // 포커스 설정
+    setTimeout(() => {
+        document.getElementById('expenseVendor').focus();
+    }, 100);
+}
+
+// 경비 등록 모달 닫기
+function closeExpenseModal() {
+    const modal = document.getElementById('expenseModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 경비 총액 계산 (매입세액공제 고려)
+function calculateExpenseTotal() {
+    const supplyAmount = parseFloat(document.getElementById('expenseSupplyAmount').value) || 0;
+    const vatType = document.getElementById('expenseVatType').value;
+    
+    let vatAmount = 0;
+    let deductibleVat = 0;
+    
+    if (vatType === 'vat') {
+        // 일반 세금계산서 - 매입세액공제 가능
+        vatAmount = Math.round(supplyAmount * 0.1);
+        deductibleVat = vatAmount;
+    } else if (vatType === 'simple') {
+        // 간이세금계산서 - 매입세액공제 불가
+        vatAmount = Math.round(supplyAmount * 0.1);
+        deductibleVat = 0;
+    } else {
+        // 세금계산서 없음
+        vatAmount = 0;
+        deductibleVat = 0;
+    }
+    
+    const totalAmount = supplyAmount + vatAmount;
+    
+    // 화면에 표시
+    document.getElementById('expenseSupplyDisplay').textContent = supplyAmount.toLocaleString() + '원';
+    document.getElementById('expenseVatDisplay').textContent = vatAmount.toLocaleString() + '원';
+    document.getElementById('expenseDeductionDisplay').textContent = deductibleVat.toLocaleString() + '원';
+    document.getElementById('expenseTotalDisplay').textContent = totalAmount.toLocaleString() + '원';
+}
+
+// 경비 거래처 자동 완성 및 카테고리 추천 설정
+async function setupExpenseAutoComplete() {
+    try {
+        console.log('💡 경비 자동 완성 기능 초기화 중...');
+        
+        const vendorInput = document.getElementById('expenseVendor');
+        const categorySelect = document.getElementById('expenseCategory');
+        
+        if (!vendorInput || !categorySelect) return;
+        
+        // 거래처 입력 시 실시간 카테고리 추천
+        vendorInput.addEventListener('input', async (e) => {
+            const vendorName = e.target.value.trim();
+            if (vendorName.length >= 2) {
+                const suggestedCategory = await suggestExpenseCategory(vendorName);
+                if (suggestedCategory && categorySelect.value === '') {
+                    categorySelect.value = suggestedCategory;
+                    // 추천된 카테고리 시각적 표시
+                    showCategorySuggestion(categorySelect, suggestedCategory);
+                }
+            }
+        });
+        
+        // 자동 완성 데이터 로드
+        await loadExpenseAutoCompleteData(vendorInput);
+        
+        console.log('✅ 경비 자동 완성 설정 완료');
+        
+    } catch (error) {
+        console.error('❌ 경비 자동 완성 설정 실패:', error);
+    }
+}
+
+// 경비 데이터 저장
+async function saveExpenseData(event) {
+    event.preventDefault();
+    
+    try {
+        showLoadingSpinner(true);
+        
+        // 폼 데이터 수집
+        const supplyAmount = parseFloat(document.getElementById('expenseSupplyAmount').value) || 0;
+        const vatType = document.getElementById('expenseVatType').value;
+        
+        let vatAmount = 0;
+        let deductibleVat = 0;
+        
+        if (vatType === 'vat') {
+            vatAmount = Math.round(supplyAmount * 0.1);
+            deductibleVat = vatAmount;
+        } else if (vatType === 'simple') {
+            vatAmount = Math.round(supplyAmount * 0.1);
+            deductibleVat = 0;
+        }
+        
+        const expenseData = {
+            date: document.getElementById('expenseDate').value,
+            vendor: document.getElementById('expenseVendor').value.trim(),
+            description: document.getElementById('expenseDescription').value.trim(),
+            category: document.getElementById('expenseCategory').value,
+            supplyAmount: supplyAmount,
+            vatAmount: vatAmount,
+            deductibleVat: deductibleVat,
+            totalAmount: supplyAmount + vatAmount,
+            vatType: vatType,
+            proof: document.getElementById('expenseProof').value,
+            memo: document.getElementById('expenseMemo').value.trim(),
+            adminEmail: currentUser.email,
+            adminName: currentUser.name,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // 필수 값 검증
+        if (!expenseData.vendor || !expenseData.description || !expenseData.category || expenseData.supplyAmount <= 0) {
+            showNotification('모든 필수 항목을 입력해주세요.', 'error');
+            showLoadingSpinner(false);
+            return;
+        }
+        
+        // Firebase에 저장
+        await db.collection('expense').add(expenseData);
+        
+        // 학습 데이터 저장 (카테고리 패턴 학습)
+        await saveClientCategoryLearning(expenseData.vendor, expenseData.category, 'expense');
+        
+        showNotification('경비가 성공적으로 등록되었습니다.', 'success');
+        
+        // 모달 닫기
+        closeExpenseModal();
+        
+        // 세무 대시보드 새로고침
+        await loadTaxationData();
+        
+        showLoadingSpinner(false);
+        
+    } catch (error) {
+        console.error('❌ 경비 저장 실패:', error);
+        showNotification('경비 등록에 실패했습니다.', 'error');
+        showLoadingSpinner(false);
+    }
+}
+
+// ===============================================
+// 급여 시스템 - Salary Management System
+// ===============================================
+
+// 급여 모달 열기
+function showSalaryModal() {
+    // 관리자 권한 확인
+    if (!isAdmin) {
+        showNotification('관리자만 접근할 수 있습니다.', 'error');
+        return;
+    }
+    
+    const modal = document.getElementById('salaryModal');
+    if (modal) {
+        modal.classList.add('active');
+        // 초기 탭 설정
+        showSalaryTab('employees');
+        // 직원 목록 로드
+        loadEmployeeList();
+        // 4대보험 설정 로드
+        loadInsuranceSettings();
+        // 급여 계산 기간 설정
+        setupSalaryPeriod();
+    }
+}
+
+// 급여 모달 닫기
+function closeSalaryModal() {
+    const modal = document.getElementById('salaryModal');
+    if (modal) {
+        modal.classList.remove('active');
+        // 폼 초기화
+        resetSalaryForms();
+    }
+}
+
+// 급여 탭 전환
+function showSalaryTab(tabName) {
+    // 모든 탭 버튼 비활성화
+    document.querySelectorAll('.salary-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // 모든 탭 컨텐츠 숨김
+    document.querySelectorAll('.salary-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // 선택된 탭 활성화
+    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+    const activeContent = document.getElementById(`${tabName}Tab`);
+    
+    if (activeTab) activeTab.classList.add('active');
+    if (activeContent) activeContent.classList.add('active');
+    
+    // 탭별 데이터 로드
+    switch(tabName) {
+        case 'employees':
+            loadEmployeeList();
+            break;
+        case 'calculation':
+            loadSalaryCalculation();
+            break;
+        case 'history':
+            loadSalaryHistory();
+            break;
+        case 'insurance':
+            loadInsuranceSettings();
+            break;
+    }
+}
+
+// 직원 목록 로드
+async function loadEmployeeList() {
+    try {
+        const employeesList = document.getElementById('employeesList');
+        if (!employeesList) return;
+        
+        // Firebase 인덱스 오류 방지를 위해 orderBy 제거 후 클라이언트에서 정렬
+        const querySnapshot = await db.collection('employees')
+            .where('adminEmail', '==', currentUser.email)
+            .get();
+        
+        if (querySnapshot.empty) {
+            employeesList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <h3>등록된 직원이 없습니다</h3>
+                    <p>첫 번째 직원을 등록해보세요!</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // 클라이언트에서 이름순 정렬
+        const employees = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            data: doc.data()
+        })).sort((a, b) => (a.data.name || '').localeCompare(b.data.name || ''));
+        
+        const employeesHTML = employees.map(employee => {
+            return createEmployeeCard(employee.id, employee.data);
+        }).join('');
+        
+        employeesList.innerHTML = employeesHTML;
+        
+        // 직원 검색 기능 추가
+        setupEmployeeSearch();
+        
+    } catch (error) {
+        console.error('❌ 직원 목록 로드 실패:', error);
+        
+        // 구체적인 에러 정보 표시
+        let errorMessage = '직원 목록을 불러오는데 실패했습니다.';
+        if (error.code === 'unavailable') {
+            errorMessage = '네트워크 연결을 확인해주세요.';
+        } else if (error.code === 'permission-denied') {
+            errorMessage = '직원 데이터 접근 권한이 없습니다.';
+        }
+        
+        showNotification(errorMessage, 'error');
+        
+        // 에러 UI 표시
+        const employeesList = document.getElementById('employeesList');
+        if (employeesList) {
+            employeesList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                    <h3 style="color: #ef4444;">직원 목록 로딩 실패</h3>
+                    <p>${errorMessage}</p>
+                    <button onclick="loadEmployeeList()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 8px;">다시 시도</button>
+                </div>
+            `;
+        }
+    }
+}
+
+// 직원 카드 생성
+function createEmployeeCard(employeeId, employee) {
+    const statusClass = employee.status === '재직' ? 'success' : 
+                       employee.status === '휴직' ? 'warning' : 'error';
+    
+    return `
+        <div class="employee-card" data-employee-id="${employeeId}">
+            <div class="employee-info">
+                <div class="employee-name">${employee.name}</div>
+                <div class="employee-details">
+                    <span><i class="fas fa-id-card"></i> ${employee.position}</span>
+                    <span><i class="fas fa-building"></i> ${employee.department}</span>
+                    <span><i class="fas fa-calendar"></i> ${formatDate(employee.joinDate)}</span>
+                    <span class="status-badge ${statusClass}">${employee.status}</span>
+                </div>
+            </div>
+            <div class="employee-actions-btn">
+                <button class="btn-edit" onclick="editEmployee('${employeeId}')">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-delete" onclick="deleteEmployee('${employeeId}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// 직원 추가 폼 표시
+function showAddEmployeeForm() {
+    const form = document.getElementById('addEmployeeForm');
+    if (form) {
+        form.style.display = 'block';
+        // 사번 자동 생성
+        generateEmployeeId();
+    }
+}
+
+// 직원 추가 폼 취소
+function cancelAddEmployee() {
+    const form = document.getElementById('addEmployeeForm');
+    if (form) {
+        form.style.display = 'none';
+        resetEmployeeForm();
+    }
+}
+
+// 사번 자동 생성
+async function generateEmployeeId() {
+    try {
+        const year = new Date().getFullYear().toString().slice(-2);
+        const querySnapshot = await db.collection('employees')
+            .where('adminEmail', '==', currentUser.email)
+            .get();
+        
+        const nextNumber = (querySnapshot.size + 1).toString().padStart(3, '0');
+        const employeeId = `EMP${year}${nextNumber}`;
+        
+        document.getElementById('empId').value = employeeId;
+    } catch (error) {
+        console.error('사번 생성 실패:', error);
+    }
+}
+
+// 직원 저장
+async function saveEmployee(event) {
+    event.preventDefault();
+    
+    const formData = {
+        name: document.getElementById('empName').value,
+        employeeId: document.getElementById('empId').value,
+        position: document.getElementById('empPosition').value,
+        department: document.getElementById('empDepartment').value,
+        joinDate: document.getElementById('empJoinDate').value,
+        phone: document.getElementById('empPhone').value,
+        baseSalary: parseInt(document.getElementById('empBaseSalary').value) || 0,
+        status: document.getElementById('empStatus').value,
+        adminEmail: currentUser.email,
+        createdAt: new Date().toISOString()
+    };
+    
+    try {
+        await db.collection('employees').add(formData);
+        showNotification('직원이 성공적으로 등록되었습니다.', 'success');
+        
+        // 폼 초기화 및 목록 새로고침
+        resetEmployeeForm();
+        cancelAddEmployee();
+        loadEmployeeList();
+        
+    } catch (error) {
+        console.error('직원 저장 실패:', error);
+        showNotification('직원 등록에 실패했습니다.', 'error');
+    }
+}
+
+// 직원 수정
+async function editEmployee(employeeId) {
+    try {
+        const doc = await db.collection('employees').doc(employeeId).get();
+        if (!doc.exists) {
+            showNotification('직원 정보를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        
+        const employee = doc.data();
+        
+        // 폼에 기존 데이터 입력
+        document.getElementById('empName').value = employee.name;
+        document.getElementById('empId').value = employee.employeeId;
+        document.getElementById('empPosition').value = employee.position;
+        document.getElementById('empDepartment').value = employee.department;
+        document.getElementById('empJoinDate').value = employee.joinDate;
+        document.getElementById('empPhone').value = employee.phone;
+        document.getElementById('empBaseSalary').value = employee.baseSalary;
+        document.getElementById('empStatus').value = employee.status;
+        
+        // 수정 모드로 전환
+        showAddEmployeeForm();
+        
+        // 폼 제출 이벤트 변경
+        const form = document.getElementById('employeeForm');
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            await updateEmployee(employeeId);
+        };
+        
+    } catch (error) {
+        console.error('직원 정보 로드 실패:', error);
+        showNotification('직원 정보를 불러오는데 실패했습니다.', 'error');
+    }
+}
+
+// 직원 정보 업데이트
+async function updateEmployee(employeeId) {
+    const formData = {
+        name: document.getElementById('empName').value,
+        employeeId: document.getElementById('empId').value,
+        position: document.getElementById('empPosition').value,
+        department: document.getElementById('empDepartment').value,
+        joinDate: document.getElementById('empJoinDate').value,
+        phone: document.getElementById('empPhone').value,
+        baseSalary: parseInt(document.getElementById('empBaseSalary').value) || 0,
+        status: document.getElementById('empStatus').value,
+        updatedAt: new Date().toISOString()
+    };
+    
+    try {
+        await db.collection('employees').doc(employeeId).update(formData);
+        showNotification('직원 정보가 성공적으로 수정되었습니다.', 'success');
+        
+        // 폼 초기화 및 목록 새로고침
+        resetEmployeeForm();
+        cancelAddEmployee();
+        loadEmployeeList();
+        
+        // 폼 제출 이벤트 원래대로 복원
+        const form = document.getElementById('employeeForm');
+        form.onsubmit = saveEmployee;
+        
+    } catch (error) {
+        console.error('직원 정보 수정 실패:', error);
+        showNotification('직원 정보 수정에 실패했습니다.', 'error');
+    }
+}
+
+// 직원 삭제
+async function deleteEmployee(employeeId) {
+    if (!confirm('정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+        return;
+    }
+    
+    try {
+        await db.collection('employees').doc(employeeId).delete();
+        showNotification('직원이 성공적으로 삭제되었습니다.', 'success');
+        loadEmployeeList();
+        
+    } catch (error) {
+        console.error('직원 삭제 실패:', error);
+        showNotification('직원 삭제에 실패했습니다.', 'error');
+    }
+}
+
+// 직원 검색 기능
+function setupEmployeeSearch() {
+    const searchInput = document.getElementById('employeeSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const employeeCards = document.querySelectorAll('.employee-card');
+            
+            employeeCards.forEach(card => {
+                const name = card.querySelector('.employee-name').textContent.toLowerCase();
+                const details = card.querySelector('.employee-details').textContent.toLowerCase();
+                
+                if (name.includes(searchTerm) || details.includes(searchTerm)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    }
+}
+
+// 직원 폼 초기화
+function resetEmployeeForm() {
+    document.getElementById('employeeForm').reset();
+    generateEmployeeId();
+}
+
+// 급여 계산 기간 설정
+function setupSalaryPeriod() {
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    
+    // 년도 옵션 추가
+    const yearSelect = document.getElementById('salaryYear');
+    if (yearSelect) {
+        yearSelect.innerHTML = '';
+        for (let year = currentYear; year >= currentYear - 5; year--) {
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = `${year}년`;
+            if (year === currentYear) option.selected = true;
+            yearSelect.appendChild(option);
+        }
+    }
+    
+    // 월 기본값 설정
+    const monthSelect = document.getElementById('salaryMonth');
+    if (monthSelect) {
+        monthSelect.value = currentMonth;
+    }
+}
+
+// 급여 계산 로드
+async function loadSalaryCalculation() {
+    try {
+        const year = document.getElementById('salaryYear').value;
+        const month = document.getElementById('salaryMonth').value;
+        
+        const calculationList = document.getElementById('salaryCalculationList');
+        if (!calculationList) return;
+        
+        // 직원 목록 가져오기 - 인덱스 오류 방지를 위해 adminEmail만 필터링
+        const employeesSnapshot = await db.collection('employees')
+            .where('adminEmail', '==', currentUser.email)
+            .get();
+        
+        // 클라이언트에서 재직 중인 직원만 필터링
+        const activeEmployees = employeesSnapshot.docs.filter(doc => {
+            const employee = doc.data();
+            return employee.status === '재직';
+        });
+        
+        if (activeEmployees.length === 0) {
+            calculationList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <h3>재직 중인 직원이 없습니다</h3>
+                    <p>직원을 먼저 등록해주세요!</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const calculationsHTML = [];
+        
+        for (const doc of activeEmployees) {
+            const employee = doc.data();
+            const calculation = await calculateEmployeeSalary(doc.id, employee, year, month);
+            calculationsHTML.push(createSalaryCalculationCard(doc.id, employee, calculation));
+        }
+        
+        calculationList.innerHTML = calculationsHTML.join('');
+        
+    } catch (error) {
+        console.error('❌ 급여 계산 로드 실패:', error);
+        
+        // 구체적인 에러 정보 표시
+        let errorMessage = '급여 계산을 불러오는데 실패했습니다.';
+        if (error.code === 'unavailable') {
+            errorMessage = '네트워크 연결을 확인해주세요.';
+        } else if (error.code === 'permission-denied') {
+            errorMessage = '급여 데이터 접근 권한이 없습니다.';
+        }
+        
+        showNotification(errorMessage, 'error');
+        
+        // 에러 UI 표시
+        const calculationList = document.getElementById('salaryCalculationList');
+        if (calculationList) {
+            calculationList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                    <h3 style="color: #ef4444;">급여 계산 로딩 실패</h3>
+                    <p>${errorMessage}</p>
+                    <button onclick="loadSalaryCalculation()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 8px;">다시 시도</button>
+                </div>
+            `;
+        }
+    }
+}
+
+// 직원 급여 계산
+async function calculateEmployeeSalary(employeeId, employee, year, month) {
+    try {
+        // 4대보험 설정 로드
+        const insuranceSettings = await getInsuranceSettings();
+        
+        const baseSalary = employee.baseSalary || 0;
+        
+        // 4대보험 계산
+        const nationalPension = Math.min(baseSalary * (insuranceSettings.pensionRate / 100), 
+                                       insuranceSettings.pensionLimit * (insuranceSettings.pensionRate / 100));
+        const healthInsurance = Math.min(baseSalary * (insuranceSettings.healthRate / 100), 
+                                       insuranceSettings.healthLimit * (insuranceSettings.healthRate / 100));
+        const employmentInsurance = baseSalary * (insuranceSettings.employmentRate / 100);
+        
+        // 소득세 간이 계산 (기본 5%)
+        const incomeTax = baseSalary * 0.05;
+        const localTax = incomeTax * 0.1;
+        
+        // 총 공제액
+        const totalDeduction = nationalPension + healthInsurance + employmentInsurance + incomeTax + localTax;
+        
+        // 실수령액
+        const netSalary = baseSalary - totalDeduction;
+        
+        return {
+            baseSalary,
+            nationalPension: Math.floor(nationalPension),
+            healthInsurance: Math.floor(healthInsurance),
+            employmentInsurance: Math.floor(employmentInsurance),
+            incomeTax: Math.floor(incomeTax),
+            localTax: Math.floor(localTax),
+            totalDeduction: Math.floor(totalDeduction),
+            netSalary: Math.floor(netSalary)
+        };
+        
+    } catch (error) {
+        console.error('급여 계산 실패:', error);
+        return null;
+    }
+}
+
+// 급여 계산 카드 생성
+function createSalaryCalculationCard(employeeId, employee, calculation) {
+    if (!calculation) return '';
+    
+    return `
+        <div class="salary-calculation-card">
+            <div class="salary-calc-header-card">
+                <div class="salary-calc-employee">${employee.name} (${employee.position})</div>
+                <div class="salary-calc-status pending">계산 완료</div>
+            </div>
+            
+            <div class="salary-calc-breakdown">
+                <div class="salary-calc-section">
+                    <h5>지급 내역</h5>
+                    <div class="salary-calc-item">
+                        <span>기본급</span>
+                        <span>${calculation.baseSalary.toLocaleString()}원</span>
+                    </div>
+                    <div class="salary-calc-item total">
+                        <span>총 지급액</span>
+                        <span>${calculation.baseSalary.toLocaleString()}원</span>
+                    </div>
+                </div>
+                
+                <div class="salary-calc-section">
+                    <h5>공제 내역</h5>
+                    <div class="salary-calc-item">
+                        <span>국민연금</span>
+                        <span>${calculation.nationalPension.toLocaleString()}원</span>
+                    </div>
+                    <div class="salary-calc-item">
+                        <span>건강보험</span>
+                        <span>${calculation.healthInsurance.toLocaleString()}원</span>
+                    </div>
+                    <div class="salary-calc-item">
+                        <span>고용보험</span>
+                        <span>${calculation.employmentInsurance.toLocaleString()}원</span>
+                    </div>
+                    <div class="salary-calc-item">
+                        <span>소득세</span>
+                        <span>${calculation.incomeTax.toLocaleString()}원</span>
+                    </div>
+                    <div class="salary-calc-item">
+                        <span>지방세</span>
+                        <span>${calculation.localTax.toLocaleString()}원</span>
+                    </div>
+                    <div class="salary-calc-item total">
+                        <span>총 공제액</span>
+                        <span>${calculation.totalDeduction.toLocaleString()}원</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="salary-calc-item total" style="margin-top: 1rem; padding: 1rem; background: var(--success); color: white; border-radius: var(--radius-md);">
+                <span>실수령액</span>
+                <span>${calculation.netSalary.toLocaleString()}원</span>
+            </div>
+            
+            <div class="salary-calc-actions">
+                <button class="btn btn-primary" onclick="paySalary('${employeeId}')">
+                    <i class="fas fa-money-bill-wave"></i>
+                    급여 지급
+                </button>
+                <button class="btn btn-secondary" onclick="generatePayslip('${employeeId}')">
+                    <i class="fas fa-file-alt"></i>
+                    급여명세서
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// 급여 지급 처리
+async function paySalary(employeeId) {
+    try {
+        const year = document.getElementById('salaryYear').value;
+        const month = document.getElementById('salaryMonth').value;
+        
+        // 직원 정보 가져오기
+        const employeeDoc = await db.collection('employees').doc(employeeId).get();
+        if (!employeeDoc.exists) {
+            showNotification('직원 정보를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        
+        const employee = employeeDoc.data();
+        const calculation = await calculateEmployeeSalary(employeeId, employee, year, month);
+        
+        if (!calculation) {
+            showNotification('급여 계산에 실패했습니다.', 'error');
+            return;
+        }
+        
+        // 급여 지급 기록 저장
+        const salaryRecord = {
+            employeeId: employeeId,
+            employeeName: employee.name,
+            year: parseInt(year),
+            month: parseInt(month),
+            baseSalary: calculation.baseSalary,
+            deductions: {
+                nationalPension: calculation.nationalPension,
+                healthInsurance: calculation.healthInsurance,
+                employmentInsurance: calculation.employmentInsurance,
+                incomeTax: calculation.incomeTax,
+                localTax: calculation.localTax
+            },
+            totalDeduction: calculation.totalDeduction,
+            netSalary: calculation.netSalary,
+            paidAt: new Date().toISOString(),
+            adminEmail: currentUser.email
+        };
+        
+        await db.collection('salary_records').add(salaryRecord);
+        
+        showNotification(`${employee.name}님의 급여가 지급되었습니다.`, 'success');
+        
+        // 급여 이력 탭으로 이동
+        showSalaryTab('history');
+        
+    } catch (error) {
+        console.error('급여 지급 실패:', error);
+        showNotification('급여 지급에 실패했습니다.', 'error');
+    }
+}
+
+// 급여명세서 생성
+async function generatePayslip(employeeId) {
+    showNotification('급여명세서 생성 기능은 준비 중입니다.', 'info');
+}
+
+// 급여 이력 로드
+async function loadSalaryHistory() {
+    try {
+        const historyList = document.getElementById('salaryHistoryList');
+        if (!historyList) return;
+        
+        // Firebase 인덱스 오류 방지를 위해 단순 쿼리 사용
+        const querySnapshot = await db.collection('salary_records')
+            .where('adminEmail', '==', currentUser.email)
+            .get();
+        
+        if (querySnapshot.empty) {
+            historyList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-history"></i>
+                    <h3>급여 지급 이력이 없습니다</h3>
+                    <p>급여를 지급하면 이력이 표시됩니다.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // 클라이언트 측에서 정렬 및 제한
+        const salaryRecords = [];
+        querySnapshot.docs.forEach(doc => {
+            const record = doc.data();
+            salaryRecords.push({
+                id: doc.id,
+                data: record,
+                paidAtTimestamp: record.paidAt ? new Date(record.paidAt).getTime() : 0
+            });
+        });
+        
+        // 날짜순 정렬 (최신순)
+        salaryRecords.sort((a, b) => b.paidAtTimestamp - a.paidAtTimestamp);
+        
+        // 최대 50개로 제한
+        const limitedRecords = salaryRecords.slice(0, 50);
+        
+        const historyHTML = limitedRecords.map(item => {
+            return createSalaryHistoryItem(item.id, item.data);
+        }).join('');
+        
+        historyList.innerHTML = historyHTML;
+        
+    } catch (error) {
+        console.error('❌ 급여 이력 로드 실패:', error);
+        
+        // 구체적인 에러 정보 표시
+        let errorMessage = '급여 이력을 불러오는데 실패했습니다.';
+        if (error.code === 'unavailable') {
+            errorMessage = '네트워크 연결을 확인해주세요.';
+        } else if (error.code === 'permission-denied') {
+            errorMessage = '급여 이력 접근 권한이 없습니다.';
+        }
+        
+        showNotification(errorMessage, 'error');
+        
+        // 에러 UI 표시
+        const historyList = document.getElementById('salaryHistoryList');
+        if (historyList) {
+            historyList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                    <h3 style="color: #ef4444;">급여 이력 로딩 실패</h3>
+                    <p>${errorMessage}</p>
+                    <button onclick="loadSalaryHistory()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 8px;">다시 시도</button>
+                </div>
+            `;
+        }
+    }
+}
+
+// 급여 이력 아이템 생성
+function createSalaryHistoryItem(recordId, record) {
+    const paidDate = new Date(record.paidAt);
+    const period = `${record.year}년 ${record.month}월`;
+    
+    return `
+        <div class="salary-history-item">
+            <div class="salary-history-info">
+                <div class="salary-history-employee">${record.employeeName}</div>
+                <div class="salary-history-period">${period} • ${formatDate(paidDate.toISOString())}</div>
+            </div>
+            <div class="salary-history-amount">${record.netSalary.toLocaleString()}원</div>
+            <div class="salary-history-actions">
+                <button class="btn-view" onclick="viewSalaryDetail('${recordId}')">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-download" onclick="downloadPayslip('${recordId}')">
+                    <i class="fas fa-download"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// 급여 상세 보기
+async function viewSalaryDetail(recordId) {
+    showNotification('급여 상세 보기 기능은 준비 중입니다.', 'info');
+}
+
+// 급여명세서 다운로드
+async function downloadPayslip(recordId) {
+    showNotification('급여명세서 다운로드 기능은 준비 중입니다.', 'info');
+}
+
+// 4대보험 설정 로드
+async function loadInsuranceSettings() {
+    try {
+        const doc = await db.collection('insurance_settings').doc(currentUser.email).get();
+        
+        if (doc.exists) {
+            const settings = doc.data();
+            document.getElementById('pensionRate').value = settings.pensionRate;
+            document.getElementById('healthRate').value = settings.healthRate;
+            document.getElementById('employmentRate').value = settings.employmentRate;
+            document.getElementById('accidentRate').value = settings.accidentRate;
+            document.getElementById('pensionLimit').value = settings.pensionLimit;
+            document.getElementById('healthLimit').value = settings.healthLimit;
+        }
+        
+    } catch (error) {
+        console.error('4대보험 설정 로드 실패:', error);
+    }
+}
+
+// 4대보험 설정 저장
+async function saveInsuranceSettings() {
+    try {
+        const settings = {
+            pensionRate: parseFloat(document.getElementById('pensionRate').value),
+            healthRate: parseFloat(document.getElementById('healthRate').value),
+            employmentRate: parseFloat(document.getElementById('employmentRate').value),
+            accidentRate: parseFloat(document.getElementById('accidentRate').value),
+            pensionLimit: parseInt(document.getElementById('pensionLimit').value),
+            healthLimit: parseInt(document.getElementById('healthLimit').value),
+            updatedAt: new Date().toISOString()
+        };
+        
+        await db.collection('insurance_settings').doc(currentUser.email).set(settings);
+        
+        showNotification('4대보험 설정이 저장되었습니다.', 'success');
+        
+    } catch (error) {
+        console.error('4대보험 설정 저장 실패:', error);
+        showNotification('4대보험 설정 저장에 실패했습니다.', 'error');
+    }
+}
+
+// 4대보험 설정 가져오기
+async function getInsuranceSettings() {
+    try {
+        const doc = await db.collection('insurance_settings').doc(currentUser.email).get();
+        
+        if (doc.exists) {
+            return doc.data();
+        } else {
+            // 기본 설정 반환
+            return {
+                pensionRate: 4.5,
+                healthRate: 3.545,
+                employmentRate: 0.9,
+                accidentRate: 0.7,
+                pensionLimit: 5530000,
+                healthLimit: 8730000
+            };
+        }
+        
+    } catch (error) {
+        console.error('4대보험 설정 가져오기 실패:', error);
+        return {
+            pensionRate: 4.5,
+            healthRate: 3.545,
+            employmentRate: 0.9,
+            accidentRate: 0.7,
+            pensionLimit: 5530000,
+            healthLimit: 8730000
+        };
+    }
+}
+
+// 급여 시스템 폼 초기화
+function resetSalaryForms() {
+    // 직원 추가 폼 숨김
+    const addForm = document.getElementById('addEmployeeForm');
+    if (addForm) {
+        addForm.style.display = 'none';
+    }
+    
+    // 모든 폼 초기화
+    const forms = document.querySelectorAll('#salaryModal form');
+    forms.forEach(form => form.reset());
+    
+    // 기본 탭으로 전환
+    showSalaryTab('employees');
+}
+
+// ===============================================
+// 부가세 신고 준비 시스템 - VAT Report System
+// ===============================================
+
+// 부가세 신고 모달 열기
+async function showTaxReport() {
+    console.log('📊 세무 리포트 버튼 클릭됨');
+    
+    try {
+        // 관리자 권한 확인 및 자동 수정
+        const hasAdminAccess = verifyAndFixAdminStatus();
+        if (!hasAdminAccess) {
+            console.log('❌ 관리자 권한 없음');
+            showNotification('부가세 신고는 관리자만 접근할 수 있습니다. 관리자 계정으로 로그인해주세요.', 'error');
+            return;
+        }
+        
+        console.log('✅ 관리자 권한 확인됨');
+        
+        const modal = document.getElementById('vatReportModal');
+        if (!modal) {
+            console.error('❌ vatReportModal 요소를 찾을 수 없습니다.');
+            showNotification('부가세 신고 화면을 찾을 수 없습니다. 페이지를 새로고침해주세요.', 'error');
+            return;
+        }
+        
+        console.log('✅ 모달 요소 찾음');
+        
+        // 로딩 시작
+        showNotification('부가세 신고 화면을 준비 중입니다...', 'info');
+        
+        modal.classList.add('active');
+        console.log('✅ 모달 활성화됨');
+        
+        // 초기 탭 설정
+        showVatTab('report');
+        console.log('✅ 탭 설정 완료');
+        
+        // 부가세 신고 기간 설정
+        setupVatReportPeriod();
+        console.log('✅ 기간 설정 완료');
+        
+        // 초기 부가세 리포트 생성
+        await generateVatReport();
+        console.log('✅ 리포트 생성 완료');
+        
+        showNotification('부가세 신고서가 준비되었습니다.', 'success');
+        
+    } catch (error) {
+        console.error('❌ 세무 리포트 모달 열기 실패:', error);
+        showNotification(`부가세 신고 화면을 여는데 실패했습니다: ${error.message}`, 'error');
+    }
+}
+
+// 부가세 신고 모달 닫기
+function closeVatReportModal() {
+    const modal = document.getElementById('vatReportModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// 부가세 탭 전환
+function showVatTab(tabName) {
+    // 모든 탭 버튼 비활성화
+    document.querySelectorAll('.vat-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // 모든 탭 컨텐츠 숨김
+    document.querySelectorAll('.vat-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // 선택된 탭 활성화
+    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+    const activeContent = document.getElementById(`${tabName}Tab`);
+    
+    if (activeTab) activeTab.classList.add('active');
+    if (activeContent) activeContent.classList.add('active');
+    
+    // 탭별 데이터 로드
+    switch(tabName) {
+        case 'report':
+            generateVatReport();
+            break;
+        case 'simulation':
+            setupVatSimulation();
+            break;
+        case 'schedule':
+            loadVatSchedule();
+            break;
+        case 'analysis':
+            loadVatAnalysis();
+            break;
+    }
+}
+
+// 부가세 신고 기간 설정
+function setupVatReportPeriod() {
+    const currentYear = new Date().getFullYear();
+    const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3);
+    
+    // 년도 옵션 추가
+    const yearSelect = document.getElementById('vatReportYear');
+    if (yearSelect) {
+        yearSelect.innerHTML = '';
+        for (let year = currentYear; year >= currentYear - 5; year--) {
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = `${year}년`;
+            if (year === currentYear) option.selected = true;
+            yearSelect.appendChild(option);
+        }
+    }
+    
+    // 분기 기본값 설정
+    const quarterSelect = document.getElementById('vatReportQuarter');
+    if (quarterSelect) {
+        quarterSelect.value = currentQuarter;
+    }
+}
+
+// 부가세 신고서 생성
+async function generateVatReport() {
+    console.log('📊 부가세 신고서 생성 시작');
+    
+    try {
+        // 관리자 권한 확인
+        const hasAdminAccess = verifyAndFixAdminStatus();
+        if (!hasAdminAccess) {
+            console.log('❌ 관리자 권한 없음');
+            showNotification('부가세 신고서 생성은 관리자만 가능합니다.', 'error');
+            return;
+        }
+        
+        const yearElement = document.getElementById('vatReportYear');
+        const quarterElement = document.getElementById('vatReportQuarter');
+        
+        if (!yearElement || !quarterElement) {
+            console.error('❌ 년도 또는 분기 선택 요소를 찾을 수 없습니다.');
+            showNotification('년도 또는 분기 선택 항목을 찾을 수 없습니다. 페이지를 새로고침해주세요.', 'error');
+            return;
+        }
+        
+        const year = parseInt(yearElement.value);
+        const quarter = parseInt(quarterElement.value);
+        
+        if (isNaN(year) || isNaN(quarter) || year < 2020 || year > 2030 || quarter < 1 || quarter > 4) {
+            console.error('❌ 유효하지 않은 년도 또는 분기 값');
+            showNotification('유효하지 않은 년도 또는 분기 값입니다. (2020-2030년, 1-4분기)', 'error');
+            return;
+        }
+        
+        // 분기별 월 계산
+        const startMonth = (quarter - 1) * 3 + 1;
+        const endMonth = quarter * 3;
+        
+        console.log(`📊 ${year}년 ${quarter}분기 부가세 신고서 생성 중... (${startMonth}월~${endMonth}월)`);
+        
+        // 매출 및 매입 데이터 로드
+        console.log('📊 매출 및 경비 데이터 로딩 중...');
+        const [incomeData, expenseData] = await Promise.all([
+            calculateIncomeFromEstimates(year, startMonth, endMonth),
+            loadExpenseData(year, startMonth, endMonth)
+        ]);
+        
+        // 데이터 검증 및 기본값 설정
+        const safeIncomeData = {
+            totalIncome: incomeData?.totalIncome || 0,
+            totalSupply: incomeData?.totalSupply || 0,
+            totalVat: incomeData?.totalVat || 0,
+            count: incomeData?.count || 0
+        };
+        
+        const safeExpenseData = {
+            totalExpense: expenseData?.totalExpense || 0,
+            totalSupply: expenseData?.totalSupply || 0,
+            totalVat: expenseData?.totalVat || 0,
+            count: expenseData?.count || 0
+        };
+        
+        console.log('📊 데이터 로딩 완료:', { safeIncomeData, safeExpenseData });
+        
+        // 부가세 계산
+        console.log('📊 부가세 계산 중...');
+        const vatData = calculateVAT(safeIncomeData, safeExpenseData);
+        
+        console.log('📊 부가세 계산 완료:', vatData);
+        
+        // 부가세 신고서 요약 생성
+        console.log('📊 부가세 신고서 요약 생성 중...');
+        createVatReportSummary(safeIncomeData, safeExpenseData, vatData, year, quarter);
+        
+        // 부가세 신고서 상세 내역 생성
+        console.log('📊 부가세 신고서 상세 내역 생성 중...');
+        createVatReportDetails(safeIncomeData, safeExpenseData, year, quarter);
+        
+        console.log('✅ 부가세 신고서 생성 완료');
+        
+        // 데이터가 없는 경우 경고 메시지
+        if (safeIncomeData.count === 0 && safeExpenseData.count === 0) {
+            showNotification('부가세 신고서가 생성되었지만, 해당 기간에 데이터가 없습니다.', 'warning');
+        } else {
+            showNotification('부가세 신고서가 생성되었습니다.', 'success');
+        }
+        
+    } catch (error) {
+        console.error('❌ 부가세 신고서 생성 실패:', error);
+        
+        // Target ID 충돌 오류 특별 처리
+        if (error.code === 'already-exists') {
+            console.log('🔄 Target ID 충돌로 인한 부가세 신고서 생성 실패 - 재시도');
+            showNotification('데이터 충돌이 발생했습니다. 잠시 후 다시 시도해주세요.', 'warning');
+            // 네트워크 재설정 후 재시도 권장
+            setTimeout(() => {
+                if (db) {
+                    cleanupFirebaseListeners();
+                }
+            }, 1000);
+        } else {
+            showNotification(`부가세 신고서 생성에 실패했습니다: ${error.message}`, 'error');
+        }
+    }
+}
+
+// 부가세 신고서 요약 생성
+function createVatReportSummary(incomeData, expenseData, vatData, year, quarter) {
+    const summaryContainer = document.getElementById('vatReportSummary');
+    if (!summaryContainer) return;
+    
+    // 분기별 월 계산
+    const startMonth = (quarter - 1) * 3 + 1;
+    const endMonth = quarter * 3;
+    
+    summaryContainer.innerHTML = `
+        <h4>${year}년 ${quarter}분기 부가세 신고서 요약</h4>
+        
+        <div class="vat-summary-card">
+            <div class="vat-summary-item income">
+                <div class="vat-summary-label">매출세액</div>
+                <div class="vat-summary-amount">${incomeData.totalVat.toLocaleString()}원</div>
+                <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-tertiary);">
+                    공급가액: ${incomeData.totalSupply.toLocaleString()}원
+                </div>
+            </div>
+            
+            <div class="vat-summary-item expense">
+                <div class="vat-summary-label">매입세액</div>
+                <div class="vat-summary-amount">${expenseData.totalVat.toLocaleString()}원</div>
+                <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-tertiary);">
+                    공급가액: ${expenseData.totalSupply.toLocaleString()}원
+                </div>
+            </div>
+            
+            <div class="vat-summary-item tax">
+                <div class="vat-summary-label">${vatData.vatToPay > 0 ? '납부할 세액' : '환급받을 세액'}</div>
+                <div class="vat-summary-amount">${Math.abs(vatData.vatToPay > 0 ? vatData.vatToPay : vatData.refundAmount).toLocaleString()}원</div>
+                <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-tertiary);">
+                    ${vatData.vatToPay > 0 ? '납부 예정' : '환급 예정'}
+                </div>
+            </div>
+        </div>
+        
+        <div class="vat-filing-info" style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-secondary); border-radius: var(--radius-lg);">
+            <h5 style="margin-bottom: 1rem;">신고 및 납부 정보</h5>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div>
+                    <strong>신고 기한:</strong> ${getVatFilingDeadline(year, quarter)}
+                </div>
+                <div>
+                    <strong>납부 기한:</strong> ${getVatPaymentDeadline(year, quarter)}
+                </div>
+                <div>
+                    <strong>신고 유형:</strong> 일반과세자
+                </div>
+                <div>
+                    <strong>과세 기간:</strong> ${year}.${startMonth.toString().padStart(2, '0')}.01 ~ ${year}.${endMonth.toString().padStart(2, '0')}.${getLastDayOfMonth(year, endMonth)}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 부가세 신고서 상세 내역 생성
+function createVatReportDetails(incomeData, expenseData, year, quarter) {
+    const detailsContainer = document.getElementById('vatReportDetails');
+    if (!detailsContainer) return;
+    
+    // 데이터 안전성 확인
+    const safeIncomeData = {
+        estimateSupply: incomeData.estimateSupply || 0,
+        estimateVat: incomeData.estimateVat || 0,
+        directSupply: incomeData.directSupply || 0,
+        directVat: incomeData.directVat || 0,
+        totalSupply: incomeData.totalSupply || 0,
+        totalVat: incomeData.totalVat || 0,
+        totalIncome: incomeData.totalIncome || 0
+    };
+    
+    const safeExpenseData = {
+        generalSupply: expenseData.generalSupply || 0,
+        generalVat: expenseData.generalVat || 0,
+        simpleSupply: expenseData.simpleSupply || 0,
+        simpleVat: expenseData.simpleVat || 0,
+        noTaxSupply: expenseData.noTaxSupply || 0,
+        totalSupply: expenseData.totalSupply || 0,
+        totalVat: expenseData.totalVat || 0,
+        totalExpense: expenseData.totalExpense || 0,
+        deductibleVat: expenseData.deductibleVat || 0
+    };
+    
+    detailsContainer.innerHTML = `
+        <div class="vat-detail-section">
+            <h5>📈 매출 세부 내역</h5>
+            <table class="vat-detail-table">
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>공급가액</th>
+                        <th>부가세</th>
+                        <th>합계</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>견적서 매출</td>
+                        <td class="amount">${safeIncomeData.estimateSupply.toLocaleString()}원</td>
+                        <td class="amount">${safeIncomeData.estimateVat.toLocaleString()}원</td>
+                        <td class="amount">${(safeIncomeData.estimateSupply + safeIncomeData.estimateVat).toLocaleString()}원</td>
+                    </tr>
+                    <tr>
+                        <td>직접 매출</td>
+                        <td class="amount">${safeIncomeData.directSupply.toLocaleString()}원</td>
+                        <td class="amount">${safeIncomeData.directVat.toLocaleString()}원</td>
+                        <td class="amount">${(safeIncomeData.directSupply + safeIncomeData.directVat).toLocaleString()}원</td>
+                    </tr>
+                    <tr style="font-weight: 600; background: var(--bg-secondary);">
+                        <td>총 매출</td>
+                        <td class="amount">${safeIncomeData.totalSupply.toLocaleString()}원</td>
+                        <td class="amount">${safeIncomeData.totalVat.toLocaleString()}원</td>
+                        <td class="amount">${safeIncomeData.totalIncome.toLocaleString()}원</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="vat-detail-section">
+            <h5>📉 매입 세부 내역</h5>
+            <table class="vat-detail-table">
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>공급가액</th>
+                        <th>부가세</th>
+                        <th>매입세액공제</th>
+                        <th>합계</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>일반 매입</td>
+                        <td class="amount">${safeExpenseData.generalSupply.toLocaleString()}원</td>
+                        <td class="amount">${safeExpenseData.generalVat.toLocaleString()}원</td>
+                        <td class="amount">${safeExpenseData.generalVat.toLocaleString()}원</td>
+                        <td class="amount">${(safeExpenseData.generalSupply + safeExpenseData.generalVat).toLocaleString()}원</td>
+                    </tr>
+                    <tr>
+                        <td>간이과세자 매입</td>
+                        <td class="amount">${safeExpenseData.simpleSupply.toLocaleString()}원</td>
+                        <td class="amount">${safeExpenseData.simpleVat.toLocaleString()}원</td>
+                        <td class="amount">0원</td>
+                        <td class="amount">${(safeExpenseData.simpleSupply + safeExpenseData.simpleVat).toLocaleString()}원</td>
+                    </tr>
+                    <tr>
+                        <td>세금계산서 없음</td>
+                        <td class="amount">${safeExpenseData.noTaxSupply.toLocaleString()}원</td>
+                        <td class="amount">0원</td>
+                        <td class="amount">0원</td>
+                        <td class="amount">${safeExpenseData.noTaxSupply.toLocaleString()}원</td>
+                    </tr>
+                    <tr style="font-weight: 600; background: var(--bg-secondary);">
+                        <td>총 매입</td>
+                        <td class="amount">${safeExpenseData.totalSupply.toLocaleString()}원</td>
+                        <td class="amount">${safeExpenseData.totalVat.toLocaleString()}원</td>
+                        <td class="amount">${safeExpenseData.deductibleVat.toLocaleString()}원</td>
+                        <td class="amount">${safeExpenseData.totalExpense.toLocaleString()}원</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+// 부가세 납부액 시뮬레이션 설정
+function setupVatSimulation() {
+    const currentYear = new Date().getFullYear();
+    const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3);
+    
+    // 현재 분기의 기존 데이터 자동 입력
+    loadCurrentQuarterData(currentYear, currentQuarter);
+}
+
+// 현재 분기 데이터 로드
+async function loadCurrentQuarterData(year, quarter) {
+    try {
+        const startMonth = (quarter - 1) * 3 + 1;
+        const endMonth = quarter * 3;
+        
+        const [incomeData, expenseData] = await Promise.all([
+            calculateIncomeFromEstimates(year, startMonth, endMonth),
+            loadExpenseData(year, startMonth, endMonth)
+        ]);
+        
+        // 시뮬레이션 입력란에 현재 데이터 표시
+        document.getElementById('simIncomeAmount').value = incomeData.totalSupply;
+        document.getElementById('simExpenseAmount').value = expenseData.totalSupply;
+        
+        // 자동 시뮬레이션 실행
+        runVatSimulation();
+        
+    } catch (error) {
+        console.error('현재 분기 데이터 로드 실패:', error);
+    }
+}
+
+// 부가세 시뮬레이션 실행
+function runVatSimulation() {
+    const incomeAmount = parseInt(document.getElementById('simIncomeAmount').value) || 0;
+    const expenseAmount = parseInt(document.getElementById('simExpenseAmount').value) || 0;
+    
+    // 부가세 계산 (10%)
+    const incomeVat = incomeAmount * 0.1;
+    const expenseVat = expenseAmount * 0.1;
+    const vatToPay = incomeVat - expenseVat;
+    
+    const resultContainer = document.getElementById('simulationResult');
+    if (!resultContainer) return;
+    
+    resultContainer.innerHTML = `
+        <h5>시뮬레이션 결과</h5>
+        
+        <div class="simulation-result-grid">
+            <div class="simulation-item">
+                <div class="simulation-item-label">매출 공급가액</div>
+                <div class="simulation-item-value">${incomeAmount.toLocaleString()}원</div>
+            </div>
+            <div class="simulation-item">
+                <div class="simulation-item-label">매출세액</div>
+                <div class="simulation-item-value">${incomeVat.toLocaleString()}원</div>
+            </div>
+            <div class="simulation-item">
+                <div class="simulation-item-label">매입 공급가액</div>
+                <div class="simulation-item-value">${expenseAmount.toLocaleString()}원</div>
+            </div>
+            <div class="simulation-item">
+                <div class="simulation-item-label">매입세액</div>
+                <div class="simulation-item-value">${expenseVat.toLocaleString()}원</div>
+            </div>
+        </div>
+        
+        <div class="simulation-final-amount">
+            <div class="label">${vatToPay >= 0 ? '납부할 부가세' : '환급받을 부가세'}</div>
+            <div class="amount">${Math.abs(vatToPay).toLocaleString()}원</div>
+        </div>
+        
+        <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md);">
+            <h6 style="margin-bottom: 0.5rem;">💡 시뮬레이션 안내</h6>
+            <ul style="margin: 0; padding-left: 1.5rem; font-size: 0.875rem; color: var(--text-secondary);">
+                <li>실제 신고 시에는 세무사와 상담을 권장합니다</li>
+                <li>간이과세자 매입분은 공제율이 다를 수 있습니다</li>
+                <li>기타 공제 및 감면 사항은 포함되지 않았습니다</li>
+            </ul>
+        </div>
+    `;
+}
+
+// 부가세 신고 일정 로드
+function loadVatSchedule() {
+    const currentYear = new Date().getFullYear();
+    const scheduleContainer = document.getElementById('scheduleTimeline');
+    const checklistContainer = document.getElementById('vatChecklist');
+    
+    if (scheduleContainer) {
+        scheduleContainer.innerHTML = createVatScheduleItems(currentYear);
+    }
+    
+    if (checklistContainer) {
+        checklistContainer.innerHTML = createVatChecklist();
+    }
+}
+
+// 부가세 신고 일정 아이템 생성
+function createVatScheduleItems(year) {
+    const quarters = [
+        { quarter: 1, period: '1-3월', deadline: `${year}.04.25`, status: 'completed' },
+        { quarter: 2, period: '4-6월', deadline: `${year}.07.25`, status: 'completed' },
+        { quarter: 3, period: '7-9월', deadline: `${year}.10.25`, status: 'pending' },
+        { quarter: 4, period: '10-12월', deadline: `${year + 1}.01.25`, status: 'pending' }
+    ];
+    
+    const currentDate = new Date();
+    const currentQuarter = Math.ceil((currentDate.getMonth() + 1) / 3);
+    
+    return quarters.map(item => {
+        const isOverdue = item.quarter < currentQuarter && item.status === 'pending';
+        const isCurrent = item.quarter === currentQuarter;
+        const statusClass = isOverdue ? 'danger' : (isCurrent ? 'warning' : '');
+        const statusBadge = isOverdue ? 'overdue' : (item.status === 'completed' ? 'completed' : 'pending');
+        
+        return `
+            <div class="schedule-item ${statusClass}">
+                <div class="schedule-date">${item.deadline}</div>
+                <div class="schedule-content">
+                    <div class="schedule-title">${year}년 ${item.quarter}분기 부가세 신고</div>
+                    <div class="schedule-description">${item.period} 과세기간 부가세 신고 및 납부</div>
+                </div>
+                <div class="schedule-status">
+                    <span class="schedule-status-badge ${statusBadge}">
+                        ${statusBadge === 'completed' ? '완료' : statusBadge === 'overdue' ? '연체' : '대기'}
+                    </span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 부가세 신고 체크리스트 생성
+function createVatChecklist() {
+    const checklistItems = [
+        '매출 세금계산서 발행 완료',
+        '매입 세금계산서 수취 완료',
+        '현금영수증 및 신용카드 매출 집계',
+        '세무 관련 증빙서류 정리',
+        '전분기 이월세액 확인',
+        '가산세 및 감면 사항 검토',
+        '부가세 신고서 작성',
+        '전자신고시스템 접속 확인',
+        '납부 계좌 잔액 확인',
+        '신고 및 납부 완료'
+    ];
+    
+    return checklistItems.map((item, index) => `
+        <div class="checklist-item">
+            <input type="checkbox" class="checklist-checkbox" id="checklist-${index}">
+            <label for="checklist-${index}" class="checklist-text">${item}</label>
+        </div>
+    `).join('');
+}
+
+// 부가세 분석 리포트 로드
+async function loadVatAnalysis() {
+    try {
+        const currentYear = new Date().getFullYear();
+        const analysisData = await generateVatAnalysisData(currentYear);
+        
+        createVatTrendChart(analysisData.trends);
+        createVatBreakdownChart(analysisData.breakdown);
+        createAnalysisSummary(analysisData.insights);
+        
+    } catch (error) {
+        console.error('부가세 분석 로드 실패:', error);
+        showNotification('부가세 분석을 불러오는데 실패했습니다.', 'error');
+    }
+}
+
+// 부가세 분석 데이터 생성
+async function generateVatAnalysisData(year) {
+    const trends = [];
+    const breakdown = { income: 0, expense: 0, tax: 0 };
+    const insights = [];
+    
+    // 분기별 트렌드 데이터 생성
+    for (let quarter = 1; quarter <= 4; quarter++) {
+        const startMonth = (quarter - 1) * 3 + 1;
+        const endMonth = quarter * 3;
+        
+        try {
+            const [incomeData, expenseData] = await Promise.all([
+                calculateIncomeFromEstimates(year, startMonth, endMonth),
+                loadExpenseData(year, startMonth, endMonth)
+            ]);
+            
+            const vatData = calculateVAT(incomeData, expenseData);
+            
+            trends.push({
+                quarter: `${quarter}Q`,
+                income: incomeData.totalVat,
+                expense: expenseData.totalVat,
+                tax: vatData.vatToPay
+            });
+            
+            breakdown.income += incomeData.totalVat;
+            breakdown.expense += expenseData.totalVat;
+            breakdown.tax += vatData.vatToPay;
+            
+        } catch (error) {
+            console.error(`${quarter}분기 데이터 로드 실패:`, error);
+        }
+    }
+    
+    // 인사이트 생성
+    if (trends.length > 0) {
+        const avgTax = breakdown.tax / trends.length;
+        const maxTax = Math.max(...trends.map(t => t.tax));
+        const minTax = Math.min(...trends.map(t => t.tax));
+        
+        insights.push({
+            title: '평균 분기별 부가세',
+            text: `연평균 분기별 부가세는 ${avgTax.toLocaleString()}원입니다.`
+        });
+        
+        insights.push({
+            title: '부가세 변동성',
+            text: `최고 ${maxTax.toLocaleString()}원부터 최저 ${minTax.toLocaleString()}원까지 분기별 변동이 있습니다.`
+        });
+        
+        if (breakdown.tax > 0) {
+            insights.push({
+                title: '연간 납부 예상액',
+                text: `${year}년 연간 부가세 납부 예상액은 ${breakdown.tax.toLocaleString()}원입니다.`
+            });
+        }
+    }
+    
+    return { trends, breakdown, insights };
+}
+
+// 부가세 트렌드 차트 생성
+function createVatTrendChart(trends) {
+    const canvas = document.getElementById('vatTrendChart');
+    if (!canvas || !trends.length) return;
+    
+    // 간단한 차트 구현 (실제로는 Chart.js 등 라이브러리 사용 권장)
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    // 배경 클리어
+    ctx.clearRect(0, 0, width, height);
+    
+    // 차트 제목
+    ctx.fillStyle = 'var(--text-primary)';
+    ctx.font = '16px var(--font-family)';
+    ctx.textAlign = 'center';
+    ctx.fillText('분기별 부가세 추이', width / 2, 30);
+    
+    // 간단한 막대 차트
+    const barWidth = width / (trends.length * 2);
+    const maxValue = Math.max(...trends.map(t => Math.max(t.income, t.expense, t.tax)));
+    
+    trends.forEach((trend, index) => {
+        const x = (index + 0.5) * (width / trends.length);
+        const incomeHeight = (trend.income / maxValue) * (height - 80);
+        const expenseHeight = (trend.expense / maxValue) * (height - 80);
+        const taxHeight = (trend.tax / maxValue) * (height - 80);
+        
+        // 매출세액 (녹색)
+        ctx.fillStyle = '#10b981';
+        ctx.fillRect(x - barWidth * 1.5, height - 50 - incomeHeight, barWidth, incomeHeight);
+        
+        // 매입세액 (주황)
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(x - barWidth * 0.5, height - 50 - expenseHeight, barWidth, expenseHeight);
+        
+        // 납부세액 (파랑)
+        ctx.fillStyle = '#3b82f6';
+        ctx.fillRect(x + barWidth * 0.5, height - 50 - taxHeight, barWidth, taxHeight);
+        
+        // 분기 라벨
+        ctx.fillStyle = 'var(--text-secondary)';
+        ctx.font = '12px var(--font-family)';
+        ctx.textAlign = 'center';
+        ctx.fillText(trend.quarter, x, height - 20);
+    });
+}
+
+// 부가세 구성 차트 생성
+function createVatBreakdownChart(breakdown) {
+    const canvas = document.getElementById('vatBreakdownChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    // 배경 클리어
+    ctx.clearRect(0, 0, width, height);
+    
+    // 차트 제목
+    ctx.fillStyle = 'var(--text-primary)';
+    ctx.font = '16px var(--font-family)';
+    ctx.textAlign = 'center';
+    ctx.fillText('연간 부가세 구성', width / 2, 30);
+    
+    // 간단한 도넛 차트
+    const centerX = width / 2;
+    const centerY = height / 2 + 10;
+    const radius = Math.min(width, height) / 4;
+    
+    const total = breakdown.income + breakdown.expense + Math.abs(breakdown.tax);
+    if (total === 0) return;
+    
+    let currentAngle = -Math.PI / 2;
+    
+    // 매출세액
+    const incomeAngle = (breakdown.income / total) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + incomeAngle);
+    ctx.lineTo(centerX, centerY);
+    ctx.fillStyle = '#10b981';
+    ctx.fill();
+    currentAngle += incomeAngle;
+    
+    // 매입세액
+    const expenseAngle = (breakdown.expense / total) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + expenseAngle);
+    ctx.lineTo(centerX, centerY);
+    ctx.fillStyle = '#f59e0b';
+    ctx.fill();
+    currentAngle += expenseAngle;
+    
+    // 납부세액
+    const taxAngle = (Math.abs(breakdown.tax) / total) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + taxAngle);
+    ctx.lineTo(centerX, centerY);
+    ctx.fillStyle = '#3b82f6';
+    ctx.fill();
+}
+
+// 분석 요약 생성
+function createAnalysisSummary(insights) {
+    const summaryContainer = document.getElementById('analysisSummary');
+    if (!summaryContainer) return;
+    
+    summaryContainer.innerHTML = `
+        <h5>📊 부가세 분석 인사이트</h5>
+        ${insights.map(insight => `
+            <div class="analysis-insight">
+                <div class="analysis-insight-title">${insight.title}</div>
+                <div class="analysis-insight-text">${insight.text}</div>
+            </div>
+        `).join('')}
+        
+        <div style="margin-top: 2rem; padding: 1rem; background: var(--warning); color: white; border-radius: var(--radius-md);">
+            <h6 style="margin-bottom: 0.5rem;">⚠️ 주의사항</h6>
+            <p style="margin: 0; font-size: 0.875rem;">
+                이 분석은 입력된 데이터를 기반으로 한 참고 자료입니다. 
+                정확한 세무 신고를 위해서는 세무 전문가와 상담하시기 바랍니다.
+            </p>
+        </div>
+    `;
+}
+
+// 부가세 데이터 내보내기
+async function exportVatData(format) {
+    try {
+        const year = parseInt(document.getElementById('vatReportYear').value);
+        const quarter = parseInt(document.getElementById('vatReportQuarter').value);
+        const startMonth = (quarter - 1) * 3 + 1;
+        const endMonth = quarter * 3;
+        
+        const [incomeData, expenseData] = await Promise.all([
+            calculateIncomeFromEstimates(year, startMonth, endMonth),
+            loadExpenseData(year, startMonth, endMonth)
+        ]);
+        
+        if (format === 'excel') {
+            exportToExcel(incomeData, expenseData, year, quarter);
+        } else if (format === 'csv') {
+            exportToCSV(incomeData, expenseData, year, quarter);
+        }
+        
+    } catch (error) {
+        console.error('데이터 내보내기 실패:', error);
+        showNotification('데이터 내보내기에 실패했습니다.', 'error');
+    }
+}
+
+// 엑셀로 내보내기
+async function exportToExcel(incomeData, expenseData, year, quarter) {
+    try {
+        showLoadingSpinner(true);
+        
+        // 상세 데이터 로드
+        const startMonth = (quarter - 1) * 3 + 1;
+        const endMonth = quarter * 3;
+        const [incomeDetails, expenseDetails] = await Promise.all([
+            getIncomeDetailList(year, startMonth, endMonth),
+            getExpenseDetailList(year, startMonth, endMonth)
+        ]);
+        
+        // 부가세 계산
+        const vatData = calculateVAT(incomeData, expenseData);
+        
+        // CSV 데이터 생성 (Excel로 열 수 있도록)
+        const csvData = [];
+        
+        // 헤더 정보
+        csvData.push([`부가세 신고서 - ${year}년 ${quarter}분기`]);
+        csvData.push([]);
+        
+        // 요약 정보
+        csvData.push(['구분', '공급가액', '부가세', '합계']);
+        csvData.push(['매출세액', incomeData.totalSupply, incomeData.totalVat, incomeData.totalIncome]);
+        csvData.push(['매입세액', expenseData.totalSupply, expenseData.totalVat, expenseData.totalExpense]);
+        csvData.push(['매입세액공제', '', expenseData.deductibleVat, expenseData.deductibleVat]);
+        csvData.push(['납부세액', '', '', vatData.vatToPay]);
+        csvData.push([]);
+        
+        // 매출 상세 내역
+        csvData.push(['매출 상세 내역']);
+        csvData.push(['날짜', '거래처', '내용', '카테고리', '공급가액', '부가세', '합계']);
+        incomeDetails.forEach(item => {
+            csvData.push([
+                new Date(item.date).toLocaleDateString('ko-KR'),
+                item.client,
+                item.description,
+                item.category || '정비서비스',
+                item.supplyAmount,
+                item.vatAmount,
+                item.totalAmount
+            ]);
+        });
+        
+        csvData.push([]);
+        
+        // 매입 상세 내역
+        csvData.push(['매입 상세 내역']);
+        csvData.push(['날짜', '거래처', '내용', '카테고리', '공급가액', '부가세', '합계', '세액공제']);
+        expenseDetails.forEach(item => {
+            csvData.push([
+                new Date(item.date).toLocaleDateString('ko-KR'),
+                item.vendor,
+                item.description,
+                item.category || '기타',
+                item.supplyAmount,
+                item.vatAmount,
+                item.totalAmount,
+                item.deductibleVat || item.vatAmount
+            ]);
+        });
+        
+        // CSV 파일 생성 (UTF-8 BOM 추가로 한글 지원)
+        const csvContent = csvData.map(row => row.join(',')).join('\n');
+        // UTF-8 BOM (Byte Order Mark) 추가 - Excel에서 한글이 제대로 표시됩니다
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `부가세신고서_상세내역_${year}년_${quarter}분기.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showLoadingSpinner(false);
+        showNotification('Excel 호환 CSV 파일이 다운로드되었습니다.', 'success');
+        
+    } catch (error) {
+        console.error('Excel 내보내기 실패:', error);
+        showNotification('Excel 내보내기에 실패했습니다.', 'error');
+        showLoadingSpinner(false);
+    }
+}
+
+// CSV로 내보내기
+function exportToCSV(incomeData, expenseData, year, quarter) {
+    const csvData = [
+        ['구분', '공급가액', '부가세', '합계'],
+        ['매출세액', incomeData.totalSupply, incomeData.totalVat, incomeData.totalIncome],
+        ['매입세액', expenseData.totalSupply, expenseData.totalVat, expenseData.totalExpense],
+        ['납부세액', '', '', incomeData.totalVat - expenseData.totalVat]
+    ];
+    
+    const csvContent = csvData.map(row => row.join(',')).join('\n');
+    // UTF-8 BOM (Byte Order Mark) 추가 - Excel에서 한글이 제대로 표시됩니다
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `부가세신고서_${year}년_${quarter}분기.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showNotification('CSV 파일이 다운로드되었습니다.', 'success');
+}
+
+// 부가세 PDF 신고서 생성
+async function generateVatPDF() {
+    try {
+        showLoadingSpinner(true);
+        console.log('📊 부가세 신고서 PDF 생성 시작');
+        
+        // PDF 라이브러리 로딩 확인 (진행 상황 표시)
+        checkPDFLibraryStatus();
+        const isPdfReady = await waitForJsPDFLibrary(15000, true);
+        if (!isPdfReady) {
+            console.error('❌ 부가세 신고서 PDF 라이브러리 로딩 실패');
+            showNotification('PDF 라이브러리 로딩 실패. 잠시 후 다시 시도해주세요.', 'error');
+            showLoadingSpinner(false);
+            
+            // 수동 재시도 옵션 제공
+            setTimeout(() => {
+                const confirmed = confirm('PDF 라이브러리 로딩에 실패했습니다.\n다시 시도하시겠습니까?');
+                if (confirmed) {
+                    generateVatPDF(); // 재귀 호출로 재시도
+                }
+            }, 2000);
+            return;
+        }
+        
+        console.log('✅ 부가세 신고서 PDF 라이브러리 준비 완료');
+        
+        const year = parseInt(document.getElementById('vatReportYear').value);
+        const quarter = parseInt(document.getElementById('vatReportQuarter').value);
+        
+        // 분기별 월 계산
+        const startMonth = (quarter - 1) * 3 + 1;
+        const endMonth = quarter * 3;
+        
+        console.log(`📄 ${year}년 ${quarter}분기 부가세 신고서 PDF 생성 중...`);
+        showNotification('데이터 로딩 중...', 'info');
+        
+        // 매출 및 매입 데이터 로드
+        const [incomeData, expenseData] = await Promise.all([
+            calculateIncomeFromEstimates(year, startMonth, endMonth),
+            loadExpenseData(year, startMonth, endMonth)
+        ]);
+        
+        // 부가세 계산
+        const vatData = calculateVAT(incomeData, expenseData);
+        
+        showNotification('PDF 생성 중...', 'info');
+        
+        // 🎨 HTML 방식으로 PDF 생성 (견적서 방식 적용 - 한글 문제 해결)
+        await generateVatPDFFromHTML(year, quarter, startMonth, endMonth, incomeData, expenseData, vatData);
+        
+        showLoadingSpinner(false);
+        showNotification('부가세 신고서 PDF가 생성되었습니다.', 'success');
+        
+    } catch (error) {
+        console.error('PDF 생성 실패:', error);
+        showNotification('PDF 생성에 실패했습니다.', 'error');
+        showLoadingSpinner(false);
+    }
+}
+
+// 월별 세무 리포트 PDF 생성
+async function generateMonthlyTaxReport(year, month) {
+    try {
+        showLoadingSpinner(true);
+        console.log(`📊 ${year}년 ${month}월 세무 리포트 PDF 생성 시작`);
+        
+        // PDF 라이브러리 로딩 확인 (진행 상황 표시)
+        checkPDFLibraryStatus();
+        const isPdfReady = await waitForJsPDFLibrary(15000, true);
+        if (!isPdfReady) {
+            console.error('❌ 월별 세무 리포트 PDF 라이브러리 로딩 실패');
+            showNotification('PDF 라이브러리 로딩 실패. 잠시 후 다시 시도해주세요.', 'error');
+            showLoadingSpinner(false);
+            return;
+        }
+        
+        console.log('✅ 월별 세무 리포트 PDF 라이브러리 준비 완료');
+        
+        console.log(`📄 ${year}년 ${month}월 세무 리포트 PDF 생성 중...`);
+        showNotification('데이터 로딩 중...', 'info');
+        
+        // 월별 데이터 로드
+        const [incomeData, expenseData] = await Promise.all([
+            calculateIncomeFromEstimates(year, month, month),
+            loadExpenseData(year, month, month)
+        ]);
+        
+        // 부가세 계산
+        const vatData = calculateVAT(incomeData, expenseData);
+        
+        showNotification('PDF 생성 중...', 'info');
+        
+        // PDF 생성
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        // 헤더 설정
+        pdf.setFontSize(18);
+        pdf.text('월별 세무 리포트', 105, 20, { align: 'center' });
+        
+        pdf.setFontSize(12);
+        pdf.text(`${year}년 ${month}월`, 105, 30, { align: 'center' });
+        
+        // 요약 정보
+        let yPos = 50;
+        pdf.setFontSize(14);
+        pdf.text('월별 손익 현황', 20, yPos);
+        yPos += 15;
+        
+        pdf.setFontSize(10);
+        pdf.text(`매출 총액: ${incomeData.totalIncome.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`매입 총액: ${expenseData.totalExpense.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`순손익: ${(incomeData.totalIncome - expenseData.totalExpense).toLocaleString()}원`, 25, yPos);
+        yPos += 15;
+        
+        // 부가세 현황
+        pdf.setFontSize(14);
+        pdf.text('부가세 현황', 20, yPos);
+        yPos += 15;
+        
+        pdf.setFontSize(10);
+        pdf.text(`매출세액: ${incomeData.totalVat.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`매입세액공제: ${expenseData.deductibleVat.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`차감세액: ${vatData.vatToPay.toLocaleString()}원`, 25, yPos);
+        yPos += 15;
+        
+        // 작성 정보
+        yPos += 20;
+        const today = new Date();
+        pdf.setFontSize(8);
+        pdf.text(`작성일: ${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`, 20, yPos);
+        pdf.text('투훈스 가라지', 150, yPos);
+        
+        // PDF 저장
+        pdf.save(`월별세무리포트_${year}년_${month}월.pdf`);
+        
+        showLoadingSpinner(false);
+        showNotification(`${year}년 ${month}월 세무 리포트가 생성되었습니다.`, 'success');
+        
+    } catch (error) {
+        console.error('월별 리포트 생성 실패:', error);
+        showNotification('월별 리포트 생성에 실패했습니다.', 'error');
+        showLoadingSpinner(false);
+    }
+}
+
+// 분기별 세무 리포트 PDF 생성
+async function generateQuarterlyTaxReport(year, quarter) {
+    try {
+        showLoadingSpinner(true);
+        console.log(`📊 ${year}년 ${quarter}분기 세무 리포트 PDF 생성 시작`);
+        
+        // PDF 라이브러리 로딩 확인 (진행 상황 표시)
+        checkPDFLibraryStatus();
+        const isPdfReady = await waitForJsPDFLibrary(15000, true);
+        if (!isPdfReady) {
+            console.error('❌ 분기별 세무 리포트 PDF 라이브러리 로딩 실패');
+            showNotification('PDF 라이브러리 로딩 실패. 잠시 후 다시 시도해주세요.', 'error');
+            showLoadingSpinner(false);
+            return;
+        }
+        
+        console.log('✅ 분기별 세무 리포트 PDF 라이브러리 준비 완료');
+        
+        console.log(`📄 ${year}년 ${quarter}분기 세무 리포트 PDF 생성 중...`);
+        showNotification('데이터 로딩 중...', 'info');
+        
+        // 분기별 월 계산
+        const startMonth = (quarter - 1) * 3 + 1;
+        const endMonth = quarter * 3;
+        
+        // 분기별 데이터 로드
+        const [incomeData, expenseData] = await Promise.all([
+            calculateIncomeFromEstimates(year, startMonth, endMonth),
+            loadExpenseData(year, startMonth, endMonth)
+        ]);
+        
+        // 부가세 계산
+        const vatData = calculateVAT(incomeData, expenseData);
+        
+        showNotification('PDF 생성 중...', 'info');
+        
+        // PDF 생성
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        // 헤더 설정
+        pdf.setFontSize(18);
+        pdf.text('분기별 세무 리포트', 105, 20, { align: 'center' });
+        
+        pdf.setFontSize(12);
+        pdf.text(`${year}년 ${quarter}분기 (${startMonth}월 ~ ${endMonth}월)`, 105, 30, { align: 'center' });
+        
+        // 요약 정보
+        let yPos = 50;
+        pdf.setFontSize(14);
+        pdf.text('분기별 손익 현황', 20, yPos);
+        yPos += 15;
+        
+        pdf.setFontSize(10);
+        pdf.text(`매출 총액: ${incomeData.totalIncome.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`매입 총액: ${expenseData.totalExpense.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`순손익: ${(incomeData.totalIncome - expenseData.totalExpense).toLocaleString()}원`, 25, yPos);
+        yPos += 15;
+        
+        // 부가세 현황
+        pdf.setFontSize(14);
+        pdf.text('부가세 현황', 20, yPos);
+        yPos += 15;
+        
+        pdf.setFontSize(10);
+        pdf.text(`매출세액: ${incomeData.totalVat.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`매입세액공제: ${expenseData.deductibleVat.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`차감세액: ${vatData.vatToPay.toLocaleString()}원`, 25, yPos);
+        yPos += 15;
+        
+        // 작성 정보
+        yPos += 20;
+        const today = new Date();
+        pdf.setFontSize(8);
+        pdf.text(`작성일: ${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`, 20, yPos);
+        pdf.text('투훈스 가라지', 150, yPos);
+        
+        // PDF 저장
+        pdf.save(`분기별세무리포트_${year}년_${quarter}분기.pdf`);
+        
+        showLoadingSpinner(false);
+        showNotification(`${year}년 ${quarter}분기 세무 리포트가 생성되었습니다.`, 'success');
+        
+    } catch (error) {
+        console.error('분기별 리포트 생성 실패:', error);
+        showNotification('분기별 리포트 생성에 실패했습니다.', 'error');
+        showLoadingSpinner(false);
+    }
+}
+
+// 연별 세무 리포트 PDF 생성
+async function generateYearlyTaxReport(year) {
+    try {
+        showLoadingSpinner(true);
+        console.log(`📊 ${year}년 연별 세무 리포트 PDF 생성 시작`);
+        
+        // PDF 라이브러리 로딩 확인 (진행 상황 표시)
+        checkPDFLibraryStatus();
+        const isPdfReady = await waitForJsPDFLibrary(15000, true);
+        if (!isPdfReady) {
+            console.error('❌ 연별 세무 리포트 PDF 라이브러리 로딩 실패');
+            showNotification('PDF 라이브러리 로딩 실패. 잠시 후 다시 시도해주세요.', 'error');
+            showLoadingSpinner(false);
+            return;
+        }
+        
+        console.log('✅ 연별 세무 리포트 PDF 라이브러리 준비 완료');
+        
+        console.log(`📄 ${year}년 연별 세무 리포트 PDF 생성 중...`);
+        showNotification('데이터 로딩 중...', 'info');
+        
+        // 연별 데이터 로드
+        const [incomeData, expenseData] = await Promise.all([
+            calculateIncomeFromEstimates(year, 1, 12),
+            loadExpenseData(year, 1, 12)
+        ]);
+        
+        showNotification('PDF 생성 중...', 'info');
+        
+        // PDF 생성
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        // 헤더 설정
+        pdf.setFontSize(18);
+        pdf.text('연별 세무 리포트', 105, 20, { align: 'center' });
+        
+        pdf.setFontSize(12);
+        pdf.text(`${year}년`, 105, 30, { align: 'center' });
+        
+        // 연간 요약
+        let yPos = 50;
+        pdf.setFontSize(14);
+        pdf.text('연간 손익 현황', 20, yPos);
+        yPos += 15;
+        
+        pdf.setFontSize(10);
+        pdf.text(`매출 총액: ${incomeData.totalIncome.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`매입 총액: ${expenseData.totalExpense.toLocaleString()}원`, 25, yPos);
+        yPos += 7;
+        pdf.text(`순손익: ${(incomeData.totalIncome - expenseData.totalExpense).toLocaleString()}원`, 25, yPos);
+        yPos += 15;
+        
+        // 작성 정보
+        yPos += 20;
+        const today = new Date();
+        pdf.setFontSize(8);
+        pdf.text(`작성일: ${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`, 20, yPos);
+        pdf.text('투훈스 가라지', 150, yPos);
+        
+        // PDF 저장
+        pdf.save(`연별세무리포트_${year}년.pdf`);
+        
+        showLoadingSpinner(false);
+        showNotification(`${year}년 연별 세무 리포트가 생성되었습니다.`, 'success');
+        
+    } catch (error) {
+        console.error('연별 리포트 생성 실패:', error);
+        showNotification('연별 리포트 생성에 실패했습니다.', 'error');
+        showLoadingSpinner(false);
+    }
+}
+
+// 상세 내역 조회 함수들
+async function getIncomeDetailList(year, startMonth, endMonth) {
+    try {
+        const incomeList = [];
+        
+        // 견적서 데이터
+        let estimateQuery = db.collection('estimates')
+            .where('status', '==', 'approved');
+        
+        if (isAdmin) {
+            estimateQuery = estimateQuery.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const estimateSnapshot = await estimateQuery.get();
+        estimateSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.approvedAt) {
+                const approvedDate = new Date(data.approvedAt);
+                if (approvedDate.getFullYear() === year && 
+                    approvedDate.getMonth() + 1 >= startMonth && 
+                    approvedDate.getMonth() + 1 <= endMonth) {
+                    
+                    incomeList.push({
+                        date: data.approvedAt,
+                        client: data.customerName || '고객',
+                        description: data.title || '정비 서비스',
+                        category: '정비서비스',
+                        supplyAmount: data.supplyAmount || 0,
+                        vatAmount: data.vatAmount || 0,
+                        totalAmount: data.totalAmount || 0
+                    });
+                }
+            }
+        });
+        
+        // 직접 등록된 매출 데이터
+        let incomeQuery = db.collection('income');
+        if (isAdmin) {
+            incomeQuery = incomeQuery.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const incomeSnapshot = await incomeQuery.get();
+        incomeSnapshot.forEach(doc => {
+            const data = doc.data();
+            const incomeDate = new Date(data.date);
+            if (incomeDate.getFullYear() === year && 
+                incomeDate.getMonth() + 1 >= startMonth && 
+                incomeDate.getMonth() + 1 <= endMonth) {
+                
+                incomeList.push({
+                    date: data.date,
+                    client: data.client || '고객',
+                    description: data.description || '매출',
+                    category: data.category || '기타',
+                    supplyAmount: data.supplyAmount || 0,
+                    vatAmount: data.vatAmount || 0,
+                    totalAmount: data.totalAmount || 0
+                });
+            }
+        });
+        
+        // 날짜순 정렬
+        return incomeList.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+    } catch (error) {
+        console.error('매출 상세 내역 조회 실패:', error);
+        return [];
+    }
+}
+
+async function getExpenseDetailList(year, startMonth, endMonth) {
+    try {
+        const expenseList = [];
+        
+        let expenseQuery = db.collection('expense');
+        if (isAdmin) {
+            expenseQuery = expenseQuery.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const expenseSnapshot = await expenseQuery.get();
+        expenseSnapshot.forEach(doc => {
+            const data = doc.data();
+            const expenseDate = new Date(data.date);
+            if (expenseDate.getFullYear() === year && 
+                expenseDate.getMonth() + 1 >= startMonth && 
+                expenseDate.getMonth() + 1 <= endMonth) {
+                
+                expenseList.push({
+                    date: data.date,
+                    vendor: data.vendor || '거래처',
+                    description: data.description || '매입',
+                    category: data.category || '기타',
+                    supplyAmount: data.supplyAmount || 0,
+                    vatAmount: data.vatAmount || 0,
+                    totalAmount: data.totalAmount || 0,
+                    deductibleVat: data.deductibleVat || 0
+                });
+            }
+        });
+        
+        // 날짜순 정렬
+        return expenseList.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+    } catch (error) {
+        console.error('매입 상세 내역 조회 실패:', error);
+        return [];
+    }
+}
+
+// 유틸리티 함수들
+function getVatFilingDeadline(year, quarter) {
+    const deadlines = ['', '04.25', '07.25', '10.25', '01.25'];
+    const deadlineYear = quarter === 4 ? year + 1 : year;
+    return `${deadlineYear}.${deadlines[quarter]}`;
+}
+
+function getVatPaymentDeadline(year, quarter) {
+    return getVatFilingDeadline(year, quarter); // 신고와 납부 기한이 동일
+}
+
+function getLastDayOfMonth(year, month) {
+    return new Date(year, month, 0).getDate();
+}
+
+function toggleCategoryView() {
+    showNotification('분류 상세보기 기능은 준비 중입니다.', 'info');
+}
+
+function showAllTransactions() {
+    showNotification('전체 거래 내역 기능은 준비 중입니다.', 'info');
+}
+
+// 세무 리포트 옵션 모달
+async function showTaxReportOptions() {
+    console.log('🎯 showTaxReportOptions 함수 호출됨');
+    console.log('🔍 현재 상태 확인:');
+    console.log('  - currentUser:', currentUser);
+    console.log('  - isAdmin:', isAdmin);
+    console.log('  - ADMIN_EMAILS:', ADMIN_EMAILS);
+    
+    if (currentUser && currentUser.email) {
+        console.log('  - 현재 사용자 이메일:', currentUser.email);
+        console.log('  - 관리자 이메일 포함 여부:', ADMIN_EMAILS.includes(currentUser.email));
+    }
+    
+    // 관리자 권한 확인 및 자동 수정
+    const hasAdminAccess = verifyAndFixAdminStatus();
+    if (!hasAdminAccess) {
+        console.log('❌ 관리자 권한 없음');
+        console.log('🔧 가능한 해결책:');
+        console.log('  1. 관리자 이메일로 로그인하세요:', ADMIN_EMAILS);
+        console.log('  2. 또는 브라우저 콘솔에서 setupAdminUser() 실행');
+        showNotification('관리자만 접근할 수 있습니다.', 'error');
+        return;
+    }
+    
+    console.log('✅ 관리자 권한 확인됨');
+    
+    // PDF 라이브러리 로딩 확인 (상세한 진행 상황 표시)
+    console.log('📊 PDF 라이브러리 상태 확인 중...');
+    checkPDFLibraryStatus();
+    
+    showNotification('세무 리포트 준비 중...', 'info');
+    const isPdfReady = await waitForJsPDFLibrary(15000, true);
+    if (!isPdfReady) {
+        console.error('❌ 세무 리포트용 PDF 라이브러리 로딩 실패');
+        
+        // 사용자에게 재시도 옵션 제공
+        const retryButton = `
+            <div style="margin-top: 10px;">
+                <button onclick="showTaxReportOptions()" style="
+                    background: #3b82f6; 
+                    color: white; 
+                    border: none; 
+                    padding: 8px 16px; 
+                    border-radius: 6px; 
+                    cursor: pointer;
+                    margin-right: 8px;
+                ">다시 시도</button>
+                <button onclick="location.reload()" style="
+                    background: #6b7280; 
+                    color: white; 
+                    border: none; 
+                    padding: 8px 16px; 
+                    border-radius: 6px; 
+                    cursor: pointer;
+                ">페이지 새로고침</button>
+            </div>
+        `;
+        
+                 showNotification('PDF 라이브러리 로딩 실패. 인터넷 연결을 확인하고 다시 시도해주세요.' + retryButton, 'error');
+         
+         // 5초 후 도움말 자동 표시
+         setTimeout(() => {
+             console.log('🆘 PDF 라이브러리 문제 해결 도움말 자동 표시');
+             showPDFLibraryHelp();
+         }, 5000);
+         
+         return;
+    }
+    
+    console.log('✅ 세무 리포트용 PDF 라이브러리 준비 완료');
+    
+    // 기존 모달 제거
+    const existingModal = document.querySelector('.modal-overlay');
+    if (existingModal) {
+        console.log('🗑️ 기존 모달 제거');
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-download"></i>
+                    세무 리포트 생성
+                </h2>
+                <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="report-options">
+                    <div class="report-option">
+                        <h3>월별 세무 리포트</h3>
+                        <p>특정 월의 세무 현황을 PDF로 생성합니다.</p>
+                        <div class="form-row">
+                            <select id="monthlyYear" class="form-control">
+                                <option value="2024">2024년</option>
+                                <option value="2023">2023년</option>
+                            </select>
+                            <select id="monthlyMonth" class="form-control">
+                                <option value="1">1월</option>
+                                <option value="2">2월</option>
+                                <option value="3">3월</option>
+                                <option value="4">4월</option>
+                                <option value="5">5월</option>
+                                <option value="6">6월</option>
+                                <option value="7">7월</option>
+                                <option value="8">8월</option>
+                                <option value="9">9월</option>
+                                <option value="10">10월</option>
+                                <option value="11">11월</option>
+                                <option value="12">12월</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="generateMonthlyReport()">월별 리포트 생성</button>
+                        </div>
+                    </div>
+                    
+                    <div class="report-option">
+                        <h3>분기별 세무 리포트</h3>
+                        <p>특정 분기의 세무 현황을 PDF로 생성합니다.</p>
+                        <div class="form-row">
+                            <select id="quarterlyYear" class="form-control">
+                                <option value="2024">2024년</option>
+                                <option value="2023">2023년</option>
+                            </select>
+                            <select id="quarterlyQuarter" class="form-control">
+                                <option value="1">1분기</option>
+                                <option value="2">2분기</option>
+                                <option value="3">3분기</option>
+                                <option value="4">4분기</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="generateQuarterlyReport()">분기별 리포트 생성</button>
+                        </div>
+                    </div>
+                    
+                    <div class="report-option">
+                        <h3>연별 세무 리포트</h3>
+                        <p>특정 연도의 세무 현황을 PDF로 생성합니다.</p>
+                        <div class="form-row">
+                            <select id="yearlyYear" class="form-control">
+                                <option value="2024">2024년</option>
+                                <option value="2023">2023년</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="generateYearlyReport()">연별 리포트 생성</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    console.log('✅ 모달 HTML 생성 완료');
+    
+    // 모달 스타일 강제 적용
+    modal.style.cssText = `
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        background: rgba(0, 0, 0, 0.8) !important;
+        z-index: 9999 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    `;
+    
+    // 모달 컨테이너 스타일도 강제 적용
+    const modalContainer = modal.querySelector('.modal-container');
+    if (modalContainer) {
+        modalContainer.style.cssText = `
+            background: white !important;
+            border-radius: 12px !important;
+            padding: 24px !important;
+            max-width: 800px !important;
+            width: 90% !important;
+            max-height: 80% !important;
+            overflow-y: auto !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important;
+        `;
+    }
+    
+    console.log('✅ 모달 스타일 적용 완료');
+    
+    document.body.appendChild(modal);
+    console.log('✅ 모달 DOM 추가 완료');
+    
+    // 모달이 실제로 추가되었는지 확인
+    const addedModal = document.querySelector('.modal-overlay');
+    console.log('🔍 추가된 모달 확인:', addedModal);
+    
+    // 현재 날짜 기준으로 기본값 설정
+    setTimeout(() => {
+        try {
+            const now = new Date();
+            const monthlyYear = document.getElementById('monthlyYear');
+            if (monthlyYear) {
+                monthlyYear.value = now.getFullYear();
+                console.log('✅ 기본값 설정 완료');
+            } else {
+                console.error('❌ monthlyYear 요소를 찾을 수 없음');
+            }
+            
+            // 다른 기본값들도 설정
+            const monthlyMonth = document.getElementById('monthlyMonth');
+            const quarterlyYear = document.getElementById('quarterlyYear');
+            const quarterlyQuarter = document.getElementById('quarterlyQuarter');
+            const yearlyYear = document.getElementById('yearlyYear');
+            
+            if (monthlyMonth) monthlyMonth.value = now.getMonth() + 1;
+            if (quarterlyYear) quarterlyYear.value = now.getFullYear();
+            if (quarterlyQuarter) quarterlyQuarter.value = Math.ceil((now.getMonth() + 1) / 3);
+            if (yearlyYear) yearlyYear.value = now.getFullYear();
+            
+        } catch (error) {
+            console.error('❌ 기본값 설정 실패:', error);
+        }
+    }, 100);
+    
+    console.log('🎉 showTaxReportOptions 함수 완료');
+}
+
+function generateMonthlyReport() {
+    const year = parseInt(document.getElementById('monthlyYear').value);
+    const month = parseInt(document.getElementById('monthlyMonth').value);
+    generateMonthlyTaxReport(year, month);
+    document.querySelector('.modal-overlay').remove();
+}
+
+function generateQuarterlyReport() {
+    const year = parseInt(document.getElementById('quarterlyYear').value);
+    const quarter = parseInt(document.getElementById('quarterlyQuarter').value);
+    generateQuarterlyTaxReport(year, quarter);
+    document.querySelector('.modal-overlay').remove();
+}
+
+function generateYearlyReport() {
+    const year = parseInt(document.getElementById('yearlyYear').value);
+    generateYearlyTaxReport(year);
+    document.querySelector('.modal-overlay').remove();
+}
+
+// ===============================================
+// 초보자 도움말 시스템 - Beginner Help System
+// ===============================================
+
+// 세무 도움말 센터 열기
+function showTaxHelpCenter() {
+    const modal = document.getElementById('taxHelpModal');
+    if (modal) {
+        modal.classList.add('active');
+        // 기본 탭을 가이드로 설정
+        showHelpTab('guide');
+    }
+}
+
+// 세무 도움말 센터 닫기
+function closeTaxHelpModal() {
+    const modal = document.getElementById('taxHelpModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// 도움말 탭 전환
+function showHelpTab(tabName) {
+    // 모든 탭 버튼 비활성화
+    document.querySelectorAll('.help-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // 모든 탭 컨텐츠 숨김
+    document.querySelectorAll('.help-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // 선택된 탭 활성화
+    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+    const activeContent = document.getElementById(`${tabName}Tab`);
+    
+    if (activeTab) activeTab.classList.add('active');
+    if (activeContent) activeContent.classList.add('active');
+}
+
+// FAQ 토글
+function toggleFAQ(questionElement) {
+    const faqItem = questionElement.parentElement;
+    const answer = faqItem.querySelector('.faq-answer');
+    const chevron = questionElement.querySelector('i');
+    
+    // 다른 FAQ 항목들 닫기
+    document.querySelectorAll('.faq-item').forEach(item => {
+        if (item !== faqItem) {
+            item.classList.remove('active');
+            const otherAnswer = item.querySelector('.faq-answer');
+            const otherChevron = item.querySelector('.faq-question i');
+            if (otherAnswer) otherAnswer.style.display = 'none';
+            if (otherChevron) {
+                otherChevron.classList.remove('fa-chevron-down');
+                otherChevron.classList.add('fa-chevron-right');
+            }
+        }
+    });
+    
+    // 현재 FAQ 토글
+    if (faqItem.classList.contains('active')) {
+        faqItem.classList.remove('active');
+        answer.style.display = 'none';
+        chevron.classList.remove('fa-chevron-down');
+        chevron.classList.add('fa-chevron-right');
+    } else {
+        faqItem.classList.add('active');
+        answer.style.display = 'block';
+        chevron.classList.remove('fa-chevron-right');
+        chevron.classList.add('fa-chevron-down');
+    }
+}
+
+// 초보자 모드 변수
+let beginnerMode = localStorage.getItem('beginnerMode') === 'true';
+
+// 초보자 모드 활성화
+function enableBeginnerMode() {
+    beginnerMode = true;
+    localStorage.setItem('beginnerMode', 'true');
+    
+    // 도움말 모달 닫기
+    closeTaxHelpModal();
+    
+    // 초보자 모드 UI 적용
+    applyBeginnerMode();
+    
+    showNotification('🎓 초보자 모드가 활성화되었습니다! 더 자세한 설명과 도움말을 제공합니다.', 'success');
+}
+
+// 초보자 모드 비활성화
+function disableBeginnerMode() {
+    beginnerMode = false;
+    localStorage.setItem('beginnerMode', 'false');
+    
+    // 초보자 모드 UI 제거
+    removeBeginnerMode();
+    
+    showNotification('초보자 모드가 비활성화되었습니다.', 'info');
+}
+
+// 초보자 모드 UI 적용
+function applyBeginnerMode() {
+    // 도움말 버튼 스타일 변경
+    const helpBtn = document.querySelector('.help-toggle-btn');
+    if (helpBtn) {
+        helpBtn.classList.add('beginner-active');
+        helpBtn.title = '초보자 모드 활성화됨 (클릭하여 도움말 보기)';
+    }
+    
+    // 매출/경비 등록 버튼에 상세 설명 추가
+    addBeginnerTooltips();
+    
+    // 초보자 모드 표시
+    showBeginnerModeIndicator();
+}
+
+// 초보자 모드 UI 제거
+function removeBeginnerMode() {
+    const helpBtn = document.querySelector('.help-toggle-btn');
+    if (helpBtn) {
+        helpBtn.classList.remove('beginner-active');
+        helpBtn.title = '세무 도움말';
+    }
+    
+    // 툴팁 제거
+    removeBeginnerTooltips();
+    
+    // 초보자 모드 표시 제거
+    hideBeginnerModeIndicator();
+}
+
+// 초보자 모드 표시
+function showBeginnerModeIndicator() {
+    // 기존 표시기 제거
+    const existingIndicator = document.querySelector('.beginner-mode-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+    
+    // 새 표시기 생성
+    const indicator = document.createElement('div');
+    indicator.className = 'beginner-mode-indicator';
+    indicator.innerHTML = `
+        <div class="beginner-indicator-content">
+            <i class="fas fa-graduation-cap"></i>
+            <span>초보자 모드</span>
+            <button onclick="disableBeginnerMode()" title="초보자 모드 끄기">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(indicator);
+}
+
+// 초보자 모드 표시 제거
+function hideBeginnerModeIndicator() {
+    const indicator = document.querySelector('.beginner-mode-indicator');
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
+// 초보자 툴팁 추가
+function addBeginnerTooltips() {
+    // 매출 등록 버튼
+    const incomeBtn = document.querySelector('[onclick="showIncomeModal()"]');
+    if (incomeBtn && !incomeBtn.hasAttribute('data-beginner-tooltip')) {
+        incomeBtn.setAttribute('data-beginner-tooltip', '고객에게 제공한 서비스나 판매한 상품의 수입을 기록합니다. 견적서 시스템에서 자동으로 생성되거나 직접 입력할 수 있습니다.');
+        incomeBtn.setAttribute('data-beginner-added', 'true');
+    }
+    
+    // 경비 등록 버튼
+    const expenseBtn = document.querySelector('[onclick="showExpenseModal()"]');
+    if (expenseBtn && !expenseBtn.hasAttribute('data-beginner-tooltip')) {
+        expenseBtn.setAttribute('data-beginner-tooltip', '사업을 위해 지출한 비용을 기록합니다. 부품 구매, 공구 구입, 임대료, 전기료 등이 포함됩니다. 세금계산서가 있으면 매입세액공제를 받을 수 있습니다.');
+        expenseBtn.setAttribute('data-beginner-added', 'true');
+    }
+    
+    // 급여 관리 버튼
+    const salaryBtn = document.querySelector('[onclick="showSalaryModal()"]');
+    if (salaryBtn && !salaryBtn.hasAttribute('data-beginner-tooltip')) {
+        salaryBtn.setAttribute('data-beginner-tooltip', '직원의 급여와 4대보험(국민연금, 건강보험, 고용보험, 산재보험)을 관리합니다. 급여 계산 시 자동으로 세금과 보험료가 계산됩니다.');
+        salaryBtn.setAttribute('data-beginner-added', 'true');
+    }
+    
+    // 부가세 신고 버튼
+    const vatBtn = document.querySelector('[onclick="showTaxReport()"]');
+    if (vatBtn && !vatBtn.hasAttribute('data-beginner-tooltip')) {
+        vatBtn.setAttribute('data-beginner-tooltip', '분기별 부가세 신고서를 작성하고 납부세액을 계산합니다. 매출세액에서 매입세액공제를 차감한 금액을 납부하게 됩니다.');
+        vatBtn.setAttribute('data-beginner-added', 'true');
+    }
+    
+    // 툴팁 이벤트 리스너 추가
+    document.querySelectorAll('[data-beginner-tooltip]').forEach(element => {
+        if (!element.hasAttribute('data-tooltip-listener')) {
+            element.addEventListener('mouseenter', showBeginnerTooltip);
+            element.addEventListener('mouseleave', hideBeginnerTooltip);
+            element.setAttribute('data-tooltip-listener', 'true');
+        }
+    });
+}
+
+// 초보자 툴팁 제거
+function removeBeginnerTooltips() {
+    document.querySelectorAll('[data-beginner-added="true"]').forEach(element => {
+        element.removeAttribute('data-beginner-tooltip');
+        element.removeAttribute('data-beginner-added');
+        element.removeAttribute('data-tooltip-listener');
+        element.removeEventListener('mouseenter', showBeginnerTooltip);
+        element.removeEventListener('mouseleave', hideBeginnerTooltip);
+    });
+    
+    // 툴팁 엘리먼트 제거
+    const tooltip = document.querySelector('.beginner-tooltip');
+    if (tooltip) {
+        tooltip.remove();
+    }
+}
+
+// 초보자 툴팁 표시
+function showBeginnerTooltip(event) {
+    if (!beginnerMode) return;
+    
+    const element = event.target.closest('[data-beginner-tooltip]');
+    if (!element) return;
+    
+    const tooltipText = element.getAttribute('data-beginner-tooltip');
+    
+    // 기존 툴팁 제거
+    hideBeginnerTooltip();
+    
+    // 새 툴팁 생성
+    const tooltip = document.createElement('div');
+    tooltip.className = 'beginner-tooltip';
+    tooltip.innerHTML = `
+        <div class="tooltip-content">
+            <div class="tooltip-header">
+                <i class="fas fa-lightbulb"></i>
+                <span>도움말</span>
+            </div>
+            <div class="tooltip-text">${tooltipText}</div>
+        </div>
+    `;
+    
+    document.body.appendChild(tooltip);
+    
+    // 위치 조정
+    const rect = element.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    
+    let top = rect.top - tooltipRect.height - 10;
+    let left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+    
+    // 화면 경계 조정
+    if (top < 10) {
+        top = rect.bottom + 10;
+        tooltip.classList.add('below');
+    }
+    if (left < 10) left = 10;
+    if (left + tooltipRect.width > window.innerWidth - 10) {
+        left = window.innerWidth - tooltipRect.width - 10;
+    }
+    
+    tooltip.style.top = `${top}px`;
+    tooltip.style.left = `${left}px`;
+    
+    // 애니메이션
+    setTimeout(() => {
+        tooltip.classList.add('show');
+    }, 10);
+}
+
+// 초보자 툴팁 숨김
+function hideBeginnerTooltip() {
+    const tooltip = document.querySelector('.beginner-tooltip');
+    if (tooltip) {
+        tooltip.classList.remove('show');
+        setTimeout(() => {
+            tooltip.remove();
+        }, 200);
+    }
+}
+
+// 세무 용어 팝업
+function showTaxTermPopup(term) {
+    const termDefinitions = {
+        '공급가액': {
+            title: '공급가액 💰',
+            definition: '부가세를 제외한 순수한 재화나 서비스의 가격',
+            example: '정비비 100,000원 + 부가세 10,000원 = 총 110,000원일 때, 공급가액은 100,000원',
+            tip: '영수증에는 총액이 적혀있어도 공급가액을 따로 계산해야 합니다.'
+        },
+        '부가세': {
+            title: '부가가치세 (VAT) 📊',
+            definition: '재화나 서비스 거래 시 부과되는 세금 (10%)',
+            example: '공급가액 100,000원 × 10% = 부가세 10,000원',
+            tip: '매출세액(받은 부가세)에서 매입세액(낸 부가세)을 차감하여 신고합니다.'
+        },
+        '매입세액공제': {
+            title: '매입세액공제 ↩️',
+            definition: '사업용 구매 시 낸 부가세를 돌려받는 것',
+            example: '부품 구매 시 낸 부가세 5,000원을 환급받음',
+            tip: '세금계산서나 신용카드 영수증이 있어야 공제받을 수 있습니다.'
+        }
+    };
+    
+    const definition = termDefinitions[term];
+    if (!definition) return;
+    
+    const popup = document.createElement('div');
+    popup.className = 'tax-term-popup';
+    popup.innerHTML = `
+        <div class="popup-content">
+            <div class="popup-header">
+                <h4>${definition.title}</h4>
+                <button onclick="this.closest('.tax-term-popup').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="popup-body">
+                <p><strong>의미:</strong> ${definition.definition}</p>
+                <p><strong>예시:</strong> ${definition.example}</p>
+                <p><strong>팁:</strong> ${definition.tip}</p>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    setTimeout(() => {
+        popup.classList.add('show');
+    }, 10);
+}
+
+// 페이지 로드 시 초보자 모드 확인
+document.addEventListener('DOMContentLoaded', function() {
+    // 기존 초기화 이후에 실행
+    setTimeout(() => {
+        if (beginnerMode) {
+            applyBeginnerMode();
+        }
+    }, 1000);
+});
+
+// ===============================================
+// 자동 카테고리 분류 시스템
+// ===============================================
+
+// 매출 카테고리 추천
+async function suggestIncomeCategory(clientName) {
+    try {
+        // 1. 학습된 데이터에서 찾기 (최우선)
+        const learnedMatch = await findLearnedCategory(clientName, 'income');
+        if (learnedMatch) {
+            console.log(`🧠 학습된 매치: ${clientName} → ${learnedMatch}`);
+            return learnedMatch;
+        }
+        
+        // 2. 기존 거래 데이터에서 찾기
+        const exactMatch = await findExactClientMatch(clientName, 'income');
+        if (exactMatch) {
+            console.log(`🎯 거래 기록 매치: ${clientName} → ${exactMatch}`);
+            return exactMatch;
+        }
+        
+        // 3. 키워드 기반 매칭
+        const keywordMatch = getIncomeKeywordMatch(clientName);
+        if (keywordMatch) {
+            console.log(`🔍 키워드 매치: ${clientName} → ${keywordMatch}`);
+            return keywordMatch;
+        }
+        
+        // 4. 기본값
+        return '정비서비스';
+        
+    } catch (error) {
+        console.error('❌ 매출 카테고리 추천 실패:', error);
+        return null;
+    }
+}
+
+// 경비 카테고리 추천
+async function suggestExpenseCategory(vendorName) {
+    try {
+        // 1. 학습된 데이터에서 찾기 (최우선)
+        const learnedMatch = await findLearnedCategory(vendorName, 'expense');
+        if (learnedMatch) {
+            console.log(`🧠 학습된 매치: ${vendorName} → ${learnedMatch}`);
+            return learnedMatch;
+        }
+        
+        // 2. 기존 거래 데이터에서 찾기
+        const exactMatch = await findExactClientMatch(vendorName, 'expense');
+        if (exactMatch) {
+            console.log(`🎯 거래 기록 매치: ${vendorName} → ${exactMatch}`);
+            return exactMatch;
+        }
+        
+        // 3. 키워드 기반 매칭
+        const keywordMatch = getExpenseKeywordMatch(vendorName);
+        if (keywordMatch) {
+            console.log(`🔍 키워드 매치: ${vendorName} → ${keywordMatch}`);
+            return keywordMatch;
+        }
+        
+        // 4. 기본값
+        return '기타';
+        
+    } catch (error) {
+        console.error('❌ 경비 카테고리 추천 실패:', error);
+        return null;
+    }
+}
+
+// 정확한 거래처 매치 찾기
+async function findExactClientMatch(name, type) {
+    try {
+        const collectionName = type === 'income' ? 'income' : 'expense';
+        const fieldName = type === 'income' ? 'client' : 'vendor';
+        
+        let query = db.collection(collectionName);
+        if (isAdmin) {
+            query = query.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const snapshot = await query.get();
+        const categoryCount = new Map();
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const clientName = data[fieldName];
+            
+            if (clientName && clientName.toLowerCase().includes(name.toLowerCase())) {
+                const category = data.category;
+                if (category) {
+                    categoryCount.set(category, (categoryCount.get(category) || 0) + 1);
+                }
+            }
+        });
+        
+        // 가장 많이 사용된 카테고리 반환
+        if (categoryCount.size > 0) {
+            return [...categoryCount.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        }
+        
+        return null;
+        
+    } catch (error) {
+        console.error('❌ 정확한 매치 검색 실패:', error);
+        return null;
+    }
+}
+
+// 매출 키워드 기반 매칭
+function getIncomeKeywordMatch(clientName) {
+    const name = clientName.toLowerCase();
+    
+    // 키워드 매핑 테이블
+    const keywordMaps = [
+        { keywords: ['정비', '수리', '점검', '정비소', '카센터', '모터스'], category: '정비서비스' },
+        { keywords: ['부품', '파츠', '타이어', '오일', '배터리', '브레이크'], category: '부품판매' },
+        { keywords: ['검사', '점검', '진단', '검진', '테스트'], category: '점검서비스' },
+        { keywords: ['개인', '고객', '손님', '개별'], category: '정비서비스' }
+    ];
+    
+    for (const map of keywordMaps) {
+        if (map.keywords.some(keyword => name.includes(keyword))) {
+            return map.category;
+        }
+    }
+    
+    return null;
+}
+
+// 경비 키워드 기반 매칭
+function getExpenseKeywordMatch(vendorName) {
+    const name = vendorName.toLowerCase();
+    
+    // 키워드 매핑 테이블
+    const keywordMaps = [
+        { keywords: ['부품', '파츠', '오일', '타이어', '배터리', '브레이크', '엔진', '필터'], category: '부품구매' },
+        { keywords: ['공구', '툴', '장비', '기계', '렌치', '드라이버', '잭'], category: '공구구매' },
+        { keywords: ['사무', '용품', '펜', '종이', '노트', '파일', '복사', '프린터'], category: '사무용품' },
+        { keywords: ['임대', '월세', '전세', '렌트', '리스'], category: '임대료' },
+        { keywords: ['전기', '전력', '한전', '전기세'], category: '전기료' },
+        { keywords: ['통신', '인터넷', 'kt', 'skt', 'lg', '핸드폰', '전화'], category: '통신료' },
+        { keywords: ['주유', '기름', '연료', '휘발유', '경유', 'gs', 's-oil'], category: '연료비' },
+        { keywords: ['광고', '홍보', '마케팅', '전단', '간판', '홈페이지'], category: '광고선전비' }
+    ];
+    
+    for (const map of keywordMaps) {
+        if (map.keywords.some(keyword => name.includes(keyword))) {
+            return map.category;
+        }
+    }
+    
+    return null;
+}
+
+// 카테고리 추천 시각적 표시
+function showCategorySuggestion(selectElement, suggestedCategory) {
+    // 애니메이션 클래스 추가
+    selectElement.classList.add('category-recommended');
+    
+    // 스마트 추천 배지 추가
+    addSmartSuggestionBadge(selectElement);
+    
+    // 2초 후 효과 제거
+    setTimeout(() => {
+        selectElement.classList.remove('category-recommended');
+        removeSmartSuggestionBadge(selectElement);
+    }, 3000);
+    
+    // 토스트 알림 (더 상세한 정보 포함)
+    const reason = getRecommendationReason(suggestedCategory);
+    showNotification(`🤖 AI 추천: "${suggestedCategory}" ${reason}`, 'info');
+}
+
+// 스마트 추천 배지 추가
+function addSmartSuggestionBadge(element) {
+    // 기존 배지 제거
+    removeSmartSuggestionBadge(element);
+    
+    const badge = document.createElement('span');
+    badge.className = 'smart-suggestion-badge';
+    badge.textContent = 'AI';
+    badge.style.position = 'absolute';
+    badge.style.top = '-8px';
+    badge.style.right = '-8px';
+    
+    // 부모 요소에 상대 위치 설정
+    const parent = element.parentNode;
+    if (parent) {
+        parent.style.position = 'relative';
+        parent.appendChild(badge);
+    }
+}
+
+// 스마트 추천 배지 제거
+function removeSmartSuggestionBadge(element) {
+    const parent = element.parentNode;
+    if (parent) {
+        const existingBadge = parent.querySelector('.smart-suggestion-badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+    }
+}
+
+// 추천 이유 설명
+function getRecommendationReason(category) {
+    const reasons = {
+        '정비서비스': '(정비/수리 관련 키워드 감지)',
+        '부품판매': '(부품/파츠 관련 키워드 감지)',
+        '점검서비스': '(검사/점검 관련 키워드 감지)',
+        '부품구매': '(부품/오일 관련 키워드 감지)',
+        '공구구매': '(공구/장비 관련 키워드 감지)',
+        '연료비': '(주유/연료 관련 키워드 감지)',
+        '전기료': '(전기/전력 관련 키워드 감지)',
+        '통신료': '(통신/인터넷 관련 키워드 감지)',
+        '광고선전비': '(광고/홍보 관련 키워드 감지)'
+    };
+    
+    return reasons[category] || '(이전 거래 패턴 분석)';
+}
+
+// 거래처-카테고리 학습 데이터 저장
+async function saveClientCategoryLearning(clientName, category, type) {
+    try {
+        const learningData = {
+            clientName: clientName.toLowerCase().trim(),
+            category: category,
+            type: type, // 'income' or 'expense'
+            adminEmail: currentUser.email,
+            count: 1,
+            lastUsed: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // 기존 학습 데이터가 있는지 확인
+        const learningId = `${type}_${currentUser.email}_${clientName.toLowerCase().trim()}_${category}`;
+        const existingDoc = await db.collection('category_learning').doc(learningId).get();
+        
+        if (existingDoc.exists) {
+            // 기존 데이터 업데이트 (사용 횟수 증가)
+            await db.collection('category_learning').doc(learningId).update({
+                count: firebase.firestore.FieldValue.increment(1),
+                lastUsed: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            console.log(`📚 학습 데이터 업데이트: ${clientName} → ${category}`);
+        } else {
+            // 새로운 학습 데이터 생성
+            await db.collection('category_learning').doc(learningId).set(learningData);
+            console.log(`📚 새로운 학습 데이터: ${clientName} → ${category}`);
+        }
+        
+    } catch (error) {
+        console.error('❌ 학습 데이터 저장 실패:', error);
+        // 학습 데이터 저장 실패는 전체 프로세스를 중단하지 않음
+    }
+}
+
+// 학습된 카테고리 조회 (findExactClientMatch 개선 버전)
+async function findLearnedCategory(clientName, type) {
+    try {
+        let query = db.collection('category_learning')
+            .where('type', '==', type)
+            .where('adminEmail', '==', currentUser.email);
+        
+        const snapshot = await query.get();
+        const matches = [];
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const learnedName = data.clientName;
+            
+            // 유사도 계산 (정확한 매치, 포함 관계 등)
+            if (learnedName === clientName.toLowerCase().trim()) {
+                // 정확한 매치
+                matches.push({ category: data.category, score: data.count * 10, type: 'exact' });
+            } else if (learnedName.includes(clientName.toLowerCase()) || clientName.toLowerCase().includes(learnedName)) {
+                // 부분 매치
+                matches.push({ category: data.category, score: data.count * 5, type: 'partial' });
+            }
+        });
+        
+        // 점수순 정렬하여 가장 적합한 카테고리 반환
+        if (matches.length > 0) {
+            matches.sort((a, b) => b.score - a.score);
+            console.log(`🧠 학습된 카테고리: ${clientName} → ${matches[0].category} (${matches[0].type} match)`);
+            return matches[0].category;
+        }
+        
+        return null;
+        
+    } catch (error) {
+        console.error('❌ 학습된 카테고리 조회 실패:', error);
+        return null;
+    }
+}
+
+// 매출 자동 완성 데이터 로드
+async function loadIncomeAutoCompleteData(inputElement) {
+    try {
+        let query = db.collection('income');
+        if (isAdmin) {
+            query = query.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const snapshot = await query.get();
+        const clients = new Set();
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.client) {
+                clients.add(data.client);
+            }
+        });
+        
+        // 견적서 고객도 포함
+        let estimateQuery = db.collection('estimates');
+        if (isAdmin) {
+            estimateQuery = estimateQuery.where('createdBy', '==', currentUser.email);
+        }
+        
+        const estimateSnapshot = await estimateQuery.get();
+        estimateSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.customerName) {
+                clients.add(data.customerName);
+            }
+        });
+        
+        setupAutoComplete(inputElement, Array.from(clients));
+        
+    } catch (error) {
+        console.error('❌ 매출 자동 완성 데이터 로드 실패:', error);
+    }
+}
+
+// 경비 자동 완성 데이터 로드
+async function loadExpenseAutoCompleteData(inputElement) {
+    try {
+        let query = db.collection('expense');
+        if (isAdmin) {
+            query = query.where('adminEmail', '==', currentUser.email);
+        }
+        
+        const snapshot = await query.get();
+        const vendors = new Set();
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.vendor) {
+                vendors.add(data.vendor);
+            }
+        });
+        
+        setupAutoComplete(inputElement, Array.from(vendors));
+        
+    } catch (error) {
+        console.error('❌ 경비 자동 완성 데이터 로드 실패:', error);
+    }
+}
+
+// 자동 완성 UI 설정
+function setupAutoComplete(inputElement, dataList) {
+    // 기존 datalist 제거
+    const existingDatalist = document.getElementById(inputElement.id + '_datalist');
+    if (existingDatalist) {
+        existingDatalist.remove();
+    }
+    
+    // 새로운 datalist 생성
+    const datalist = document.createElement('datalist');
+    datalist.id = inputElement.id + '_datalist';
+    
+    dataList.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item;
+        datalist.appendChild(option);
+    });
+    
+    // input에 datalist 연결
+    inputElement.setAttribute('list', datalist.id);
+    inputElement.parentNode.appendChild(datalist);
+    
+    console.log(`📝 자동 완성 설정 완료: ${dataList.length}개 항목`);
+}
+
+// Firebase 캐시 강제 정리 함수
+async function clearFirebaseCache() {
+    console.log('🧹 Firebase 캐시 정리 시작...');
+    
+    try {
+        // 모든 리스너 정리
+        cleanupFirebaseListeners();
+        
+        // 네트워크 비활성화 후 재활성화
+        if (db) {
+            await db.disableNetwork();
+            console.log('📴 Firebase 네트워크 비활성화');
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await db.enableNetwork();
+            console.log('📶 Firebase 네트워크 재활성화');
+        }
+        
+        // 쿼리 큐 정리
+        queryQueue.clear();
+        
+        console.log('✅ Firebase 캐시 정리 완료');
+        showNotification('Firebase 캐시가 정리되었습니다.', 'success');
+        
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Firebase 캐시 정리 실패:', error);
+        showNotification('캐시 정리에 실패했습니다: ' + error.message, 'error');
+        return false;
+    }
+}
+
+// 관리자 상태 디버깅 함수
+function checkAdminStatus() {
+    console.log('🔍 관리자 상태 확인:');
+    console.log('  - currentUser:', currentUser);
+    console.log('  - isAdmin:', isAdmin);
+    console.log('  - ADMIN_EMAILS:', ADMIN_EMAILS);
+    
+    if (currentUser && currentUser.email) {
+        console.log('  - 현재 사용자 이메일:', currentUser.email);
+        console.log('  - 관리자 이메일 포함 여부:', ADMIN_EMAILS.includes(currentUser.email));
+        
+        if (!isAdmin && ADMIN_EMAILS.includes(currentUser.email)) {
+            console.log('⚠️ 관리자 이메일이지만 isAdmin이 false입니다. setupAdminUser() 실행을 권장합니다.');
+        }
+    } else {
+        console.log('❌ 로그인되지 않았습니다.');
+    }
+    
+    return {
+        currentUser,
+        isAdmin,
+        adminEmails: ADMIN_EMAILS,
+        isLoggedIn: !!currentUser,
+        isAdminEmail: currentUser ? ADMIN_EMAILS.includes(currentUser.email) : false,
+        canAccessTax: isAdmin && currentUser && ADMIN_EMAILS.includes(currentUser.email)
+    };
+}
+
+// 관리자 권한 확인 및 자동 수정 함수
+function verifyAndFixAdminStatus() {
+    console.log('🔧 관리자 권한 확인 및 수정 중...');
+    
+    const status = checkAdminStatus();
+    console.log('📊 상태 확인 결과:', status);
+    
+    // 관리자 이메일로 로그인했지만 권한이 없는 경우 수정
+    if (status.isLoggedIn && status.isAdminEmail && !status.isAdmin) {
+        console.log('🔧 관리자 권한 자동 수정 중...');
+        isAdmin = true;
+        console.log('✅ 관리자 권한이 설정되었습니다.');
+        
+        // UI 업데이트
+        updateUI();
+        
+        showNotification('관리자 권한이 활성화되었습니다.', 'success');
+        return true;
+    }
+    
+    return status.canAccessTax;
+}
+
+// PDF 라이브러리 로딩 체크 및 대기 함수 (개선된 버전)
+async function waitForJsPDFLibrary(maxWaitTime = 15000, showProgress = true) {
+    console.log('📄 jsPDF 라이브러리 로딩 확인 중...');
+    
+    // 이미 로드된 경우
+    if (typeof window.jspdf !== 'undefined' && window.jspdf.jsPDF) {
+        console.log('✅ jsPDF 라이브러리가 이미 로드되어 있습니다.');
+        if (showProgress) {
+            showNotification('PDF 라이브러리 로딩 완료', 'success');
+        }
+        return true;
+    }
+    
+    // 프로그레스 표시를 위한 변수
+    let progressCounter = 0;
+    const maxProgress = Math.floor(maxWaitTime / 100);
+    
+    if (showProgress) {
+        showNotification('PDF 라이브러리 로딩 중... (0%)', 'info');
+    }
+    
+    // 로딩 대기 (개선된 버전)
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < maxWaitTime) {
+        // 라이브러리 로딩 체크
+        if (typeof window.jspdf !== 'undefined' && window.jspdf.jsPDF) {
+            console.log('✅ jsPDF 라이브러리 로딩 완료');
+            if (showProgress) {
+                showNotification('PDF 라이브러리 로딩 완료!', 'success');
+            }
+            return true;
+        }
+        
+        // 진행률 계산 및 표시
+        progressCounter++;
+        if (showProgress && progressCounter % 10 === 0) { // 1초마다 업데이트
+            const progress = Math.min(Math.floor((progressCounter / maxProgress) * 100), 99);
+            showNotification(`PDF 라이브러리 로딩 중... (${progress}%)`, 'info');
+        }
+        
+        // 중간에 수동으로 라이브러리 로드 시도
+        if (progressCounter === 30) { // 3초 후 수동 로드 시도
+            console.log('🔄 jsPDF 라이브러리 수동 로드 시도...');
+            await tryLoadJsPDFManually();
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    console.error('❌ jsPDF 라이브러리 로딩 실패 - 시간 초과');
+    
+    if (showProgress) {
+        showNotification('PDF 라이브러리 로딩에 실패했습니다. 재시도 중...', 'warning');
+        
+        // 마지막으로 수동 로드 시도
+        const manualLoadSuccess = await tryLoadJsPDFManually();
+        if (manualLoadSuccess) {
+            showNotification('PDF 라이브러리 로딩 성공!', 'success');
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// jsPDF 라이브러리 수동 로드 함수
+async function tryLoadJsPDFManually() {
+    try {
+        console.log('🔧 jsPDF 수동 로드 시도...');
+        
+        // 기존 스크립트 태그 확인
+        const existingScript = document.querySelector('script[src*="jspdf"]');
+        if (existingScript) {
+            console.log('📄 기존 jsPDF 스크립트 태그 발견');
+        }
+        
+        // 다른 CDN으로 시도
+        const cdnUrls = [
+            'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+            'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
+            'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'
+        ];
+        
+        for (const url of cdnUrls) {
+            try {
+                console.log(`🌐 CDN 시도: ${url}`);
+                
+                // 새로운 스크립트 태그 생성
+                const script = document.createElement('script');
+                script.src = url;
+                script.async = false;
+                
+                // 로딩 완료 대기
+                const loaded = await new Promise((resolve) => {
+                    script.onload = () => {
+                        console.log(`✅ CDN 로드 성공: ${url}`);
+                        resolve(true);
+                    };
+                    script.onerror = () => {
+                        console.log(`❌ CDN 로드 실패: ${url}`);
+                        resolve(false);
+                    };
+                    
+                    // 타임아웃 설정
+                    setTimeout(() => {
+                        console.log(`⏰ CDN 로드 타임아웃: ${url}`);
+                        resolve(false);
+                    }, 5000);
+                    
+                    document.head.appendChild(script);
+                });
+                
+                if (loaded && typeof window.jspdf !== 'undefined' && window.jspdf.jsPDF) {
+                    console.log('✅ jsPDF 수동 로드 성공');
+                    return true;
+                }
+                
+            } catch (error) {
+                console.warn(`⚠️ CDN 로드 오류: ${url}`, error);
+            }
+        }
+        
+        return false;
+        
+    } catch (error) {
+        console.error('❌ jsPDF 수동 로드 실패:', error);
+        return false;
+    }
+}
+
+// PDF 라이브러리 상태 확인 함수
+function checkPDFLibraryStatus() {
+    const status = {
+        jsPDF: typeof window.jspdf !== 'undefined' && window.jspdf.jsPDF,
+        html2canvas: typeof html2canvas !== 'undefined',
+        scriptTags: {
+            jsPDF: !!document.querySelector('script[src*="jspdf"]'),
+            html2canvas: !!document.querySelector('script[src*="html2canvas"]')
+        }
+    };
+    
+    console.log('📊 PDF 라이브러리 상태:', status);
+    return status;
+}
+
+// QR코드 라이브러리 로딩 체크 및 대기 함수
+async function waitForQRCodeLibrary(maxWaitTime = 10000) {
+    console.log('🔗 QRCode 라이브러리 로딩 확인 중...');
+    
+    // 이미 로드된 경우
+    if (typeof QRCode !== 'undefined') {
+        console.log('✅ QRCode 라이브러리가 이미 로드되어 있습니다.');
+        return true;
+    }
+    
+    // 로딩 대기
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitTime) {
+        if (typeof QRCode !== 'undefined') {
+            console.log('✅ QRCode 라이브러리 로딩 완료');
+            return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    console.error('❌ QRCode 라이브러리 로딩 실패 - 시간 초과');
+    return false;
+}
+
+// Target ID 충돌 해결 함수 (사용자용)
+async function fixTargetIdConflict() {
+    console.log('🔧 사용자 요청으로 Target ID 충돌 해결 시도');
+    showNotification('Target ID 충돌을 해결하고 있습니다...', 'info');
+    
+    try {
+        // 1. 모든 리스너 정리
+        cleanupFirebaseListeners();
+        
+        // 2. 잠시 대기
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // 3. Firebase 네트워크 재설정
+        if (db) {
+            await db.disableNetwork();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await db.enableNetwork();
+        }
+        
+        // 4. 대시보드 데이터 다시 로드
+        if (currentUser) {
+            await loadDashboardData();
+        }
+        
+        showNotification('Target ID 충돌이 해결되었습니다. 정상적으로 작동합니다.', 'success');
+        console.log('✅ Target ID 충돌 해결 완료');
+        
+    } catch (error) {
+        console.error('❌ Target ID 충돌 해결 실패:', error);
+        showNotification('충돌 해결에 실패했습니다. 페이지를 새로고침해주세요.', 'error');
+    }
+}
+
+// 전역 함수 등록
+window.clearFirebaseCache = clearFirebaseCache;
+window.checkAdminStatus = checkAdminStatus;
+window.verifyAndFixAdminStatus = verifyAndFixAdminStatus;
+window.waitForJsPDFLibrary = waitForJsPDFLibrary;
+window.waitForQRCodeLibrary = waitForQRCodeLibrary;
+window.tryLoadJsPDFManually = tryLoadJsPDFManually;
+window.checkPDFLibraryStatus = checkPDFLibraryStatus;
+window.fixPDFLibraryIssue = fixPDFLibraryIssue;
+window.showPDFLibraryHelp = showPDFLibraryHelp;
+window.showConsoleHelp = showConsoleHelp;
+window.fixTargetIdConflict = fixTargetIdConflict;
+window.loadTaxationData = loadTaxationData;
+window.showIncomeModal = showIncomeModal;
+window.closeIncomeModal = closeIncomeModal;
+window.calculateIncomeTotal = calculateIncomeTotal;
+window.setupIncomeAutoComplete = setupIncomeAutoComplete;
+window.saveIncomeData = saveIncomeData;
+window.showExpenseModal = showExpenseModal;
+window.closeExpenseModal = closeExpenseModal;
+window.calculateExpenseTotal = calculateExpenseTotal;
+window.setupExpenseAutoComplete = setupExpenseAutoComplete;
+window.saveExpenseData = saveExpenseData;
+window.suggestIncomeCategory = suggestIncomeCategory;
+window.suggestExpenseCategory = suggestExpenseCategory;
+window.showCategorySuggestion = showCategorySuggestion;
+window.addSmartSuggestionBadge = addSmartSuggestionBadge;
+window.removeSmartSuggestionBadge = removeSmartSuggestionBadge;
+window.getRecommendationReason = getRecommendationReason;
+window.saveClientCategoryLearning = saveClientCategoryLearning;
+window.findLearnedCategory = findLearnedCategory;
+window.setupAutoComplete = setupAutoComplete;
+window.showSalaryModal = showSalaryModal;
+window.closeSalaryModal = closeSalaryModal;
+window.showSalaryTab = showSalaryTab;
+window.cancelAddEmployee = cancelAddEmployee;
+window.saveEmployee = saveEmployee;
+window.editEmployee = editEmployee;
+window.deleteEmployee = deleteEmployee;
+window.paySalary = paySalary;
+window.showTaxReport = showTaxReport;
+window.setupAdminUser = setupAdminUser;
+window.showTaxReportOptions = showTaxReportOptions;
+window.closeVatReportModal = closeVatReportModal;
+window.showVatTab = showVatTab;
+window.generateVatReport = generateVatReport;
+window.generateMonthlyReport = generateMonthlyReport;
+window.generateQuarterlyReport = generateQuarterlyReport;
+window.generateYearlyReport = generateYearlyReport;
+window.showTaxHelpCenter = showTaxHelpCenter;
+window.closeTaxHelpModal = closeTaxHelpModal;
+window.showHelpTab = showHelpTab;
+window.toggleFAQ = toggleFAQ;
+window.enableBeginnerMode = enableBeginnerMode;
+window.disableBeginnerMode = disableBeginnerMode;
+window.showTaxTermPopup = showTaxTermPopup;
+window.toggleCategoryView = toggleCategoryView;
+window.showAllTransactions = showAllTransactions;
+
 // 월별 다운로드 관련 함수들을 전역으로 등록
 window.showMonthlyEstimateModal = showMonthlyEstimateModal;
 window.closeMonthlyEstimateModal = closeMonthlyEstimateModal;
 window.downloadMonthlyEstimates = downloadMonthlyEstimates;
 window.getEstimatesByMonth = getEstimatesByMonth;
+
+// 누락된 전역 함수들 추가
+window.showAddEmployeeForm = showAddEmployeeForm;
+window.loadSalaryCalculation = loadSalaryCalculation;
+window.loadSalaryHistory = loadSalaryHistory;
+window.saveInsuranceSettings = saveInsuranceSettings;
+window.exportVatData = exportVatData;
+window.generateVatPDF = generateVatPDF;
+window.runVatSimulation = runVatSimulation;
+window.updateMaintenanceStatus = updateMaintenanceStatus;
+window.generatePayslip = generatePayslip;
+window.viewSalaryDetail = viewSalaryDetail;
+window.downloadPayslip = downloadPayslip;
+
+// Firebase 연결 관련 함수들 전역 노출
+window.checkFirebaseConnection = checkFirebaseConnection;
+window.attemptFirebaseReconnection = attemptFirebaseReconnection;
+window.monitorFirebaseConnection = monitorFirebaseConnection;
+window.cleanupFirebaseListeners = cleanupFirebaseListeners;
+window.safeFirebaseQuery = safeFirebaseQuery;
+
+// 정비이력 로딩 디버깅 함수 (브라우저 콘솔에서 실행 가능)
+async function debugMaintenanceLoading() {
+    console.log('🔍 정비이력 로딩 디버깅 시작...');
+    
+    // 1. 사용자 정보 확인
+    console.log('👤 현재 사용자 정보:', {
+        uid: currentUser?.uid,
+        email: currentUser?.email,
+        carNumber: currentUser?.carNumber,
+        role: currentUser?.role,
+        isAdmin: isAdmin
+    });
+    
+    // 2. Firebase 연결 상태 확인
+    console.log('🔥 Firebase 연결 상태:', {
+        dbInitialized: !!db,
+        firebaseLoaded: typeof firebase !== 'undefined'
+    });
+    
+    if (!db) {
+        console.error('❌ Firebase 데이터베이스 초기화되지 않음');
+        return;
+    }
+    
+    try {
+        // 3. 전체 정비 이력 수 확인
+        const totalSnapshot = await db.collection('maintenance').get();
+        console.log('📊 전체 정비 이력 수:', totalSnapshot.size);
+        
+        // 4. 각 정비 이력의 상세 정보 확인
+        const allMaintenances = [];
+        totalSnapshot.forEach(doc => {
+            const data = doc.data();
+            allMaintenances.push({
+                id: doc.id,
+                carNumber: data.carNumber,
+                adminEmail: data.adminEmail,
+                type: data.type,
+                date: data.date,
+                status: data.status
+            });
+        });
+        
+        console.log('📋 모든 정비 이력:', allMaintenances);
+        
+        // 5. 권한별 필터링 시뮬레이션
+        if (!isAdmin && currentUser?.carNumber) {
+            const userFiltered = allMaintenances.filter(m => m.carNumber === currentUser.carNumber);
+            console.log('🚗 사용자 차량번호로 필터링된 이력:', userFiltered);
+        } else if (isAdmin && currentUser?.email) {
+            const adminFiltered = allMaintenances.filter(m => m.adminEmail === currentUser.email);
+            console.log('👨‍💼 관리자 이메일로 필터링된 이력:', adminFiltered);
+        }
+        
+        showNotification('정비이력 디버깅 완료 - 콘솔을 확인하세요', 'info');
+        
+    } catch (error) {
+        console.error('❌ 정비이력 디버깅 실패:', error);
+        showNotification('정비이력 디버깅 실패: ' + error.message, 'error');
+    }
+}
+
+// 디버깅 함수를 전역으로 노출
+window.debugMaintenanceLoading = debugMaintenanceLoading;
+
+// 전역 함수로 노출
+window.debugMaintenanceLoading = debugMaintenanceLoading;
+
+// closeDetailModal 함수 정의 (closeMaintenanceDetailModal과 동일)
+window.closeDetailModal = function() {
+    console.log('closeDetailModal 호출됨 - closeMaintenanceDetailModal로 리다이렉트');
+    closeMaintenanceDetailModal();
+};
+
+// 🔧 PDF 한글 폰트 지원 함수들
+function setupKoreanPDFFont(pdf) {
+    try {
+        console.log('📄 PDF 한글 폰트 설정 중...');
+        
+        // 한글 지원을 위한 폰트 설정
+        // 기본 폰트로 시작하되 한글 텍스트 처리 개선
+        pdf.setFont('helvetica', 'normal');
+        
+        // 한글 텍스트를 위한 인코딩 설정
+        if (pdf.internal && pdf.internal.getFont) {
+            const font = pdf.internal.getFont();
+            if (font && font.encoding) {
+                // UTF-8 인코딩 강제 설정
+                font.encoding = 'UTF-8';
+            }
+        }
+        
+        console.log('✅ PDF 한글 폰트 설정 완료');
+        return true;
+    } catch (error) {
+        console.warn('⚠️ PDF 한글 폰트 설정 실패:', error);
+        // 기본 설정으로 fallback
+        pdf.setFont('helvetica', 'normal');
+        return false;
+    }
+}
+
+// 🔧 PDF 한글 텍스트 안전 출력 함수
+function addKoreanText(pdf, text, x, y, options = {}) {
+    try {
+        // 한글 텍스트 전처리
+        const processedText = text.toString().trim();
+        
+        // 텍스트가 비어있으면 건너뛰기
+        if (!processedText) return;
+        
+        // 한글 포함 여부 확인
+        const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(processedText);
+        
+        if (hasKorean) {
+            // 한글이 포함된 경우 특별 처리
+            // UTF-8 바이트 배열로 변환하여 처리
+            try {
+                const bytes = new TextEncoder().encode(processedText);
+                const decoded = new TextDecoder('utf-8').decode(bytes);
+                pdf.text(decoded, x, y, options);
+            } catch (encodeError) {
+                // 인코딩 실패 시 원본 텍스트 사용
+                console.warn('⚠️ 텍스트 인코딩 실패, 원본 사용:', processedText);
+                pdf.text(processedText, x, y, options);
+            }
+        } else {
+            // 영어/숫자만 있는 경우 기본 처리
+            pdf.text(processedText, x, y, options);
+        }
+    } catch (error) {
+        console.warn('⚠️ PDF 텍스트 출력 실패:', error, '텍스트:', text);
+        // 기본 출력으로 fallback
+        try {
+            pdf.text(text.toString(), x, y, options);
+        } catch (fallbackError) {
+            console.error('❌ PDF 텍스트 fallback도 실패:', fallbackError);
+        }
+    }
+}
+
+// 🎨 HTML 방식 부가세 신고서 PDF 생성 (한글 문제 해결)
+async function generateVatPDFFromHTML(year, quarter, startMonth, endMonth, incomeData, expenseData, vatData) {
+    try {
+        console.log('📄 부가세 신고서 PDF 변환 시작... (HTML → 이미지 → PDF)');
+        
+        // HTML 템플릿 생성
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+        const deadline = getVatFilingDeadline(year, quarter);
+        
+        const vatHTML = `
+            <div style="
+                width: 794px; 
+                padding: 40px; 
+                background: white; 
+                font-family: 'Noto Sans KR', 'Inter', sans-serif;
+                color: #333;
+                font-size: 14px;
+                line-height: 1.5;
+            ">
+                <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #333; padding-bottom: 20px;">
+                    <h1 style="margin: 0; font-size: 32px; font-weight: bold; color: #333;">부가가치세 신고서</h1>
+                    <p style="margin: 15px 0 5px 0; font-size: 18px; color: #666;">신고기간: ${year}년 ${quarter}분기 (${startMonth}월 ~ ${endMonth}월)</p>
+                    <p style="margin: 0; font-size: 14px; color: #999;">신고일자: ${todayStr}</p>
+                </div>
+                
+                <div style="margin-bottom: 30px; background: #f8f9fa; padding: 25px; border-radius: 12px;">
+                    <h3 style="margin: 0 0 20px 0; color: #333; font-size: 20px;">사업자 정보</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div>
+                            <p style="margin: 8px 0; font-size: 16px;"><strong>사업자명:</strong> 투훈스 게러지</p>
+                            <p style="margin: 8px 0; font-size: 16px;"><strong>업태:</strong> 서비스업</p>
+                        </div>
+                        <div>
+                            <p style="margin: 8px 0; font-size: 16px;"><strong>사업자등록번호:</strong> 123-45-67890</p>
+                            <p style="margin: 8px 0; font-size: 16px;"><strong>종목:</strong> 이륜차정비</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 30px;">
+                    <h3 style="margin: 0 0 20px 0; color: #333; font-size: 22px; border-left: 5px solid #333; padding-left: 15px;">1. 매출 현황</h3>
+                    <div style="background: #f8f9fa; padding: 25px; border-radius: 12px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 25px; text-align: center;">
+                            <div style="background: white; padding: 20px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 16px;">공급가액</p>
+                                <p style="margin: 0; font-size: 20px; font-weight: bold; color: #333;">${incomeData.totalSupply.toLocaleString()}원</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 16px;">부가세액</p>
+                                <p style="margin: 0; font-size: 20px; font-weight: bold; color: #333;">${incomeData.totalVat.toLocaleString()}원</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 16px;">합계</p>
+                                <p style="margin: 0; font-size: 20px; font-weight: bold; color: #333;">${incomeData.totalIncome.toLocaleString()}원</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 30px;">
+                    <h3 style="margin: 0 0 20px 0; color: #333; font-size: 22px; border-left: 5px solid #333; padding-left: 15px;">2. 매입 현황</h3>
+                    <div style="background: #f8f9fa; padding: 25px; border-radius: 12px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; text-align: center;">
+                            <div style="background: white; padding: 20px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 14px;">공급가액</p>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #333;">${expenseData.totalSupply.toLocaleString()}원</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 14px;">부가세액</p>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #333;">${expenseData.totalVat.toLocaleString()}원</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 14px;">매입세액공제</p>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #333;">${expenseData.deductibleVat.toLocaleString()}원</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 14px;">합계</p>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #333;">${expenseData.totalExpense.toLocaleString()}원</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 40px;">
+                    <h3 style="margin: 0 0 20px 0; color: #333; font-size: 22px; border-left: 5px solid #333; padding-left: 15px;">3. 부가세 계산</h3>
+                    <div style="background: #f8f9fa; padding: 25px; border-radius: 12px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 20px;">
+                            <div style="background: white; padding: 20px; border-radius: 8px; text-align: center;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 16px;">매출세액</p>
+                                <p style="margin: 0; font-size: 20px; font-weight: bold; color: #333;">${incomeData.totalVat.toLocaleString()}원</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-radius: 8px; text-align: center;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 16px;">매입세액공제</p>
+                                <p style="margin: 0; font-size: 20px; font-weight: bold; color: #333;">${expenseData.deductibleVat.toLocaleString()}원</p>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; padding: 25px; background: white; border-radius: 12px; border: 3px solid #333;">
+                            ${vatData.vatToPay > 0 ? `
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 18px;">납부할 세액</p>
+                                <p style="margin: 0; font-size: 28px; font-weight: bold; color: #333;">${vatData.vatToPay.toLocaleString()}원</p>
+                            ` : vatData.refundAmount > 0 ? `
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 18px;">환급받을 세액</p>
+                                <p style="margin: 0; font-size: 28px; font-weight: bold; color: #333;">${vatData.refundAmount.toLocaleString()}원</p>
+                            ` : `
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 18px;">납부할 세액</p>
+                                <p style="margin: 0; font-size: 28px; font-weight: bold; color: #333;">0원</p>
+                            `}
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 40px;">
+                    <h3 style="margin: 0 0 20px 0; color: #333; font-size: 22px; border-left: 5px solid #333; padding-left: 15px;">신고 및 납부 일정</h3>
+                    <div style="background: #f8f9fa; padding: 25px; border-radius: 12px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; text-align: center;">
+                            <div style="background: white; padding: 20px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 16px;">신고 마감일</p>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #333;">${deadline}</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-radius: 8px;">
+                                <p style="margin: 0 0 8px 0; color: #333; font-size: 16px;">납부 마감일</p>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #333;">${deadline}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 50px; text-align: center; border-top: 2px solid #ddd; padding-top: 30px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; text-align: center;">
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                            <p style="margin: 0 0 15px 0; font-size: 16px;">신고인</p>
+                            <p style="margin: 0; font-size: 18px; font-weight: bold;">투훈스 게러지 (인)</p>
+                        </div>
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                            <p style="margin: 0 0 15px 0; font-size: 16px;">작성일</p>
+                            <p style="margin: 0; font-size: 18px; font-weight: bold;">${todayStr}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 40px; font-size: 14px; color: #999;">- 1 -</div>
+            </div>
+        `;
+        
+        // 임시 div 생성
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = vatHTML;
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        tempDiv.style.background = 'white';
+        document.body.appendChild(tempDiv);
+        
+        // 잠시 대기 (DOM 렌더링 완료 대기)
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // html2canvas로 이미지 생성
+        const canvas = await html2canvas(tempDiv.firstElementChild, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            width: 794,
+            allowTaint: true,
+            useCORS: true,
+            logging: false
+        });
+        
+        // 임시 div 제거
+        document.body.removeChild(tempDiv);
+        
+        // PDF 생성
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        // 캔버스를 이미지로 변환
+        const imgData = canvas.toDataURL('image/png');
+        
+        // A4 크기 계산
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        // 이미지 크기 조정
+        const imgWidth = pdfWidth;
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        // 페이지가 길면 여러 페이지로 분할
+        let position = 0;
+        let pageHeight = pdfHeight;
+        
+        while (position < imgHeight) {
+            // 현재 페이지에 이미지 추가
+            pdf.addImage(
+                imgData, 
+                'PNG', 
+                0, 
+                position === 0 ? 0 : -position, 
+                imgWidth, 
+                imgHeight
+            );
+            
+            position += pageHeight;
+            
+            // 다음 페이지가 필요하면 추가
+            if (position < imgHeight) {
+                pdf.addPage();
+            }
+        }
+        
+        // PDF 저장
+        const fileName = `부가세신고서_${year}년_${quarter}분기.pdf`;
+        pdf.save(fileName);
+        
+        console.log('✅ 부가세 신고서 PDF 생성 완료 (한글 문제 해결됨!)');
+        
+    } catch (error) {
+        console.error('❌ 부가세 신고서 PDF 생성 오류:', error);
+        throw error;
+    }
+}

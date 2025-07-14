@@ -19,26 +19,24 @@
     <!-- Preload Critical Resources -->
     <link rel="preload" href="logo.png" as="image" type="image/png">
     
-    <!-- Fonts (Optimized) -->
+    <!-- Fonts (Optimized) - 한글+영문 통합, 불필요한 weight 제거 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Bootstrap (Grid & Utilities Only) -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap-grid.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap-utilities.min.css" rel="stylesheet">
+    <!-- Bootstrap 제거: 실제 사용량 적어서 직접 구현이 더 효율적 -->
     
     <!-- Custom Styles -->
     <link rel="stylesheet" href="styles.css">
     
     <!-- Firebase (Optimized Loading) -->
-    <script defer src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
     <script defer src="firebase-config.js"></script>
     
     <!-- PDF Generation (Lazy Load) -->
@@ -260,6 +258,156 @@
                 </div>
             </div>
         </div>
+
+        <!-- Taxation Screen -->
+        <div id="taxationScreen" class="screen">
+            <!-- Taxation Header -->
+            <div class="taxation-header">
+                <div class="taxation-title">
+                    <h1>
+                        <i class="fas fa-calculator"></i>
+                        세무 관리
+                        <button class="help-toggle-btn" onclick="showTaxHelpCenter()" title="세무 도움말">
+                            <i class="fas fa-question-circle"></i>
+                        </button>
+                    </h1>
+                    <p class="taxation-subtitle">간편한 세무 관리 솔루션</p>
+                </div>
+                <div class="taxation-period">
+                    <select id="taxationYear" class="period-select">
+                        <option value="2024">2024년</option>
+                        <option value="2023">2023년</option>
+                    </select>
+                    <select id="taxationQuarter" class="period-select">
+                        <option value="1">1분기</option>
+                        <option value="2">2분기</option>
+                        <option value="3">3분기</option>
+                        <option value="4">4분기</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Taxation Summary Cards -->
+            <div class="taxation-summary">
+                <div class="tax-card income-card">
+                    <div class="tax-card-header">
+                        <i class="fas fa-arrow-up"></i>
+                        <h3>매출</h3>
+                    </div>
+                    <div class="tax-card-body">
+                        <div class="tax-amount" id="totalIncome">0원</div>
+                        <div class="tax-detail">
+                            <span>공급가액: <span id="incomeSupply">0원</span></span>
+                            <span>부가세: <span id="incomeVat">0원</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tax-card expense-card">
+                    <div class="tax-card-header">
+                        <i class="fas fa-arrow-down"></i>
+                        <h3>매입</h3>
+                    </div>
+                    <div class="tax-card-body">
+                        <div class="tax-amount" id="totalExpense">0원</div>
+                        <div class="tax-detail">
+                            <span>공급가액: <span id="expenseSupply">0원</span></span>
+                            <span>부가세: <span id="expenseVat">0원</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tax-card vat-card">
+                    <div class="tax-card-header">
+                        <i class="fas fa-percent"></i>
+                        <h3>부가세</h3>
+                    </div>
+                    <div class="tax-card-body">
+                        <div class="tax-amount" id="vatToPay">0원</div>
+                        <div class="tax-detail">
+                            <span>납부예정액</span>
+                            <span class="vat-status" id="vatStatus">미신고</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tax-card calendar-card">
+                    <div class="tax-card-header">
+                        <i class="fas fa-calendar-alt"></i>
+                        <h3>신고일정</h3>
+                    </div>
+                    <div class="tax-card-body">
+                        <div class="tax-amount" id="nextDeadline">D-15</div>
+                        <div class="tax-detail">
+                            <span>부가세 신고</span>
+                            <span>2024.04.25</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Taxation Quick Actions -->
+            <div class="taxation-actions">
+                <button class="tax-action-btn primary" onclick="showIncomeModal()">
+                    <i class="fas fa-plus"></i>
+                    <span>매출 등록</span>
+                </button>
+                <button class="tax-action-btn secondary" onclick="showExpenseModal()">
+                    <i class="fas fa-minus"></i>
+                    <span>경비 등록</span>
+                </button>
+                <button class="tax-action-btn accent" onclick="showSalaryModal()">
+                    <i class="fas fa-users"></i>
+                    <span>급여 관리</span>
+                </button>
+                <button class="tax-action-btn info" onclick="showTaxReport()">
+                    <i class="fas fa-file-alt"></i>
+                    <span>부가세 신고</span>
+                </button>
+                <button class="tax-action-btn warning" onclick="showTaxReportOptions()">
+                    <i class="fas fa-download"></i>
+                    <span>세무 리포트</span>
+                </button>
+                <button class="tax-action-btn danger" onclick="showPDFLibraryHelp()" title="PDF 생성 문제가 있을 때 사용하세요">
+                    <i class="fas fa-wrench"></i>
+                    <span>PDF 문제 해결</span>
+                </button>
+            </div>
+
+            <!-- Taxation Categories -->
+            <div class="taxation-categories">
+                <div class="category-header">
+                    <h3>
+                        <i class="fas fa-chart-pie"></i>
+                        분류별 현황
+                    </h3>
+                    <button class="category-toggle" onclick="toggleCategoryView()">
+                        <i class="fas fa-expand-alt"></i>
+                    </button>
+                </div>
+                
+                <div class="category-grid" id="categoryGrid">
+                    <!-- 동적으로 생성될 카테고리 카드들 -->
+                </div>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="taxation-recent">
+                <div class="recent-header">
+                    <h3>
+                        <i class="fas fa-clock"></i>
+                        최근 거래
+                    </h3>
+                    <button class="view-all-btn" onclick="showAllTransactions()">
+                        전체보기
+                    </button>
+                </div>
+                
+                <div class="recent-list" id="recentTransactions">
+                    <!-- 동적으로 생성될 최근 거래 목록 -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Floating Action Button -->
@@ -282,6 +430,10 @@
             <i class="fas fa-plus-circle"></i>
             <span>등록</span>
         </button>
+            <button class="nav-item" id="taxationNavItem" data-screen="taxation">
+        <i class="fas fa-calculator"></i>
+        <span>세무</span>
+    </button>
         <button class="nav-item" data-screen="search">
             <i class="fas fa-search"></i>
             <span>검색</span>
@@ -679,6 +831,764 @@
                 <button type="submit" class="btn btn-primary" form="passwordResetForm" id="sendResetBtn">
                     <i class="fas fa-paper-plane"></i>
                     재설정 링크 보내기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Salary Management Modal -->
+    <div id="salaryModal" class="modal-overlay">
+        <div class="modal-container large-modal">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-users"></i>
+                    직원 급여 관리
+                </h2>
+                <button class="modal-close" onclick="closeSalaryModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Salary Management Tabs -->
+                <div class="salary-tabs">
+                    <button class="salary-tab active" data-tab="employees" onclick="showSalaryTab('employees')">
+                        <i class="fas fa-user-plus"></i>
+                        직원 관리
+                    </button>
+                    <button class="salary-tab" data-tab="calculation" onclick="showSalaryTab('calculation')">
+                        <i class="fas fa-calculator"></i>
+                        급여 계산
+                    </button>
+                    <button class="salary-tab" data-tab="history" onclick="showSalaryTab('history')">
+                        <i class="fas fa-history"></i>
+                        지급 이력
+                    </button>
+                    <button class="salary-tab" data-tab="insurance" onclick="showSalaryTab('insurance')">
+                        <i class="fas fa-shield-alt"></i>
+                        4대보험
+                    </button>
+                </div>
+
+                <!-- Employee Management Tab -->
+                <div class="salary-tab-content active" id="employeesTab">
+                    <div class="employee-actions">
+                        <button class="btn btn-primary" onclick="showAddEmployeeForm()">
+                            <i class="fas fa-plus"></i>
+                            직원 추가
+                        </button>
+                        <div class="employee-search">
+                            <input type="text" id="employeeSearch" placeholder="직원 검색..." class="form-control">
+                            <i class="fas fa-search"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="employees-list" id="employeesList">
+                        <!-- 직원 목록이 동적으로 생성됩니다 -->
+                    </div>
+                    
+                    <!-- Add Employee Form -->
+                    <div class="add-employee-form" id="addEmployeeForm" style="display: none;">
+                        <h4>새 직원 등록</h4>
+                        <form id="employeeForm" onsubmit="saveEmployee(event)">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="empName">이름 *</label>
+                                    <input type="text" id="empName" required class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="empId">사번</label>
+                                    <input type="text" id="empId" class="form-control" placeholder="자동생성">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="empPosition">직급</label>
+                                    <select id="empPosition" class="form-control">
+                                        <option value="사원">사원</option>
+                                        <option value="주임">주임</option>
+                                        <option value="대리">대리</option>
+                                        <option value="과장">과장</option>
+                                        <option value="차장">차장</option>
+                                        <option value="부장">부장</option>
+                                        <option value="정비사">정비사</option>
+                                        <option value="정비보조">정비보조</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="empDepartment">부서</label>
+                                    <select id="empDepartment" class="form-control">
+                                        <option value="정비">정비</option>
+                                        <option value="관리">관리</option>
+                                        <option value="영업">영업</option>
+                                        <option value="기타">기타</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="empJoinDate">입사일</label>
+                                    <input type="date" id="empJoinDate" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="empPhone">연락처</label>
+                                    <input type="tel" id="empPhone" class="form-control" placeholder="010-1234-5678">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="empBaseSalary">기본급 (원)</label>
+                                    <input type="number" id="empBaseSalary" class="form-control" placeholder="2000000">
+                                </div>
+                                <div class="form-group">
+                                    <label for="empStatus">상태</label>
+                                    <select id="empStatus" class="form-control">
+                                        <option value="재직">재직</option>
+                                        <option value="휴직">휴직</option>
+                                        <option value="퇴직">퇴직</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" onclick="cancelAddEmployee()">
+                                    <i class="fas fa-times"></i>
+                                    취소
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i>
+                                    저장
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Salary Calculation Tab -->
+                <div class="salary-tab-content" id="calculationTab">
+                    <div class="salary-calc-header">
+                        <div class="calc-period">
+                            <label>급여 기간</label>
+                            <select id="salaryYear" class="form-control">
+                                <option value="2024">2024년</option>
+                                <option value="2023">2023년</option>
+                            </select>
+                            <select id="salaryMonth" class="form-control">
+                                <option value="1">1월</option>
+                                <option value="2">2월</option>
+                                <option value="3">3월</option>
+                                <option value="4">4월</option>
+                                <option value="5">5월</option>
+                                <option value="6">6월</option>
+                                <option value="7">7월</option>
+                                <option value="8">8월</option>
+                                <option value="9">9월</option>
+                                <option value="10">10월</option>
+                                <option value="11">11월</option>
+                                <option value="12">12월</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="loadSalaryCalculation()">
+                            <i class="fas fa-calculator"></i>
+                            급여 계산
+                        </button>
+                    </div>
+                    
+                    <div class="salary-calculation-list" id="salaryCalculationList">
+                        <!-- 급여 계산 목록이 동적으로 생성됩니다 -->
+                    </div>
+                </div>
+
+                <!-- Salary History Tab -->
+                <div class="salary-tab-content" id="historyTab">
+                    <div class="salary-history-header">
+                        <div class="history-filters">
+                            <input type="month" id="historyMonth" class="form-control">
+                            <select id="historyEmployee" class="form-control">
+                                <option value="">전체 직원</option>
+                                <!-- 직원 목록이 동적으로 생성됩니다 -->
+                            </select>
+                        </div>
+                        <button class="btn btn-secondary" onclick="loadSalaryHistory()">
+                            <i class="fas fa-search"></i>
+                            조회
+                        </button>
+                    </div>
+                    
+                    <div class="salary-history-list" id="salaryHistoryList">
+                        <!-- 급여 지급 이력이 동적으로 생성됩니다 -->
+                    </div>
+                </div>
+
+                <!-- Insurance Settings Tab -->
+                <div class="salary-tab-content" id="insuranceTab">
+                    <div class="insurance-settings">
+                        <h4>4대보험 요율 설정</h4>
+                        <div class="insurance-rates">
+                            <div class="rate-item">
+                                <label>국민연금 (4.5%)</label>
+                                <input type="number" id="pensionRate" value="4.5" step="0.1" class="form-control">
+                                <span>%</span>
+                            </div>
+                            <div class="rate-item">
+                                <label>건강보험 (3.545%)</label>
+                                <input type="number" id="healthRate" value="3.545" step="0.001" class="form-control">
+                                <span>%</span>
+                            </div>
+                            <div class="rate-item">
+                                <label>고용보험 (0.9%)</label>
+                                <input type="number" id="employmentRate" value="0.9" step="0.1" class="form-control">
+                                <span>%</span>
+                            </div>
+                            <div class="rate-item">
+                                <label>산재보험 (0.7%)</label>
+                                <input type="number" id="accidentRate" value="0.7" step="0.1" class="form-control">
+                                <span>%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="insurance-limits">
+                            <h5>보험료 상한선</h5>
+                            <div class="limit-item">
+                                <label>국민연금 상한</label>
+                                <input type="number" id="pensionLimit" value="5530000" class="form-control">
+                                <span>원</span>
+                            </div>
+                            <div class="limit-item">
+                                <label>건강보험 상한</label>
+                                <input type="number" id="healthLimit" value="8730000" class="form-control">
+                                <span>원</span>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-primary" onclick="saveInsuranceSettings()">
+                            <i class="fas fa-save"></i>
+                            설정 저장
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeSalaryModal()">
+                    <i class="fas fa-times"></i>
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VAT Report Modal -->
+    <div id="vatReportModal" class="modal-overlay">
+        <div class="modal-container large-modal">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-percentage"></i>
+                    부가세 신고 준비
+                </h2>
+                <button class="modal-close" onclick="closeVatReportModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- VAT Report Tabs -->
+                <div class="vat-tabs">
+                    <button class="vat-tab active" data-tab="report" onclick="showVatTab('report')">
+                        <i class="fas fa-file-alt"></i>
+                        신고서 작성
+                    </button>
+                    <button class="vat-tab" data-tab="simulation" onclick="showVatTab('simulation')">
+                        <i class="fas fa-calculator"></i>
+                        납부액 시뮬레이션
+                    </button>
+                    <button class="vat-tab" data-tab="schedule" onclick="showVatTab('schedule')">
+                        <i class="fas fa-calendar-check"></i>
+                        신고 일정
+                    </button>
+                    <button class="vat-tab" data-tab="analysis" onclick="showVatTab('analysis')">
+                        <i class="fas fa-chart-line"></i>
+                        분석 리포트
+                    </button>
+                </div>
+
+                <!-- VAT Report Tab -->
+                <div class="vat-tab-content active" id="reportTab">
+                    <div class="vat-report-header">
+                        <div class="report-period-selector">
+                            <label>신고 기간</label>
+                            <select id="vatReportYear" class="form-control">
+                                <option value="2024">2024년</option>
+                                <option value="2023">2023년</option>
+                            </select>
+                            <select id="vatReportQuarter" class="form-control">
+                                <option value="1">1분기 (1-3월)</option>
+                                <option value="2">2분기 (4-6월)</option>
+                                <option value="3">3분기 (7-9월)</option>
+                                <option value="4">4분기 (10-12월)</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="generateVatReport()">
+                                <i class="fas fa-file-pdf"></i>
+                                신고서 생성
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- VAT Report Summary -->
+                    <div class="vat-report-summary" id="vatReportSummary">
+                        <!-- 동적으로 생성될 부가세 신고서 요약 -->
+                    </div>
+                    
+                    <!-- VAT Report Details -->
+                    <div class="vat-report-details" id="vatReportDetails">
+                        <!-- 동적으로 생성될 부가세 신고서 상세 내역 -->
+                    </div>
+                    
+                    <!-- VAT Report Actions -->
+                    <div class="vat-report-actions">
+                        <button class="btn btn-secondary" onclick="exportVatData('excel')">
+                            <i class="fas fa-file-excel"></i>
+                            엑셀로 내보내기
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportVatData('csv')">
+                            <i class="fas fa-file-csv"></i>
+                            CSV로 내보내기
+                        </button>
+                        <button class="btn btn-success" onclick="generateVatPDF()">
+                            <i class="fas fa-file-pdf"></i>
+                            PDF 신고서 생성
+                        </button>
+                    </div>
+                </div>
+
+                <!-- VAT Simulation Tab -->
+                <div class="vat-tab-content" id="simulationTab">
+                    <div class="vat-simulation">
+                        <h4>부가세 납부액 시뮬레이션</h4>
+                        
+                        <div class="simulation-inputs">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="simIncomeAmount">예상 매출 (공급가액)</label>
+                                    <input type="number" id="simIncomeAmount" class="form-control" placeholder="10000000">
+                                </div>
+                                <div class="form-group">
+                                    <label for="simExpenseAmount">예상 매입 (공급가액)</label>
+                                    <input type="number" id="simExpenseAmount" class="form-control" placeholder="5000000">
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-primary" onclick="runVatSimulation()">
+                                <i class="fas fa-calculator"></i>
+                                시뮬레이션 실행
+                            </button>
+                        </div>
+                        
+                        <div class="simulation-result" id="simulationResult">
+                            <!-- 시뮬레이션 결과가 표시될 영역 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VAT Schedule Tab -->
+                <div class="vat-tab-content" id="scheduleTab">
+                    <div class="vat-schedule">
+                        <h4>부가세 신고 일정</h4>
+                        
+                        <div class="schedule-timeline" id="scheduleTimeline">
+                            <!-- 신고 일정이 표시될 영역 -->
+                        </div>
+                        
+                        <div class="checklist-section">
+                            <h5>신고 준비 체크리스트</h5>
+                            <div class="vat-checklist" id="vatChecklist">
+                                <!-- 체크리스트가 표시될 영역 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VAT Analysis Tab -->
+                <div class="vat-tab-content" id="analysisTab">
+                    <div class="vat-analysis">
+                        <h4>부가세 분석 리포트</h4>
+                        
+                        <div class="analysis-charts">
+                            <div class="chart-container">
+                                <canvas id="vatTrendChart" width="400" height="200"></canvas>
+                            </div>
+                            
+                            <div class="chart-container">
+                                <canvas id="vatBreakdownChart" width="400" height="200"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="analysis-summary" id="analysisSummary">
+                            <!-- 분석 요약이 표시될 영역 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeVatReportModal()">
+                    <i class="fas fa-times"></i>
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tax Help Center Modal -->
+    <div id="taxHelpModal" class="modal-overlay">
+        <div class="modal-container large-modal">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-graduation-cap"></i>
+                    세무 도움말 센터
+                </h2>
+                <button class="modal-close" onclick="closeTaxHelpModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Help Center Tabs -->
+                <div class="help-tabs">
+                    <button class="help-tab active" data-tab="guide" onclick="showHelpTab('guide')">
+                        <i class="fas fa-route"></i>
+                        시작 가이드
+                    </button>
+                    <button class="help-tab" data-tab="terms" onclick="showHelpTab('terms')">
+                        <i class="fas fa-book"></i>
+                        세무 용어
+                    </button>
+                    <button class="help-tab" data-tab="process" onclick="showHelpTab('process')">
+                        <i class="fas fa-tasks"></i>
+                        업무 프로세스
+                    </button>
+                    <button class="help-tab" data-tab="faq" onclick="showHelpTab('faq')">
+                        <i class="fas fa-question"></i>
+                        자주 묻는 질문
+                    </button>
+                </div>
+
+                <!-- Guide Tab -->
+                <div class="help-tab-content active" id="guideTab">
+                    <div class="help-guide">
+                        <h3>🚀 세무 관리 시작하기</h3>
+                        <div class="guide-steps">
+                            <div class="guide-step">
+                                <div class="step-number">1</div>
+                                <div class="step-content">
+                                    <h4>매출 등록하기</h4>
+                                    <p>고객에게 서비스를 제공하고 받은 수입을 기록합니다.</p>
+                                    <ul>
+                                        <li><strong>매출일자:</strong> 실제 서비스를 제공한 날짜</li>
+                                        <li><strong>거래처:</strong> 고객 이름 또는 회사명</li>
+                                        <li><strong>공급가액:</strong> 부가세를 제외한 순수 서비스 금액</li>
+                                        <li><strong>부가세:</strong> 공급가액의 10% (자동 계산됨)</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="guide-step">
+                                <div class="step-number">2</div>
+                                <div class="step-content">
+                                    <h4>경비 등록하기</h4>
+                                    <p>사업을 위해 지출한 비용을 기록합니다.</p>
+                                    <ul>
+                                        <li><strong>매입일자:</strong> 실제 구매하거나 지불한 날짜</li>
+                                        <li><strong>거래처:</strong> 구매한 상점이나 회사명</li>
+                                        <li><strong>세금계산서:</strong> 일반/간이/없음으로 구분</li>
+                                        <li><strong>매입세액공제:</strong> 부가세 환급받을 수 있는 금액</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="guide-step">
+                                <div class="step-number">3</div>
+                                <div class="step-content">
+                                    <h4>부가세 신고하기</h4>
+                                    <p>분기별로 매출세액과 매입세액을 정산합니다.</p>
+                                    <ul>
+                                        <li><strong>신고 기간:</strong> 1분기(1-3월), 2분기(4-6월), 3분기(7-9월), 4분기(10-12월)</li>
+                                        <li><strong>신고 마감일:</strong> 각 분기 말월 25일</li>
+                                        <li><strong>납부세액:</strong> 매출세액 - 매입세액공제</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Terms Tab -->
+                <div class="help-tab-content" id="termsTab">
+                    <div class="tax-terms">
+                        <h3>📚 세무 용어 사전</h3>
+                        <div class="terms-grid">
+                            <div class="term-card">
+                                <h4>공급가액 💰</h4>
+                                <p><strong>의미:</strong> 부가세를 제외한 순수한 재화나 서비스의 가격</p>
+                                <p><strong>예시:</strong> 정비비 100,000원 + 부가세 10,000원 = 총 110,000원일 때, 공급가액은 100,000원</p>
+                                <p><strong>주의:</strong> 영수증에는 총액이 적혀있어도 공급가액을 따로 계산해야 함</p>
+                            </div>
+                            
+                            <div class="term-card">
+                                <h4>부가가치세 (VAT) 📊</h4>
+                                <p><strong>의미:</strong> 재화나 서비스 거래 시 부과되는 세금 (10%)</p>
+                                <p><strong>계산:</strong> 공급가액 × 10%</p>
+                                <p><strong>종류:</strong> 매출세액(받은 부가세), 매입세액(낸 부가세)</p>
+                            </div>
+                            
+                            <div class="term-card">
+                                <h4>매입세액공제 ↩️</h4>
+                                <p><strong>의미:</strong> 사업용 구매 시 낸 부가세를 돌려받는 것</p>
+                                <p><strong>조건:</strong> 세금계산서나 신용카드 영수증 필요</p>
+                                <p><strong>예시:</strong> 부품 구매 시 낸 부가세 5,000원을 환급받음</p>
+                            </div>
+                            
+                            <div class="term-card">
+                                <h4>세금계산서 📋</h4>
+                                <p><strong>의미:</strong> 부가세 거래를 증명하는 공식 서류</p>
+                                <p><strong>종류:</strong></p>
+                                <ul>
+                                    <li><strong>일반:</strong> 매입세액공제 100% 가능</li>
+                                    <li><strong>간이:</strong> 매입세액공제 제한적</li>
+                                    <li><strong>없음:</strong> 현금영수증, 신용카드 영수증</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="term-card">
+                                <h4>분기별 신고 📅</h4>
+                                <p><strong>의미:</strong> 3개월마다 부가세를 정산하여 신고</p>
+                                <p><strong>신고 기간:</strong></p>
+                                <ul>
+                                    <li>1분기: 1월~3월 (4월 25일까지)</li>
+                                    <li>2분기: 4월~6월 (7월 25일까지)</li>
+                                    <li>3분기: 7월~9월 (10월 25일까지)</li>
+                                    <li>4분기: 10월~12월 (1월 25일까지)</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="term-card">
+                                <h4>카테고리 분류 🏷️</h4>
+                                <p><strong>매출 카테고리:</strong></p>
+                                <ul>
+                                    <li>정비서비스, 부품판매, 점검서비스 등</li>
+                                </ul>
+                                <p><strong>매입 카테고리:</strong></p>
+                                <ul>
+                                    <li>부품구매, 공구구매, 임대료, 전기료 등</li>
+                                </ul>
+                                <p><strong>tip:</strong> 정확한 분류로 세무 관리가 쉬워집니다</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Process Tab -->
+                <div class="help-tab-content" id="processTab">
+                    <div class="process-guide">
+                        <h3>⚙️ 업무 프로세스 가이드</h3>
+                        
+                        <div class="process-section">
+                            <h4>🔄 일반적인 업무 흐름</h4>
+                            <div class="process-flow">
+                                <div class="process-item">
+                                    <i class="fas fa-wrench"></i>
+                                    <span>정비 서비스 제공</span>
+                                </div>
+                                <div class="process-arrow">→</div>
+                                <div class="process-item">
+                                    <i class="fas fa-plus"></i>
+                                    <span>매출 등록</span>
+                                </div>
+                                <div class="process-arrow">→</div>
+                                <div class="process-item">
+                                    <i class="fas fa-shopping-cart"></i>
+                                    <span>부품/재료 구매</span>
+                                </div>
+                                <div class="process-arrow">→</div>
+                                <div class="process-item">
+                                    <i class="fas fa-minus"></i>
+                                    <span>경비 등록</span>
+                                </div>
+                                <div class="process-arrow">→</div>
+                                <div class="process-item">
+                                    <i class="fas fa-file-alt"></i>
+                                    <span>분기별 신고</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="process-section">
+                            <h4>📝 매출 등록 상세 프로세스</h4>
+                            <div class="process-checklist">
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>정비 완료 후 고객에게 청구서 발행</span>
+                                </div>
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>견적서 시스템에서 자동으로 매출 데이터 생성</span>
+                                </div>
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>추가 매출이 있는 경우 "매출 등록" 버튼으로 직접 입력</span>
+                                </div>
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>카테고리를 정확히 선택 (정비서비스/부품판매/점검서비스/기타)</span>
+                                </div>
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>공급가액 입력 시 부가세는 자동으로 계산됨</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="process-section">
+                            <h4>💳 경비 등록 상세 프로세스</h4>
+                            <div class="process-checklist">
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>부품이나 재료 구매 후 영수증 보관</span>
+                                </div>
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>"경비 등록" 버튼으로 지출 내역 입력</span>
+                                </div>
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>세금계산서 종류 선택 (일반/간이/없음)</span>
+                                </div>
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>카테고리 정확히 분류 (부품구매/공구구매/임대료 등)</span>
+                                </div>
+                                <div class="checklist-item">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>증빙서류 종류 선택 및 보관</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ Tab -->
+                <div class="help-tab-content" id="faqTab">
+                    <div class="faq-section">
+                        <h3>❓ 자주 묻는 질문</h3>
+                        
+                        <div class="faq-item">
+                            <div class="faq-question" onclick="toggleFAQ(this)">
+                                <i class="fas fa-chevron-right"></i>
+                                <span>부가세는 언제 내야 하나요?</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>부가세는 <strong>분기별로 신고</strong>합니다:</p>
+                                <ul>
+                                    <li>1분기 (1-3월): 4월 25일까지</li>
+                                    <li>2분기 (4-6월): 7월 25일까지</li>
+                                    <li>3분기 (7-9월): 10월 25일까지</li>
+                                    <li>4분기 (10-12월): 다음 해 1월 25일까지</li>
+                                </ul>
+                                <p>납부할 세액이 있으면 신고와 동시에 납부해야 합니다.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item">
+                            <div class="faq-question" onclick="toggleFAQ(this)">
+                                <i class="fas fa-chevron-right"></i>
+                                <span>공급가액과 총액의 차이가 뭔가요?</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p><strong>공급가액</strong>은 부가세를 제외한 순수한 재화나 서비스의 가격입니다.</p>
+                                <p><strong>총액</strong>은 공급가액 + 부가세(10%)입니다.</p>
+                                <p><strong>예시:</strong></p>
+                                <ul>
+                                    <li>정비비 공급가액: 100,000원</li>
+                                    <li>부가세: 10,000원 (100,000원 × 10%)</li>
+                                    <li>총액: 110,000원</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item">
+                            <div class="faq-question" onclick="toggleFAQ(this)">
+                                <i class="fas fa-chevron-right"></i>
+                                <span>매입세액공제는 어떻게 받나요?</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>사업을 위해 구매한 물품의 부가세를 환급받는 제도입니다:</p>
+                                <ul>
+                                    <li><strong>조건:</strong> 세금계산서, 신용카드 영수증, 현금영수증 보유</li>
+                                    <li><strong>공제율:</strong> 일반 세금계산서 100%, 간이 세금계산서 제한적</li>
+                                    <li><strong>신고:</strong> 분기별 부가세 신고 시 자동으로 차감</li>
+                                </ul>
+                                <p><strong>주의:</strong> 개인용 구매는 공제받을 수 없습니다.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item">
+                            <div class="faq-question" onclick="toggleFAQ(this)">
+                                <i class="fas fa-chevron-right"></i>
+                                <span>영수증을 잃어버렸어도 경비 처리할 수 있나요?</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>영수증이 없으면 매입세액공제를 받을 수 없지만, 경비 자체는 처리 가능합니다:</p>
+                                <ul>
+                                    <li><strong>매입세액공제:</strong> 불가능</li>
+                                    <li><strong>비용 처리:</strong> 가능 (소득세 계산 시 비용으로 인정)</li>
+                                    <li><strong>대안:</strong> 신용카드 내역서, 계좌이체 내역 등으로 증빙</li>
+                                </ul>
+                                <p><strong>권장:</strong> 가능한 모든 영수증을 보관하세요.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item">
+                            <div class="faq-question" onclick="toggleFAQ(this)">
+                                <i class="fas fa-chevron-right"></i>
+                                <span>카테고리 분류를 잘못했어도 문제없나요?</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>카테고리 분류는 <strong>세무 관리와 분석</strong>을 위한 것으로:</p>
+                                <ul>
+                                    <li><strong>세금 계산:</strong> 영향 없음 (총액만 중요)</li>
+                                    <li><strong>관리 효율:</strong> 정확한 분류로 비용 분석 가능</li>
+                                    <li><strong>수정:</strong> 언제든 수정 가능</li>
+                                </ul>
+                                <p><strong>팁:</strong> 처음에는 대략적으로 분류하고, 나중에 정리해도 됩니다.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item">
+                            <div class="faq-question" onclick="toggleFAQ(this)">
+                                <i class="fas fa-chevron-right"></i>
+                                <span>이 프로그램만으로 세무신고가 완료되나요?</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>이 프로그램은 <strong>세무 데이터 관리</strong>를 도와주는 도구입니다:</p>
+                                <ul>
+                                    <li><strong>제공 기능:</strong> 매출/매입 관리, 부가세 계산, 리포트 생성</li>
+                                    <li><strong>실제 신고:</strong> 국세청 홈택스에서 직접 신고 필요</li>
+                                    <li><strong>세무사:</strong> 복잡한 경우 전문가 상담 권장</li>
+                                </ul>
+                                <p><strong>활용법:</strong> 이 프로그램으로 데이터를 정리한 후, 홈택스나 세무사에게 제공</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTaxHelpModal()">
+                    <i class="fas fa-times"></i>
+                    닫기
+                </button>
+                <button class="btn btn-primary" onclick="enableBeginnerMode()">
+                    <i class="fas fa-graduation-cap"></i>
+                    초보자 모드 켜기
                 </button>
             </div>
         </div>

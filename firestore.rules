@@ -21,6 +21,43 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
     
+    // 💰 세무 관리 컬렉션들 - 로그인된 사용자만 접근
+    match /income/{incomeId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /expense/{expenseId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /salary/{salaryId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /tax_reports/{reportId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 🤖 AI 학습 데이터 컬렉션 - 로그인된 사용자만 접근
+    match /category_learning/{learningId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 👥 직원 관리 컬렉션 - 로그인된 사용자만 접근
+    match /employees/{employeeId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 💳 급여 기록 컬렉션 - 로그인된 사용자만 접근
+    match /salary_records/{recordId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 🛡️ 4대보험 설정 컬렉션 - 로그인된 사용자만 접근
+    match /insurance_settings/{settingId} {
+      allow read, write: if request.auth != null;
+    }
+    
     // 🚫 기타 모든 접근 차단
     match /{document=**} {
       allow read, write: if false;

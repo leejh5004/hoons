@@ -1,5 +1,4 @@
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+/* 폰트 import 제거: HTML에서 최적화된 버전으로 통합 로딩 */
 
 /* ==============================================
    TWOHOONS GARAGE - Mobile First Design System
@@ -71,8 +70,8 @@
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
     --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
     
-    /* Typography */
-    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    /* Typography - 최적화된 폰트 스택 */
+    --font-family: 'Noto Sans KR', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-size-xs: 0.75rem;
     --font-size-sm: 0.875rem;
     --font-size-base: 1rem;
@@ -80,7 +79,6 @@
     --font-size-xl: 1.25rem;
     --font-size-2xl: 1.5rem;
     --font-size-3xl: 1.875rem;
-    --font-size-4xl: 2.25rem;
     
     /* Layout */
     --header-height: 64px;
@@ -155,7 +153,7 @@
 }
 
 [data-theme="dark"] .stat-number {
-    color: var(--text-primary) !important;
+    color: #0f172a !important;
 }
 
 [data-theme="dark"] .stat-label {
@@ -630,12 +628,54 @@
     text-align: right;
 }
 
-.estimate-total-section-modal h4 {
-    margin: 0; 
-    font-size: var(--font-size-2xl);
-    font-weight: 900;
+.estimate-amount-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.estimate-breakdown-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) 0;
+}
+
+.estimate-breakdown-label {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: #475569;
+}
+
+.estimate-breakdown-amount {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--info);
+}
+
+.estimate-breakdown-separator {
+    height: 2px;
+    background: linear-gradient(to right, var(--info), transparent);
+    margin: var(--space-sm) 0;
+    border-radius: 1px;
+}
+
+.estimate-breakdown-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md) 0;
+    border-top: 2px solid var(--info);
+    background: linear-gradient(145deg, #dbeafe, #bfdbfe);
+    border-radius: var(--radius-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+}
+
+.estimate-breakdown-total .estimate-breakdown-label {
+    font-size: var(--font-size-xl);
+    font-weight: 800;
     color: #1e293b;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .estimate-total-amount-modal {
@@ -3963,11 +4003,54 @@ button {
     box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
 }
 
-.estimate-total-label {
+.estimate-breakdown-detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.estimate-breakdown-detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) 0;
+}
+
+.estimate-breakdown-detail-label {
     font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--primary-700);
+}
+
+.estimate-breakdown-detail-amount {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: #1e40af;
+}
+
+.estimate-breakdown-detail-separator {
+    height: 2px;
+    background: linear-gradient(to right, var(--primary-600), transparent);
+    margin: var(--space-sm) 0;
+    border-radius: 1px;
+}
+
+.estimate-breakdown-detail-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md) 0;
+    border-top: 2px solid var(--primary-600);
+    background: linear-gradient(145deg, #bfdbfe, #93c5fd);
+    border-radius: var(--radius-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+}
+
+.estimate-total-label {
+    font-size: var(--font-size-xl);
     font-weight: 800;
     color: var(--primary-700);
-    margin-bottom: var(--space-md);
     text-transform: uppercase;
     letter-spacing: 1px;
     text-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -4572,4 +4655,2765 @@ button {
         height: 32px;
         border-width: 3px;
     }
+}
+
+/* ===============================================
+   TAXATION MANAGEMENT STYLES
+   =============================================== */
+
+/* Taxation Screen */
+.taxation-header {
+    background: linear-gradient(135deg, var(--primary-600), var(--primary-800));
+    color: white;
+    padding: var(--space-xl);
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--space-lg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
+}
+
+.taxation-title h1 {
+    font-size: var(--font-size-3xl);
+    font-weight: 900;
+    margin: 0;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.taxation-title h1 i {
+    margin-right: var(--space-sm);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.taxation-subtitle {
+    font-size: var(--font-size-base);
+    margin: var(--space-xs) 0 0 0;
+    opacity: 0.9;
+    font-weight: 500;
+}
+
+.taxation-period {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.period-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    transition: all var(--transition-fast);
+}
+
+.period-select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.period-select option {
+    background: var(--primary-800);
+    color: white;
+}
+
+/* Taxation Summary Cards */
+.taxation-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
+}
+
+.tax-card {
+    background: linear-gradient(145deg, #ffffff, #f8fafc);
+    border: 2px solid var(--secondary-200);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg);
+    transition: all var(--transition-fast);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.tax-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+.tax-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+}
+
+.tax-card-header i {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-lg);
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.tax-card-header h3 {
+    font-size: var(--font-size-lg);
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.tax-amount {
+    font-size: var(--font-size-2xl);
+    font-weight: 900;
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.tax-detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.tax-detail span {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+/* Card Type Specific Colors */
+.income-card {
+    border-color: var(--success);
+}
+
+.income-card .tax-card-header i {
+    background: linear-gradient(135deg, var(--success), #059669);
+}
+
+.expense-card {
+    border-color: var(--error);
+}
+
+.expense-card .tax-card-header i {
+    background: linear-gradient(135deg, var(--error), #dc2626);
+}
+
+.vat-card {
+    border-color: var(--warning);
+}
+
+.vat-card .tax-card-header i {
+    background: linear-gradient(135deg, var(--warning), #d97706);
+}
+
+.calendar-card {
+    border-color: var(--info);
+}
+
+.calendar-card .tax-card-header i {
+    background: linear-gradient(135deg, var(--info), #0891b2);
+}
+
+.vat-status {
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--secondary-100);
+    color: var(--secondary-600);
+}
+
+/* Taxation Quick Actions */
+.taxation-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
+}
+
+.tax-action-btn {
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-700));
+    color: white;
+    border: none;
+    padding: var(--space-lg);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+}
+
+.tax-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+}
+
+.tax-action-btn.secondary {
+    background: linear-gradient(135deg, var(--secondary-500), var(--secondary-700));
+    box-shadow: 0 4px 15px rgba(100, 116, 139, 0.3);
+}
+
+.tax-action-btn.secondary:hover {
+    box-shadow: 0 8px 25px rgba(100, 116, 139, 0.4);
+}
+
+.tax-action-btn.accent {
+    background: linear-gradient(135deg, var(--success), #059669);
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.tax-action-btn.accent:hover {
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+}
+
+.tax-action-btn.info {
+    background: linear-gradient(135deg, var(--info), #0891b2);
+    box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3);
+}
+
+.tax-action-btn.info:hover {
+    box-shadow: 0 8px 25px rgba(6, 182, 212, 0.4);
+}
+
+.tax-action-btn.warning {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+}
+
+.tax-action-btn.warning:hover {
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+}
+
+.tax-action-btn i {
+    font-size: var(--font-size-lg);
+}
+
+/* 세무 리포트 옵션 모달 스타일 */
+.report-options {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.report-option {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.report-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.report-option h3 {
+    margin: 0 0 8px 0;
+    color: var(--text-color);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.report-option p {
+    margin: 0 0 15px 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.report-option .form-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.report-option .form-control {
+    min-width: 100px;
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.report-option .form-control:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(var(--primary-500), 0.1);
+}
+
+[data-theme="dark"] .report-option {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .report-option:hover {
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .report-option .form-control {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .report-option .form-control:focus {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--primary-500);
+}
+
+@media (max-width: 768px) {
+    .report-option .form-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .report-option .form-control {
+        min-width: auto;
+    }
+}
+
+/* ===============================================
+   초보자 도움말 시스템 스타일
+   =============================================== */
+
+/* 도움말 토글 버튼 */
+.help-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    margin-left: 12px;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.help-toggle-btn:hover {
+    color: var(--primary-500);
+    background: rgba(var(--primary-500), 0.1);
+    transform: scale(1.1);
+}
+
+.help-toggle-btn.beginner-active {
+    color: #F59E0B;
+    background: rgba(245, 158, 11, 0.1);
+    animation: helpPulse 2s infinite;
+}
+
+@keyframes helpPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* 도움말 탭 스타일 */
+.help-tabs {
+    display: flex;
+    background: var(--glass-bg);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+}
+
+.help-tab {
+    flex: 1;
+    min-width: 120px;
+    background: none;
+    border: none;
+    padding: 12px 16px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.help-tab:hover {
+    color: var(--text-color);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.help-tab.active {
+    color: var(--primary-500);
+    background: rgba(var(--primary-500), 0.1);
+    position: relative;
+}
+
+.help-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30px;
+    height: 3px;
+    background: var(--primary-500);
+    border-radius: 2px;
+}
+
+.help-tab i {
+    font-size: 16px;
+}
+
+/* 도움말 탭 컨텐츠 */
+.help-tab-content {
+    display: none;
+    animation: fadeInUp 0.3s ease;
+}
+
+.help-tab-content.active {
+    display: block;
+}
+
+/* 가이드 스타일 */
+.help-guide h3 {
+    color: var(--text-color);
+    font-size: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.guide-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.guide-step {
+    display: flex;
+    gap: 16px;
+    background: var(--glass-bg);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.guide-step:hover {
+    transform: translateX(5px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.step-number {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 18px;
+}
+
+.step-content h4 {
+    color: var(--text-color);
+    font-size: 18px;
+    margin: 0 0 8px 0;
+}
+
+.step-content p {
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+}
+
+.step-content ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.step-content li {
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    line-height: 1.4;
+}
+
+.step-content strong {
+    color: var(--text-color);
+}
+
+/* 세무 용어 카드 */
+.tax-terms h3 {
+    color: var(--text-color);
+    font-size: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.terms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.term-card {
+    background: var(--glass-bg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.term-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    border-color: var(--primary-500);
+}
+
+.term-card h4 {
+    color: var(--text-color);
+    font-size: 16px;
+    margin: 0 0 12px 0;
+    font-weight: 600;
+}
+
+.term-card p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0 0 8px 0;
+}
+
+.term-card ul {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+}
+
+.term-card li {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+/* 프로세스 가이드 */
+.process-guide h3 {
+    color: var(--text-color);
+    font-size: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.process-section {
+    background: var(--glass-bg);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.process-section h4 {
+    color: var(--text-color);
+    font-size: 16px;
+    margin: 0 0 16px 0;
+    font-weight: 600;
+}
+
+.process-flow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 10px 0;
+}
+
+.process-item {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(var(--primary-500), 0.1);
+    border-radius: 8px;
+    min-width: 100px;
+    text-align: center;
+}
+
+.process-item i {
+    font-size: 20px;
+    color: var(--primary-500);
+}
+
+.process-item span {
+    font-size: 12px;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.process-arrow {
+    color: var(--text-secondary);
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.process-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    border-left: 3px solid var(--success);
+}
+
+.checklist-item i {
+    color: var(--success);
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.checklist-item span {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+/* FAQ 스타일 */
+.faq-section h3 {
+    color: var(--text-color);
+    font-size: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.faq-item {
+    background: var(--glass-bg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.faq-item:hover {
+    border-color: var(--primary-500);
+}
+
+.faq-question {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.faq-question:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.faq-question i {
+    color: var(--primary-500);
+    font-size: 14px;
+    transition: transform 0.3s ease;
+}
+
+.faq-question span {
+    color: var(--text-color);
+    font-weight: 500;
+    font-size: 15px;
+}
+
+.faq-answer {
+    display: none;
+    padding: 0 20px 20px 44px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.faq-answer p {
+    margin: 0 0 12px 0;
+}
+
+.faq-answer ul {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.faq-answer li {
+    margin-bottom: 4px;
+}
+
+.faq-answer strong {
+    color: var(--text-color);
+}
+
+/* 초보자 모드 인디케이터 */
+.beginner-mode-indicator {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 1000;
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    color: white;
+    border-radius: 25px;
+    padding: 8px 16px;
+    box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+    animation: slideInRight 0.5s ease;
+}
+
+.beginner-indicator-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.beginner-indicator-content button {
+    background: none;
+    border: none;
+    color: white;
+    padding: 2px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
+}
+
+.beginner-indicator-content button:hover {
+    opacity: 1;
+}
+
+/* 초보자 툴팁 */
+.beginner-tooltip {
+    position: fixed;
+    z-index: 10000;
+    max-width: 300px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.beginner-tooltip.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.beginner-tooltip.below {
+    transform: translateY(-10px);
+}
+
+.beginner-tooltip.below.show {
+    transform: translateY(0);
+}
+
+.tooltip-content {
+    background: rgba(245, 158, 11, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.tooltip-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.tooltip-header i {
+    font-size: 16px;
+}
+
+.tooltip-text {
+    color: rgba(255, 255, 255, 0.95);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* 세무 용어 팝업 */
+.tax-term-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.tax-term-popup.show {
+    opacity: 1;
+}
+
+.popup-content {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.tax-term-popup.show .popup-content {
+    transform: scale(1);
+}
+
+.popup-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.popup-header h4 {
+    color: var(--text-color);
+    margin: 0;
+    flex: 1;
+}
+
+.popup-header button {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.3s ease;
+}
+
+.popup-header button:hover {
+    color: var(--text-color);
+}
+
+.popup-body p {
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin: 8px 0;
+    font-size: 14px;
+}
+
+.popup-body strong {
+    color: var(--text-color);
+}
+
+/* 다크테마 지원 */
+[data-theme="dark"] .help-tab {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="dark"] .help-tab:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .help-tab.active {
+    color: var(--primary-500);
+    background: rgba(var(--primary-500), 0.1);
+}
+
+[data-theme="dark"] .guide-step,
+[data-theme="dark"] .term-card,
+[data-theme="dark"] .process-section,
+[data-theme="dark"] .faq-item {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .guide-step:hover,
+[data-theme="dark"] .term-card:hover,
+[data-theme="dark"] .faq-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--primary-500);
+}
+
+[data-theme="dark"] .popup-content {
+    background: var(--bg-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 세무 용어 도움말 버튼 */
+.tax-term-help {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-left: 6px;
+    padding: 2px 4px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0.7;
+}
+
+.tax-term-help:hover {
+    color: var(--primary-500);
+    background: rgba(var(--primary-500), 0.1);
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+[data-theme="dark"] .tax-term-help {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="dark"] .tax-term-help:hover {
+    color: var(--primary-500);
+    background: rgba(var(--primary-500), 0.1);
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+    .help-tabs {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    
+    .help-tab {
+        min-width: auto;
+        flex: 1 1 calc(50% - 2px);
+        font-size: 12px;
+        padding: 10px 8px;
+    }
+    
+    .help-tab i {
+        font-size: 14px;
+    }
+    
+    .terms-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .process-flow {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .process-arrow {
+        transform: rotate(90deg);
+        align-self: center;
+    }
+    
+    .process-item {
+        min-width: auto;
+        width: 100%;
+    }
+    
+    .guide-step {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .step-number {
+        align-self: center;
+    }
+    
+    .beginner-mode-indicator {
+        top: 70px;
+        right: 10px;
+        padding: 6px 12px;
+    }
+    
+    .beginner-indicator-content {
+        font-size: 12px;
+    }
+    
+    .beginner-tooltip {
+        max-width: 250px;
+    }
+}
+
+/* Taxation Categories */
+.taxation-categories {
+    background: linear-gradient(145deg, #ffffff, #f8fafc);
+    border: 2px solid var(--secondary-200);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-xl);
+}
+
+.category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-lg);
+}
+
+.category-header h3 {
+    font-size: var(--font-size-xl);
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.category-header h3 i {
+    color: var(--primary-600);
+}
+
+.category-toggle {
+    background: transparent;
+    border: 2px solid var(--secondary-300);
+    color: var(--secondary-600);
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.category-toggle:hover {
+    background: var(--secondary-100);
+    border-color: var(--secondary-400);
+}
+
+.category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-md);
+}
+
+/* Recent Transactions */
+.taxation-recent {
+    background: linear-gradient(145deg, #ffffff, #f8fafc);
+    border: 2px solid var(--secondary-200);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg);
+}
+
+.recent-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-lg);
+}
+
+.recent-header h3 {
+    font-size: var(--font-size-xl);
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.recent-header h3 i {
+    color: var(--primary-600);
+}
+
+.view-all-btn {
+    background: transparent;
+    border: 2px solid var(--primary-300);
+    color: var(--primary-600);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.view-all-btn:hover {
+    background: var(--primary-50);
+    border-color: var(--primary-500);
+    color: var(--primary-700);
+}
+
+.recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+/* Responsive Design for Taxation */
+@media (max-width: 768px) {
+    .taxation-header {
+        flex-direction: column;
+        gap: var(--space-md);
+        text-align: center;
+    }
+    
+    .taxation-summary {
+        grid-template-columns: 1fr;
+    }
+    
+    .taxation-actions {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .tax-action-btn {
+        flex-direction: column;
+        gap: var(--space-xs);
+    }
+    
+    .tax-action-btn span {
+        font-size: var(--font-size-sm);
+    }
+}
+
+@media (max-width: 480px) {
+    .taxation-actions {
+        grid-template-columns: 1fr;
+    }
+    
+    .period-select {
+        flex: 1;
+    }
+}
+
+/* ===============================================
+   INCOME MODAL STYLES
+   =============================================== */
+
+/* 매출 등록 모달 세금 정보 */
+.income-tax-breakdown {
+    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+    border: 2px solid #0ea5e9;
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin: var(--space-md) 0;
+    box-shadow: 0 4px 20px rgba(14, 165, 233, 0.1);
+}
+
+.tax-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+.tax-row:last-child {
+    border-bottom: none;
+}
+
+.tax-row.tax-total {
+    padding-top: var(--space-md);
+    margin-top: var(--space-sm);
+    border-top: 2px solid #0ea5e9;
+    font-weight: 700;
+}
+
+.tax-label {
+    font-size: var(--font-size-base);
+    color: #475569;
+    font-weight: 600;
+}
+
+.tax-value {
+    font-size: var(--font-size-lg);
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.tax-value.total {
+    font-size: var(--font-size-xl);
+    color: #0ea5e9;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* 다크 모드 */
+[data-theme="dark"] .income-tax-breakdown {
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border-color: #0ea5e9;
+}
+
+[data-theme="dark"] .tax-row {
+    border-bottom-color: rgba(14, 165, 233, 0.3);
+}
+
+[data-theme="dark"] .tax-row.tax-total {
+    border-top-color: #0ea5e9;
+}
+
+[data-theme="dark"] .tax-label {
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .tax-value {
+    color: #f1f5f9;
+}
+
+[data-theme="dark"] .tax-value.total {
+    color: #38bdf8;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+    .income-tax-breakdown {
+        padding: var(--space-md);
+    }
+    
+    .tax-row {
+        padding: var(--space-xs) 0;
+    }
+    
+    .tax-label {
+        font-size: var(--font-size-sm);
+    }
+    
+    .tax-value {
+        font-size: var(--font-size-base);
+    }
+    
+    .tax-value.total {
+        font-size: var(--font-size-lg);
+    }
+}
+
+/* ===============================================
+   EXPENSE MODAL STYLES
+   =============================================== */
+
+/* 경비 등록 모달 세금 정보 */
+.expense-tax-breakdown {
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+    border: 2px solid #dc2626;
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin: var(--space-md) 0;
+    box-shadow: 0 4px 20px rgba(220, 38, 38, 0.1);
+}
+
+.expense-tax-breakdown .tax-row {
+    border-bottom-color: rgba(220, 38, 38, 0.2);
+}
+
+.expense-tax-breakdown .tax-row.tax-total {
+    border-top-color: #dc2626;
+}
+
+.expense-tax-breakdown .tax-row.tax-deduction {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border: 1px solid #16a34a;
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    margin: var(--space-xs) 0;
+}
+
+.expense-tax-breakdown .tax-value.deduction {
+    color: #16a34a;
+    font-weight: 700;
+}
+
+.expense-tax-breakdown .tax-value.total {
+    color: #dc2626;
+}
+
+/* 다크 모드 */
+[data-theme="dark"] .expense-tax-breakdown {
+    background: linear-gradient(135deg, #1e1b1b, #2d1b1b);
+    border-color: #dc2626;
+}
+
+[data-theme="dark"] .expense-tax-breakdown .tax-row {
+    border-bottom-color: rgba(220, 38, 38, 0.3);
+}
+
+[data-theme="dark"] .expense-tax-breakdown .tax-row.tax-total {
+    border-top-color: #dc2626;
+}
+
+[data-theme="dark"] .expense-tax-breakdown .tax-row.tax-deduction {
+    background: linear-gradient(135deg, #1a2e1a, #2a3a2a);
+    border-color: #16a34a;
+}
+
+[data-theme="dark"] .expense-tax-breakdown .tax-value.deduction {
+    color: #22c55e;
+}
+
+[data-theme="dark"] .expense-tax-breakdown .tax-value.total {
+    color: #ef4444;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+    .expense-tax-breakdown {
+        padding: var(--space-md);
+    }
+    
+    .expense-tax-breakdown .tax-row.tax-deduction {
+        padding: var(--space-xs) var(--space-sm);
+    }
+}
+
+/* ===============================================
+   AUTO CATEGORY SUGGESTION STYLES
+   =============================================== */
+
+/* 자동 완성 입력 필드 강화 */
+.info-form-input[list] {
+    position: relative;
+}
+
+.info-form-input[list]:focus {
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+/* 카테고리 추천 애니메이션 */
+@keyframes categoryRecommendation {
+    0% {
+        background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+        border-color: #3b82f6;
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+    }
+    100% {
+        background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+        border-color: #3b82f6;
+        transform: scale(1);
+    }
+}
+
+.category-recommended {
+    animation: categoryRecommendation 0.6s ease-in-out;
+}
+
+/* 스마트 추천 배지 */
+.smart-suggestion-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-weight: 600;
+    z-index: 10;
+    animation: pulse 2s infinite;
+}
+
+/* 자동 완성 드롭다운 개선 */
+datalist {
+    position: absolute;
+    background: white;
+    border: 2px solid var(--primary-200);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+/* 학습 기능 표시 */
+.learning-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    margin-left: 8px;
+    animation: pulse 1.5s infinite;
+}
+
+/* 키워드 하이라이트 */
+.keyword-highlight {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-weight: 600;
+    color: #92400e;
+}
+
+/* 다크 모드 */
+[data-theme="dark"] .smart-suggestion-badge {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+[data-theme="dark"] datalist {
+    background: var(--bg-secondary);
+    border-color: var(--primary-400);
+}
+
+[data-theme="dark"] .keyword-highlight {
+    background: linear-gradient(135deg, #451a03, #78350f);
+    color: #fbbf24;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+    .smart-suggestion-badge {
+        font-size: 9px;
+        padding: 1px 4px;
+    }
+    
+    datalist {
+        max-height: 150px;
+    }
+}
+
+/* ================================================
+   Salary Management System Styles
+   ================================================ */
+
+/* Large Modal for Salary System */
+.large-modal {
+    max-width: 1200px;
+    width: 95%;
+    max-height: 90vh;
+    height: auto;
+}
+
+.large-modal .modal-body {
+    max-height: 75vh;
+    overflow-y: auto;
+}
+
+/* Salary Tabs */
+.salary-tabs {
+    display: flex;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--secondary-200);
+    gap: 0.5rem;
+}
+
+.salary-tab {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    position: relative;
+    transition: all var(--transition-base);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.salary-tab:hover {
+    background: var(--secondary-50);
+    color: var(--text-primary);
+}
+
+.salary-tab.active {
+    background: var(--primary-500);
+    color: var(--text-inverse);
+}
+
+.salary-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--primary-500);
+}
+
+.salary-tab i {
+    font-size: 1rem;
+}
+
+/* Salary Tab Content */
+.salary-tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.salary-tab-content.active {
+    display: block;
+}
+
+/* Employee Management */
+.employee-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+}
+
+.employee-search {
+    position: relative;
+    flex: 1;
+    max-width: 300px;
+}
+
+.employee-search input {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    border: 2px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    transition: all var(--transition-base);
+}
+
+.employee-search input:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.employee-search i {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary);
+    font-size: 0.875rem;
+}
+
+.employees-list {
+    margin-bottom: 1.5rem;
+}
+
+.employee-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+    margin-bottom: 0.75rem;
+    background: var(--bg-primary);
+    transition: all var(--transition-base);
+    cursor: pointer;
+}
+
+.employee-card:hover {
+    border-color: var(--primary-300);
+    box-shadow: var(--shadow-md);
+}
+
+.employee-info {
+    flex: 1;
+}
+
+.employee-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.employee-details {
+    display: flex;
+    gap: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.employee-actions-btn {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.employee-actions-btn button {
+    padding: 0.5rem;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-size: 0.875rem;
+}
+
+.employee-actions-btn .btn-edit {
+    background: var(--primary-100);
+    color: var(--primary-600);
+}
+
+.employee-actions-btn .btn-edit:hover {
+    background: var(--primary-200);
+}
+
+.employee-actions-btn .btn-delete {
+    background: var(--error);
+    color: white;
+}
+
+.employee-actions-btn .btn-delete:hover {
+    background: #dc2626;
+}
+
+/* Add Employee Form */
+.add-employee-form {
+    background: var(--bg-secondary);
+    padding: 1.5rem;
+    border-radius: var(--radius-lg);
+    margin-top: 1rem;
+}
+
+.add-employee-form h4 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+}
+
+/* Salary Calculation */
+.salary-calc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+}
+
+.calc-period {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.calc-period label {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.calc-period select {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.salary-calculation-card {
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    background: var(--bg-primary);
+}
+
+.salary-calc-header-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.salary-calc-employee {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.salary-calc-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.salary-calc-status.calculated {
+    background: var(--success);
+    color: white;
+}
+
+.salary-calc-status.pending {
+    background: var(--warning);
+    color: white;
+}
+
+.salary-calc-breakdown {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.salary-calc-section {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.salary-calc-section h5 {
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.salary-calc-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.salary-calc-item:last-child {
+    margin-bottom: 0;
+}
+
+.salary-calc-item.total {
+    font-weight: 600;
+    border-top: 1px solid var(--secondary-200);
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.salary-calc-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+/* Salary History */
+.salary-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+}
+
+.history-filters {
+    display: flex;
+    gap: 1rem;
+    flex: 1;
+}
+
+.history-filters input,
+.history-filters select {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.salary-history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+    margin-bottom: 0.75rem;
+    background: var(--bg-primary);
+    transition: all var(--transition-base);
+}
+
+.salary-history-item:hover {
+    border-color: var(--primary-300);
+    box-shadow: var(--shadow-md);
+}
+
+.salary-history-info {
+    flex: 1;
+}
+
+.salary-history-employee {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.salary-history-period {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.salary-history-amount {
+    font-weight: 600;
+    color: var(--primary-600);
+    font-size: 1.125rem;
+}
+
+.salary-history-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.salary-history-actions button {
+    padding: 0.5rem;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-size: 0.875rem;
+}
+
+.salary-history-actions .btn-view {
+    background: var(--primary-100);
+    color: var(--primary-600);
+}
+
+.salary-history-actions .btn-view:hover {
+    background: var(--primary-200);
+}
+
+.salary-history-actions .btn-download {
+    background: var(--success);
+    color: white;
+}
+
+.salary-history-actions .btn-download:hover {
+    background: #059669;
+}
+
+/* Insurance Settings */
+.insurance-settings {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.insurance-settings h4 {
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+    font-weight: 600;
+    text-align: center;
+}
+
+.insurance-rates {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.rate-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+}
+
+.rate-item label {
+    flex: 1;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.rate-item input {
+    width: 80px;
+    padding: 0.5rem;
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.rate-item span {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.insurance-limits {
+    margin-bottom: 2rem;
+}
+
+.insurance-limits h5 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.limit-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    margin-bottom: 0.5rem;
+}
+
+.limit-item label {
+    flex: 1;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.limit-item input {
+    width: 120px;
+    padding: 0.5rem;
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    text-align: right;
+}
+
+.limit-item span {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* Dark Theme for Salary System */
+[data-theme="dark"] .salary-tab {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .salary-tab:hover {
+    background: var(--secondary-800);
+    color: var(--text-inverse);
+}
+
+[data-theme="dark"] .salary-tab.active {
+    background: var(--primary-600);
+    color: var(--text-inverse);
+}
+
+[data-theme="dark"] .employee-search input {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .employee-search input:focus {
+    border-color: var(--primary-400);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+[data-theme="dark"] .employee-card {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+}
+
+[data-theme="dark"] .employee-card:hover {
+    border-color: var(--primary-400);
+}
+
+[data-theme="dark"] .add-employee-form {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .salary-calc-header {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .salary-calculation-card {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+}
+
+[data-theme="dark"] .salary-calc-section {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .salary-history-item {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+}
+
+[data-theme="dark"] .salary-history-item:hover {
+    border-color: var(--primary-400);
+}
+
+[data-theme="dark"] .rate-item {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .rate-item input {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .limit-item {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .limit-item input {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+    color: var(--text-primary);
+}
+
+/* Responsive Design for Salary System */
+@media (max-width: 768px) {
+    .large-modal {
+        width: 98%;
+        max-width: none;
+        margin: 1rem;
+    }
+    
+    .salary-tabs {
+        flex-direction: column;
+        gap: 0;
+    }
+    
+    .salary-tab {
+        border-radius: 0;
+        padding: 1rem;
+    }
+    
+    .employee-actions {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .employee-search {
+        max-width: none;
+    }
+    
+    .salary-calc-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .calc-period {
+        flex-wrap: wrap;
+    }
+    
+    .salary-calc-breakdown {
+        grid-template-columns: 1fr;
+    }
+    
+    .salary-history-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .history-filters {
+        flex-direction: column;
+    }
+    
+    .salary-history-item {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .insurance-rates {
+        grid-template-columns: 1fr;
+    }
+    
+    .rate-item,
+    .limit-item {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .salary-tab {
+        padding: 0.75rem;
+        font-size: 0.875rem;
+    }
+    
+    .salary-tab i {
+        font-size: 0.875rem;
+    }
+    
+    .employee-card {
+        padding: 0.75rem;
+    }
+    
+    .employee-actions-btn {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .salary-calc-section {
+        padding: 0.75rem;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .salary-calc-actions {
+        flex-direction: column;
+    }
+    
+    .salary-history-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
+
+/* ================================================
+   VAT Report System Styles
+   ================================================ */
+
+/* VAT Tabs */
+.vat-tabs {
+    display: flex;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--secondary-200);
+    gap: 0.5rem;
+}
+
+.vat-tab {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    position: relative;
+    transition: all var(--transition-base);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.vat-tab:hover {
+    background: var(--secondary-50);
+    color: var(--text-primary);
+}
+
+.vat-tab.active {
+    background: var(--primary-500);
+    color: var(--text-inverse);
+}
+
+.vat-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--primary-500);
+}
+
+.vat-tab i {
+    font-size: 1rem;
+}
+
+/* VAT Tab Content */
+.vat-tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.vat-tab-content.active {
+    display: block;
+}
+
+/* VAT Report Header */
+.vat-report-header {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+}
+
+.report-period-selector {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.report-period-selector label {
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.report-period-selector select {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    min-width: 120px;
+}
+
+/* VAT Report Summary */
+.vat-report-summary {
+    margin-bottom: 2rem;
+}
+
+.vat-summary-card {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.vat-summary-item {
+    padding: 1.5rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+    text-align: center;
+}
+
+.vat-summary-item.income {
+    border-left: 4px solid var(--success);
+}
+
+.vat-summary-item.expense {
+    border-left: 4px solid var(--warning);
+}
+
+.vat-summary-item.tax {
+    border-left: 4px solid var(--primary-500);
+}
+
+.vat-summary-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.vat-summary-amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* VAT Report Details */
+.vat-report-details {
+    margin-bottom: 2rem;
+}
+
+.vat-detail-section {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+}
+
+.vat-detail-section h5 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-weight: 600;
+    border-bottom: 1px solid var(--secondary-200);
+    padding-bottom: 0.5rem;
+}
+
+.vat-detail-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.vat-detail-table th,
+.vat-detail-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--secondary-200);
+}
+
+.vat-detail-table th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.vat-detail-table td {
+    color: var(--text-secondary);
+}
+
+.vat-detail-table .amount {
+    text-align: right;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* VAT Report Actions */
+.vat-report-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--secondary-200);
+}
+
+/* VAT Simulation */
+.vat-simulation {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.simulation-inputs {
+    padding: 2rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    margin-bottom: 2rem;
+}
+
+.simulation-result {
+    padding: 2rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+}
+
+.simulation-result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.simulation-item {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.simulation-item-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.simulation-item-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.simulation-final-amount {
+    padding: 1.5rem;
+    background: var(--primary-500);
+    color: white;
+    border-radius: var(--radius-lg);
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.simulation-final-amount .label {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.9;
+}
+
+.simulation-final-amount .amount {
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+/* VAT Schedule */
+.vat-schedule {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.schedule-timeline {
+    margin-bottom: 2rem;
+}
+
+.schedule-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+    border-left: 4px solid var(--primary-500);
+}
+
+.schedule-item.warning {
+    border-left-color: var(--warning);
+}
+
+.schedule-item.danger {
+    border-left-color: var(--error);
+}
+
+.schedule-date {
+    flex: 0 0 100px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.schedule-content {
+    flex: 1;
+    margin-left: 1rem;
+}
+
+.schedule-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.schedule-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.schedule-status {
+    flex: 0 0 80px;
+    text-align: center;
+}
+
+.schedule-status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.schedule-status-badge.pending {
+    background: var(--warning);
+    color: white;
+}
+
+.schedule-status-badge.completed {
+    background: var(--success);
+    color: white;
+}
+
+.schedule-status-badge.overdue {
+    background: var(--error);
+    color: white;
+}
+
+/* VAT Checklist */
+.checklist-section {
+    margin-top: 2rem;
+}
+
+.checklist-section h5 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.vat-checklist {
+    background: var(--bg-primary);
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+}
+
+.checklist-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--secondary-200);
+}
+
+.checklist-item:last-child {
+    border-bottom: none;
+}
+
+.checklist-checkbox {
+    margin-right: 1rem;
+    transform: scale(1.2);
+}
+
+.checklist-text {
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.checklist-item.completed .checklist-text {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+}
+
+/* VAT Analysis */
+.vat-analysis {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.analysis-charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.chart-container {
+    padding: 1.5rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--secondary-200);
+    border-radius: var(--radius-lg);
+    text-align: center;
+}
+
+.analysis-summary {
+    padding: 2rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+}
+
+.analysis-summary h5 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.analysis-insight {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: var(--radius-md);
+    border-left: 4px solid var(--info);
+}
+
+.analysis-insight-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.analysis-insight-text {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* Dark Theme for VAT System */
+[data-theme="dark"] .vat-tab {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .vat-tab:hover {
+    background: var(--secondary-800);
+    color: var(--text-inverse);
+}
+
+[data-theme="dark"] .vat-tab.active {
+    background: var(--primary-600);
+    color: var(--text-inverse);
+}
+
+[data-theme="dark"] .vat-report-header {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .vat-summary-item {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+}
+
+[data-theme="dark"] .vat-detail-section {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+}
+
+[data-theme="dark"] .vat-detail-table th {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .simulation-inputs {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .simulation-result {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+}
+
+[data-theme="dark"] .simulation-item {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .schedule-item {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+}
+
+[data-theme="dark"] .vat-checklist {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+}
+
+[data-theme="dark"] .chart-container {
+    background: var(--bg-secondary);
+    border-color: var(--secondary-700);
+}
+
+[data-theme="dark"] .analysis-summary {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .analysis-insight {
+    background: var(--bg-secondary);
+}
+
+/* Responsive Design for VAT System */
+@media (max-width: 768px) {
+    .vat-tabs {
+        flex-direction: column;
+        gap: 0;
+    }
+    
+    .vat-tab {
+        border-radius: 0;
+        padding: 1rem;
+    }
+    
+    .report-period-selector {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .report-period-selector select {
+        min-width: auto;
+        width: 100%;
+    }
+    
+    .vat-summary-card {
+        grid-template-columns: 1fr;
+    }
+    
+    .vat-report-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .simulation-result-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .analysis-charts {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .schedule-item {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+    
+    .schedule-date {
+        flex: none;
+    }
+    
+    .schedule-content {
+        margin-left: 0;
+    }
+    
+    .schedule-status {
+        flex: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .vat-tab {
+        padding: 0.75rem;
+        font-size: 0.875rem;
+    }
+    
+    .vat-tab i {
+        font-size: 0.875rem;
+    }
+    
+    .vat-report-header {
+        padding: 1rem;
+    }
+    
+    .vat-summary-item {
+        padding: 1rem;
+    }
+    
+    .vat-summary-amount {
+        font-size: 1.25rem;
+    }
+    
+    .simulation-inputs {
+        padding: 1rem;
+    }
+    
+    .simulation-result {
+        padding: 1rem;
+    }
+    
+    .simulation-final-amount .amount {
+        font-size: 1.5rem;
+    }
+}
+
+[data-theme="dark"] .stat-number {
+    color: #0f172a !important;
+}
+
+[data-theme="dark"] .tax-amount {
+    color: #0f172a !important;
+}
+
+[data-theme="dark"] .vat-summary-amount {
+    color: #0f172a !important;
+}
+
+[data-theme="dark"] .stat-label {
+    color: var(--text-secondary) !important;
+}
+
+/* 다크모드 모달 호환성 개선 */
+[data-theme="dark"] .modal-overlay {
+    background: rgba(0, 0, 0, 0.9) !important;
+}
+
+[data-theme="dark"] .modal-container {
+    background: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--secondary-700) !important;
+}
+
+[data-theme="dark"] .report-option {
+    background: var(--bg-secondary) !important;
+    border-color: var(--secondary-600) !important;
+}
+
+[data-theme="dark"] .report-option h3 {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .report-option p {
+    color: var(--text-secondary) !important;
 }
