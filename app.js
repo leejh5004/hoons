@@ -1855,7 +1855,7 @@ function handleOfflineMode() {
 // 온라인 상태 복구 처리
 function handleOnlineMode() {
     console.log('🌐 온라인 모드 복구');
-    showNotification('네트워크 연결이 복구되었습니다.', 'success');
+    // 네트워크 복구 알림 제거 - 백그라운드에서만 처리
     
     // 오프라인 표시 제거
     const offlineIndicator = document.getElementById('offlineIndicator');
@@ -1876,6 +1876,7 @@ window.addEventListener('offline', handleOfflineMode);
 // 수동 네트워크 연결 복구 함수
 async function manualNetworkReconnect() {
     console.log('👆 수동 네트워크 연결 복구 시도');
+    // 수동 복구 시에만 알림 표시 (사용자가 직접 요청한 경우)
     showNotification('네트워크 연결을 복구하고 있습니다...', 'info');
     
     try {
@@ -2101,7 +2102,7 @@ async function attemptFirebaseReconnection() {
         // 브라우저 네트워크 상태 확인
         if (!navigator.onLine) {
             console.warn('⚠️ 브라우저가 오프라인 상태입니다.');
-            showNotification('인터넷 연결을 확인해주세요.', 'warning');
+            // 자동 재연결 시에는 오프라인 알림 제거 - 진짜 오프라인일 때만 handleOfflineMode에서 처리
             return false;
         }
         
@@ -2120,7 +2121,7 @@ async function attemptFirebaseReconnection() {
         await db.doc('test/connection').get();
         
         console.log('✅ Firebase 재연결 성공');
-        showNotification('네트워크 연결이 복구되었습니다.', 'success');
+        // 자동 재연결 시에는 알림 제거 - 백그라운드 처리만
         
         // 온라인 상태 표시 업데이트
         const offlineIndicator = document.getElementById('offlineIndicator');
@@ -2152,15 +2153,15 @@ async function attemptFirebaseReconnection() {
 function monitorFirebaseConnection() {
     if (!db) return;
     
-    // 연결 상태 모니터링
+    // 연결 상태 모니터링 (알림 없이 백그라운드에서만)
     db.enableNetwork().then(() => {
         console.log('🌐 Firebase 연결 활성화');
     }).catch(error => {
         console.warn('⚠️ Firebase 연결 문제:', error);
-        showNotification('네트워크 연결 불안정', 'warning');
+        // 알림 제거 - 백그라운드에서만 처리
     });
     
-    // 주기적으로 연결 상태 체크 (5분마다)
+    // 주기적으로 연결 상태 체크 (5분마다) - 알림 없이
     setInterval(async () => {
         try {
             await db.enableNetwork();
@@ -2168,13 +2169,9 @@ function monitorFirebaseConnection() {
         } catch (error) {
             console.warn('⚠️ Firebase 연결 상태 불안정:', error);
             
-            // 재연결 시도
+            // 재연결 시도 (알림 없이)
             const reconnected = await attemptFirebaseReconnection();
-            if (reconnected) {
-                showNotification('네트워크 연결 복구됨', 'success');
-            } else {
-                showNotification('네트워크 연결 불안정', 'warning');
-            }
+            // 알림 제거 - 백그라운드에서만 재연결 처리
         }
     }, 300000); // 5분 = 300000ms
 }
@@ -2485,7 +2482,10 @@ function updateStatCard(elementId, value) {
     }
 }
 
-function showLoadingSpinner(show) {
+// 로딩 알림 중복 방지를 위한 변수
+let isShowingLoadingNotification = false;
+
+function showLoadingSpinner(show, suppressNotification = false) {
     const spinner = document.getElementById('loadingSpinner');
     const content = document.getElementById('timelineContent');
     
@@ -2497,13 +2497,17 @@ function showLoadingSpinner(show) {
         content.style.display = show ? 'none' : 'block';
     }
     
-    // 로딩 중일 때 사용자 피드백 강화
+    // 로딩 중일 때 사용자 피드백 (검색 시에는 알림 생략)
     if (show) {
         console.log('🔄 로딩 시작...');
-        // 일시적인 알림
-        showNotification('데이터를 불러오고 있습니다...', 'info');
+        // 검색이 아닌 경우에만 알림 표시, 그리고 이미 표시 중이 아닐 때만
+        if (!suppressNotification && !isShowingLoadingNotification) {
+            isShowingLoadingNotification = true;
+            showNotification('데이터를 불러오고 있습니다...', 'info');
+        }
     } else {
         console.log('✅ 로딩 완료');
+        isShowingLoadingNotification = false;
     }
 }
 
@@ -2538,15 +2542,14 @@ async function loadMaintenanceTimeline(searchTerm = '') {
     
     console.log('✅ Firebase 연결 상태 확인됨');
     
-    // 로딩 스피너 표시
-    showLoadingSpinner(true);
+    // 로딩 스피너 표시 (검색 시에는 알림 억제)
+    const isSearching = searchTerm && searchTerm.trim() !== '';
+    showLoadingSpinner(true, isSearching);
     
     try {
-        // 네트워크 연결 상태 확인 및 복구
-        console.log('🌐 네트워크 연결 상태 확인 중...');
+        // 네트워크 연결 상태 확인 (백그라운드에서만)
         try {
             await db.enableNetwork();
-            console.log('✅ 네트워크 연결 활성화됨');
         } catch (networkError) {
             console.warn('⚠️ 네트워크 연결 문제, 재연결 시도:', networkError);
             const reconnected = await attemptFirebaseReconnection();
@@ -4066,10 +4069,22 @@ function initializeSearchAndFilters() {
     // 초기 필터를 '전체'로 설정
     window.currentFilter = 'all';
     
+    // 디바운싱을 위한 타이머 변수
+    let searchTimeout = null;
+    
     if (quickSearch) {
         quickSearch.addEventListener('input', (e) => {
             const searchTerm = e.target.value;
-            loadMaintenanceTimeline(searchTerm);
+            
+            // 이전 타이머가 있으면 취소
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            // 500ms 후에 검색 실행 (디바운싱)
+            searchTimeout = setTimeout(() => {
+                loadMaintenanceTimeline(searchTerm);
+            }, 500);
         });
     }
     
