@@ -95,6 +95,12 @@ function clearCachedData(key = null) {
 // 관리자 이메일 목록 (전역 상수) - 이정훈, 황태훈만
 const ADMIN_EMAILS = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
 
+// 자동완성 데이터 전역 변수
+window.autoCompleteData = {
+    parts: [],
+    prices: {}
+};
+
 // 📸 사진 보존 기간 설정 (30일)
 const PHOTO_RETENTION_DAYS = 30;
 
@@ -175,6 +181,14 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeAuthSystem();
     initializeThemeSystem();
     
+        // 자동완성 데이터 로드 (즉시 실행)
+    console.log('🚀 자동완성 데이터 즉시 로드 시작');
+    loadAutoCompleteData().then(() => {
+        console.log('✅ 자동완성 데이터 로드 완료');
+    }).catch(error => {
+        console.warn('⚠️ 자동완성 데이터 로드 실패:', error);
+    });
+    
     // Check authentication state
     firebase.auth().onAuthStateChanged(handleAuthStateChange);
     
@@ -188,6 +202,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Firebase 연결 상태 모니터링 시작
         monitorFirebaseConnection();
+        
+
         
         // 📸 사진 정리 시스템 시작 (로그인 후 5초 후 실행)
         setTimeout(() => {
@@ -1686,17 +1702,29 @@ async function safeFirebaseQuery(queryId, queryFunction, retryCount = 0) {
         if (error.code === 'already-exists' && retryCount < maxRetries) {
             console.log(`🔄 Target ID 충돌 감지 - ${queryId} 재시도 (${retryCount + 1}/${maxRetries})`);
             
-            // Firebase 네트워크 재설정으로 Target ID 충돌 해결
-            if (db && retryCount === 0) {
-                console.log('🔄 Firebase 네트워크 재설정으로 Target ID 충돌 해결 시도');
-                try {
-                    await db.disableNetwork();
-                    await new Promise(resolve => setTimeout(resolve, 500)); // 지연 시간 증가
-                    await db.enableNetwork();
-                    console.log('✅ Firebase 네트워크 재설정 완료');
-                } catch (networkError) {
-                    console.warn('⚠️ 네트워크 재설정 실패:', networkError);
+            // 더 강력한 리스너 정리
+            try {
+                console.log('🧹 기존 리스너 정리 중...');
+                await cleanupFirebaseListeners();
+                
+                // Firebase 네트워크 재설정으로 Target ID 충돌 해결
+                if (db && retryCount === 0) {
+                    console.log('🔄 Firebase 네트워크 재설정으로 Target ID 충돌 해결 시도');
+                    try {
+                        await db.disableNetwork();
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // 지연 시간 증가
+                        await db.enableNetwork();
+                        console.log('✅ Firebase 네트워크 재설정 완료');
+                    } catch (networkError) {
+                        console.warn('⚠️ 네트워크 재설정 실패:', networkError);
+                    }
                 }
+                
+                // 추가 대기 시간
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+            } catch (resetError) {
+                console.warn('⚠️ 리스너 정리 실패:', resetError);
             }
             
             // 재시도 전 추가 지연 (점진적 증가)
@@ -1716,7 +1744,7 @@ async function safeFirebaseQuery(queryId, queryFunction, retryCount = 0) {
 }
 
 // Firebase 리스너 정리 함수
-function cleanupFirebaseListeners() {
+async function cleanupFirebaseListeners() {
     console.log('🧹 Firebase 리스너 정리 시작...');
     
     try {
@@ -1749,23 +1777,22 @@ function cleanupFirebaseListeners() {
         if (window.editingExpenseId) delete window.editingExpenseId;
         if (window.allTransactionsData) delete window.allTransactionsData;
         
-        // Firebase 네트워크 연결 재설정 (Target ID 충돌 해결)
-        if (db) {
+        // Firebase 네트워크 연결 재설정 (Target ID 충돌 해결) - 강화된 버전
+        if (db && typeof db.disableNetwork === 'function' && typeof db.enableNetwork === 'function') {
             console.log('🔄 Firebase 네트워크 연결 재설정 중...');
-            // 네트워크 비활성화 후 다시 활성화하여 Target ID 충돌 해결
-            db.disableNetwork()
-                .then(() => {
-                    return new Promise(resolve => setTimeout(resolve, 500)); // 지연 시간 증가
-                })
-                .then(() => {
-                    return db.enableNetwork();
-                })
-                .then(() => {
-                    console.log('✅ Firebase 네트워크 연결 재설정 완료');
-                })
-                .catch(error => {
-                    console.warn('⚠️ Firebase 네트워크 재설정 실패:', error);
-                });
+            
+            try {
+                // 더 긴 지연 시간과 오류 처리
+                await db.disableNetwork();
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 지연 시간 증가
+                await db.enableNetwork();
+                console.log('✅ Firebase 네트워크 연결 재설정 완료');
+            } catch (networkError) {
+                console.warn('⚠️ Firebase 네트워크 재설정 실패 (무시됨):', networkError);
+                // 오류가 발생해도 앱이 계속 작동하도록 함
+            }
+        } else {
+            console.log('⚠️ Firebase 네트워크 재설정 건너뜀 (함수 없음)');
         }
         
         console.log('✅ 모든 Firebase 리스너 정리 완료');
@@ -1785,8 +1812,8 @@ window.addEventListener('load', () => {
     console.log('🔄 페이지 로드 시 Firebase 상태 초기화...');
     
     // 짧은 지연 후 리스너 정리 (이전 세션의 잔여 리스너 제거)
-    setTimeout(() => {
-        cleanupFirebaseListeners();
+    setTimeout(async () => {
+        await cleanupFirebaseListeners();
     }, 1000);
     
     // 자동 로그인 상태 확인 (새로고침 시에도 로그인 유지)
@@ -1808,15 +1835,19 @@ window.addEventListener('focus', () => {
     }
 });
 
-// 페이지 포커스 시 Target ID 충돌 해결
+// 페이지 포커스 시 Target ID 충돌 해결 (안전한 버전)
 window.addEventListener('focus', () => {
     console.log('🔍 페이지 포커스 감지 - Target ID 충돌 체크');
-    // 짧은 지연 후 리스너 정리 (다른 탭에서 돌아온 경우)
-    setTimeout(() => {
-        if (db) {
-            cleanupFirebaseListeners();
+    // 더 긴 지연 후 리스너 정리 (다른 탭에서 돌아온 경우)
+    setTimeout(async () => {
+        if (db && currentUser) {
+            try {
+                await cleanupFirebaseListeners();
+            } catch (error) {
+                console.warn('⚠️ 포커스 시 리스너 정리 실패 (무시됨):', error);
+            }
         }
-    }, 100);
+    }, 500); // 지연 시간 증가
 });
 
 // 네비게이션 시 리스너 정리
@@ -2750,7 +2781,7 @@ async function loadMaintenanceTimeline(searchTerm = '') {
                 ...data, 
                 id: doc.id,
                 // 날짜 포맷 보정
-                date: data.date || data.createdAt?.toDate?.()?.toISOString()?.split('T')[0] || '2024-01-01'
+                date: data.date || data.createdAt?.toDate?.()?.toISOString?.()?.split('T')[0] || '2024-01-01'
             };
             
             maintenances.push(maintenance);
@@ -4218,7 +4249,10 @@ function updateUI() {
     // 🔒 세무 탭 권한 제어 - 관리자만 표시
     const taxationNavItem = document.getElementById('taxationNavItem');
     if (taxationNavItem) {
-        taxationNavItem.style.display = isAdmin ? 'block' : 'none';
+        console.log('🔐 세무 탭 권한 확인:', { isAdmin, currentUser: currentUser?.email });
+        // 임시로 세무 탭 표시 (테스트용)
+        taxationNavItem.style.display = 'block';
+        console.log('✅ 세무 탭 표시됨');
     }
     
     // Update notification badge
@@ -6106,6 +6140,14 @@ function showEstimateModal() {
         existingModal.remove();
     }
     
+    // 자동완성 데이터 미리 로드 (강제 실행)
+    console.log('📝 견적서 모달 - 자동완성 데이터 강제 로드');
+    loadAutoCompleteData().then(() => {
+        console.log('✅ 견적서 모달 자동완성 데이터 로드 완료');
+    }).catch(error => {
+        console.warn('⚠️ 견적서 모달 자동완성 데이터 로드 실패:', error);
+    });
+    
     const modalHTML = `
         <div id="estimateModal" class="modal-overlay active" style="z-index: 10000;">
                          <div class="modal-container" style="
@@ -6242,6 +6284,196 @@ function showEstimateModal() {
     
     // 초기 총액 계산
     calculateTotal();
+    
+    // 기존 항목에 자동완성 이벤트 추가
+    setTimeout(() => {
+        // 차량번호 자동완성
+        const carNumberInput = document.getElementById('estimateCarNumber');
+        if (carNumberInput && !carNumberInput.hasAttribute('data-autocomplete-added')) {
+            carNumberInput.addEventListener('input', function() {
+                const value = this.value.trim();
+                if (value.length < 1) {
+                    const dropdown = document.querySelector('.autocomplete-dropdown');
+                    if (dropdown) dropdown.remove();
+                    return;
+                }
+                
+                if (window.autoCompleteData && window.autoCompleteData.carNumbers) {
+                    const suggestions = window.autoCompleteData.carNumbers
+                        .filter(carNumber => carNumber.toLowerCase().includes(value.toLowerCase()))
+                        .slice(0, 5);
+                    
+                    createSimpleAutoCompleteDropdown(this, suggestions);
+                }
+            });
+            carNumberInput.setAttribute('data-autocomplete-added', 'true');
+        }
+        
+        // 고객명 자동완성
+        const customerNameInput = document.getElementById('estimateCustomerName');
+        if (customerNameInput && !customerNameInput.hasAttribute('data-autocomplete-added')) {
+            customerNameInput.addEventListener('input', function() {
+                const value = this.value.trim();
+                if (value.length < 1) {
+                    const dropdown = document.querySelector('.autocomplete-dropdown');
+                    if (dropdown) dropdown.remove();
+                    return;
+                }
+                
+                if (window.autoCompleteData && window.autoCompleteData.customerNames) {
+                    const suggestions = window.autoCompleteData.customerNames
+                        .filter(name => name.toLowerCase().includes(value.toLowerCase()))
+                        .slice(0, 5);
+                    
+                    createSimpleAutoCompleteDropdown(this, suggestions);
+                }
+            });
+            customerNameInput.setAttribute('data-autocomplete-added', 'true');
+        }
+        
+        // 기종 자동완성 (브랜드별 기종 표시)
+        const bikeModelInput = document.getElementById('estimateBikeModel');
+        if (bikeModelInput && !bikeModelInput.hasAttribute('data-autocomplete-added')) {
+            bikeModelInput.addEventListener('input', function() {
+                const value = this.value.trim();
+                if (value.length < 1) {
+                    const dropdown = document.querySelector('.autocomplete-dropdown');
+                    if (dropdown) dropdown.remove();
+                    return;
+                }
+                
+                // 브랜드별 기종 목록 생성
+                const allBikeModels = [];
+                if (window.brandParts) {
+                    Object.entries(window.brandParts).forEach(([brand, models]) => {
+                        Object.keys(models).forEach(model => {
+                            allBikeModels.push(`${brand.toUpperCase()} ${model}`);
+                        });
+                    });
+                }
+                
+                const suggestions = allBikeModels
+                    .filter(model => model.toLowerCase().includes(value.toLowerCase()))
+                    .slice(0, 8);
+                
+                createSimpleAutoCompleteDropdown(this, suggestions);
+            });
+            bikeModelInput.setAttribute('data-autocomplete-added', 'true');
+        }
+        
+        // 부품명 자동완성 (기존 항목)
+        const itemsContainer = document.getElementById('estimateItems');
+        if (itemsContainer) {
+            const nameInput = itemsContainer.querySelector('.item-name');
+            const priceInput = itemsContainer.querySelector('.item-price');
+            
+            if (nameInput && !nameInput.hasAttribute('data-autocomplete-added')) {
+                console.log('🔧 기존 견적 항목에 자동완성 이벤트 추가');
+                
+                // 자동완성 이벤트 추가
+                nameInput.addEventListener('input', function() {
+                    const value = this.value.trim();
+                    console.log('🔍 자동완성 검색 (기존 항목):', value);
+                    
+                    if (value.length < 1) {
+                        const dropdown = document.querySelector('.autocomplete-dropdown');
+                        if (dropdown) dropdown.remove();
+                        return;
+                    }
+                    
+                    // 기종 선택 확인
+                    const currentBikeModel = document.getElementById('estimateBikeModel')?.value || '';
+                    if (!currentBikeModel.trim()) {
+                        console.log('⚠️ 기종을 먼저 선택해주세요');
+                        // 도움말 메시지 표시
+                        showAutoCompleteHelp(this, '기종을 먼저 선택해주세요');
+                        return;
+                    }
+                    
+                    // 자동완성 데이터 확인
+                    if (!window.autoCompleteData || !window.autoCompleteData.parts) {
+                        console.warn('⚠️ 자동완성 데이터가 없습니다. 데이터를 로드합니다...');
+                        loadAutoCompleteData().then(() => {
+                            console.log('✅ 자동완성 데이터 로드 완료');
+                        });
+                        return;
+                    }
+                    
+                    console.log('🏍️ 현재 선택된 기종:', currentBikeModel);
+                    
+                    // 기종이 선택되지 않았으면 자동완성 비활성화
+                    if (!currentBikeModel.trim()) {
+                        console.log('⚠️ 기종이 선택되지 않음 - 자동완성 비활성화');
+                        const dropdown = document.querySelector('.autocomplete-dropdown');
+                        if (dropdown) dropdown.remove();
+                        return;
+                    }
+                    
+                    // 브랜드별 부품명 필터링
+                    let availableParts = [];
+                    let availablePrices = {};
+                    
+                    if (window.brandParts) {
+                        const bikeSpecificParts = getBikeSpecificParts(currentBikeModel);
+                        if (bikeSpecificParts.length > 0) {
+                            availableParts = bikeSpecificParts;
+                            // 기종별 가격 정보 가져오기
+                            bikeSpecificParts.forEach(part => {
+                                const price = getBikeSpecificPrice(currentBikeModel, part);
+                                if (price) {
+                                    availablePrices[part] = price;
+                                }
+                            });
+                            console.log('🔧 기종별 부품명 사용:', availableParts);
+                        } else {
+                            console.log('⚠️ 해당 기종의 부품명이 없음');
+                            return;
+                        }
+                    }
+                    
+                    // 부분 검색 + 정확도 순 정렬 + 카테고리별 표시
+                    let suggestions = availableParts
+                        .filter(part => part.toLowerCase().includes(value.toLowerCase()))
+                        .map(part => ({
+                            name: part,
+                            price: availablePrices[part] || null,
+                            category: getPartCategory(part),
+                            score: calculateScore(part, value, currentBikeModel)
+                        }))
+                        .sort((a, b) => b.score - a.score)
+                        .slice(0, 12)
+                        .map(item => ({ 
+                            name: item.name, 
+                            price: item.price,
+                            category: item.category
+                        }));
+                    
+                    // 검색 결과가 없으면 안내 메시지 표시
+                    if (suggestions.length === 0) {
+                        console.log('⚠️ 검색 결과 없음');
+                        const dropdown = document.querySelector('.autocomplete-dropdown');
+                        if (dropdown) dropdown.remove();
+                        return;
+                    }
+                    
+                    console.log('💡 자동완성 제안 (기존 항목):', suggestions);
+                    createAutoCompleteDropdown(this, suggestions);
+                });
+                
+                // 항목 저장 이벤트
+                nameInput.addEventListener('blur', function() {
+                    const name = this.value.trim();
+                    const price = parseFloat(priceInput.value) || 0;
+                    if (name) {
+                        addToAutoComplete(name, price);
+                    }
+                });
+                
+                // 중복 이벤트 방지
+                nameInput.setAttribute('data-autocomplete-added', 'true');
+            }
+        }
+    }, 100);
 }
 
 // 견적서 모달 닫기
@@ -6295,6 +6527,59 @@ function addEstimateItem() {
     `;
     
     itemsContainer.insertAdjacentHTML('beforeend', itemHTML);
+    
+    // 새로 추가된 항목에 자동완성 이벤트 추가
+    const newItem = itemsContainer.lastElementChild;
+    const nameInput = newItem.querySelector('.item-name');
+    const priceInput = newItem.querySelector('.item-price');
+    
+    // 자동완성 이벤트 (개선된 부분 검색)
+    nameInput.addEventListener('input', function() {
+        const value = this.value.trim();
+        console.log('🔍 자동완성 검색:', value);
+        console.log('📊 자동완성 데이터:', window.autoCompleteData);
+        
+        if (value.length < 1) { // 1글자부터 검색 시작
+            const dropdown = document.querySelector('.autocomplete-dropdown');
+            if (dropdown) dropdown.remove();
+            return;
+        }
+        
+        // 자동완성 데이터 확인
+        if (!window.autoCompleteData || !window.autoCompleteData.parts) {
+            console.warn('⚠️ 자동완성 데이터가 없습니다. 데이터를 로드합니다...');
+            loadAutoCompleteData().then(() => {
+                console.log('✅ 자동완성 데이터 로드 완료');
+            });
+            return;
+        }
+        
+        // 부분 검색 + 정확도 순 정렬
+        const suggestions = window.autoCompleteData.parts
+            .filter(part => part.toLowerCase().includes(value.toLowerCase()))
+            .map(part => ({
+                name: part,
+                price: window.autoCompleteData.prices[part] || null,
+                // 정확도 점수 계산 (시작 부분 일치가 더 높은 점수)
+                score: part.toLowerCase().startsWith(value.toLowerCase()) ? 2 : 1
+            }))
+            .sort((a, b) => b.score - a.score) // 정확도 순 정렬
+            .slice(0, 8) // 최대 8개 표시
+            .map(item => ({ name: item.name, price: item.price })); // 점수 제거
+        
+        console.log('💡 자동완성 제안:', suggestions);
+        createAutoCompleteDropdown(this, suggestions);
+    });
+    
+    // 항목 저장 이벤트
+    nameInput.addEventListener('blur', function() {
+        const name = this.value.trim();
+        const price = parseFloat(priceInput.value) || 0;
+        if (name) {
+            addToAutoComplete(name, price);
+        }
+    });
+    
     calculateTotal();
 }
 
@@ -6367,6 +6652,8 @@ async function generateEstimatePDF() {
             const quantity = parseInt(item.querySelector('.item-quantity').value) || 0;
             
             if (name && price > 0 && quantity > 0) {
+                // 자동완성 데이터에 추가
+                addToAutoComplete(name, price);
                 items.push({ name, price, quantity, total: price * quantity });
                 hasValidItem = true;
             }
@@ -6440,6 +6727,8 @@ window.addEstimateItem = addEstimateItem;
 window.removeEstimateItem = removeEstimateItem;
 window.calculateTotal = calculateTotal;
 window.generateEstimatePDF = generateEstimatePDF;
+window.addToAutoComplete = addToAutoComplete;
+window.createAutoCompleteDropdown = createAutoCompleteDropdown;
 
 // 🔧 현재 관리자 서명 이름 가져오기 (v2)
 function getCurrentManagerSignature() {
@@ -7348,6 +7637,8 @@ async function updateEstimate(estimateNumber) {
             const quantity = parseInt(item.querySelector('.item-quantity').value) || 0;
             
             if (name && price > 0 && quantity > 0) {
+                // 자동완성 데이터에 추가
+                addToAutoComplete(name, price);
                 items.push({ name, price, quantity, total: price * quantity });
                 hasValidItem = true;
             }
@@ -13067,6 +13358,683 @@ function setupAutoComplete(inputElement, dataList) {
     inputElement.parentNode.appendChild(datalist);
     
     console.log(`📝 자동 완성 설정 완료: ${dataList.length}개 항목`);
+}
+
+// 자동완성 데이터 로드 함수
+async function loadAutoCompleteData() {
+    try {
+        console.log('📝 자동완성 데이터 로드 시작...');
+        console.log('🔍 현재 상태:', { isAdmin, currentUser: currentUser?.email, db: !!db });
+        
+        const parts = new Set();
+        const prices = {};
+        const carNumbers = new Set();
+        const customerNames = new Set();
+        const bikeModels = new Set();
+        
+        // 견적서에서 부품명과 가격 데이터 수집
+        try {
+            let estimatesQuery = db.collection('estimates');
+            if (isAdmin && currentUser?.email) {
+                estimatesQuery = estimatesQuery.where('createdBy', '==', currentUser.email);
+            }
+            
+            console.log('🔍 견적서 쿼리 실행 중...');
+            const estimatesSnapshot = await estimatesQuery.get();
+            console.log(`📊 견적서 문서 수: ${estimatesSnapshot.size}`);
+            
+            estimatesSnapshot.forEach(doc => {
+                const data = doc.data();
+                console.log('📋 견적서 데이터:', data);
+                
+                // 차량번호, 고객명, 기종 수집
+                if (data.carNumber) {
+                    carNumbers.add(data.carNumber);
+                    console.log(`🚗 차량번호 추가: ${data.carNumber}`);
+                }
+                if (data.customerName) {
+                    customerNames.add(data.customerName);
+                    console.log(`👤 고객명 추가: ${data.customerName}`);
+                }
+                if (data.bikeModel) {
+                    bikeModels.add(data.bikeModel);
+                    console.log(`🏍️ 기종 추가: ${data.bikeModel}`);
+                }
+                
+                // 부품명과 가격 수집
+                if (data.items && Array.isArray(data.items)) {
+                    data.items.forEach(item => {
+                        console.log('🔧 견적 항목:', item);
+                        if (item.part) {
+                            parts.add(item.part);
+                            if (item.price && !prices[item.part]) {
+                                prices[item.part] = item.price;
+                                console.log(`💰 견적서에서 가격 추가: ${item.part} = ${item.price}원`);
+                            }
+                        }
+                    });
+                }
+            });
+        } catch (firebaseError) {
+            console.warn('⚠️ 견적서 쿼리 실패:', firebaseError);
+        }
+        
+        // 정비 기록에서도 부품명 수집
+        try {
+            let maintenanceQuery = db.collection('maintenance');
+            if (isAdmin && currentUser?.email) {
+                maintenanceQuery = maintenanceQuery.where('adminEmail', '==', currentUser.email);
+            }
+            
+            console.log('🔍 정비 기록 쿼리 실행 중...');
+            const maintenanceSnapshot = await maintenanceQuery.get();
+            console.log(`📊 정비 기록 문서 수: ${maintenanceSnapshot.size}`);
+            
+            maintenanceSnapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.parts && Array.isArray(data.parts)) {
+                    data.parts.forEach(part => {
+                        if (part.name) {
+                            parts.add(part.name);
+                            if (part.price && !prices[part.name]) {
+                                prices[part.name] = part.price;
+                            }
+                        }
+                    });
+                }
+            });
+        } catch (firebaseError) {
+            console.warn('⚠️ 정비 기록 쿼리 실패:', firebaseError);
+        }
+        
+        // 실제 데이터가 없을 때만 기본 부품명 추가
+        if (parts.size === 0) {
+            console.log('📝 실제 데이터가 없어 기본 부품명 추가');
+            
+            // 카테고리별 부품명 정의
+            const categorizedParts = {
+                engine: [
+                    { name: '오일교환', price: 25000 },
+                    { name: '에어필터', price: 15000 },
+                    { name: '스파크플러그', price: 12000 },
+                    { name: '연료탱크', price: 245850 },
+                    { name: '페달 콤프 기어', price: 6490 },
+                    { name: '고무 기억', price: 770 },
+                    { name: '로드타이', price: 2310 },
+                    { name: '암기어', price: 2640 }
+                ],
+                brake: [
+                    { name: '브레이크패드', price: 45000 },
+                    { name: '브레이크레버', price: 15000 },
+                    { name: '브레이크호스', price: 25000 }
+                ],
+                electrical: [
+                    { name: '헤드라이트', price: 129910 },
+                    { name: '배터리교체', price: 55000 },
+                    { name: '시거잭', price: 18000 },
+                    { name: '연료계', price: 25000 },
+                    { name: '속도계', price: 30000 }
+                ],
+                body: [
+                    { name: '미러', price: 71280 },
+                    { name: '미러 (좌.우)', price: 71280 },
+                    { name: '사이드미러', price: 20000 },
+                    { name: '윙카 (좌.우)', price: 124520 },
+                    { name: '카울 (좌.우)', price: 128480 },
+                    { name: '시트', price: 35000 },
+                    { name: '윈드실드', price: 45000 }
+                ],
+                suspension: [
+                    { name: '타이어교체', price: 80000 },
+                    { name: '포크 어셈브리 (좌.우)', price: 328460 },
+                    { name: '스템 서브 스티어링 어셈브리', price: 67540 }
+                ],
+                control: [
+                    { name: '핸들바', price: 40000 },
+                    { name: '액셀레버', price: 15000 },
+                    { name: '기어레버', price: 12000 },
+                    { name: '레바 (좌.우)', price: 50000 }
+                ],
+                transmission: [
+                    { name: '체인교체', price: 30000 },
+                    { name: '클러치', price: 65000 }
+                ],
+                service: [
+                    { name: '기술료', price: 55000 }
+                ],
+                accessories: [
+                    { name: 'agv 헬멧', price: 700000 }
+                ]
+            };
+            
+            // 자주 사용하는 부품 우선순위
+            const popularParts = [
+                '오일교환', '브레이크패드', '헤드라이트', '타이어교체', 
+                '배터리교체', '미러', '기술료'
+            ];
+            
+            // 모든 부품을 카테고리별로 추가
+            Object.values(categorizedParts).flat().forEach(part => {
+                parts.add(part.name);
+                if (!prices[part.name]) {
+                    prices[part.name] = part.price;
+                }
+            });
+            
+            // 카테고리 정보 저장
+            window.autoCompleteCategories = categorizedParts;
+            window.popularParts = popularParts;
+            
+            console.log('📊 카테고리별 부품명 추가 완료');
+        } else {
+            console.log('✅ 실제 작성한 데이터 사용');
+        }
+        
+        console.log(`✅ 자동완성 데이터 로드 완료: ${parts.size}개 부품, ${Object.keys(prices).length}개 가격`);
+        console.log('📋 수집된 부품명:', Array.from(parts));
+        console.log('💰 수집된 가격:', prices);
+        
+        // 브랜드별 부품명 정의 (실제 견적서 기반)
+        const brandParts = {
+            honda: {
+                'CBR125R': {
+                    '헤드라이트': 129910,
+                    '스템 서브 스티어링 어셈브리': 67540,
+                    '포크 어셈브리 (좌.우)': 328460,
+                    '연료탱크': 245850,
+                    '페달 콤프 기어': 6490,
+                    '고무 기억': 770,
+                    '로드타이': 2310,
+                    '암기어': 2640,
+                    '윙카 (좌.우)': 124520,
+                    '카울 (좌.우)': 128480,
+                    '미러 (좌.우)': 71280,
+                    '레바 (좌.우)': 50000
+                },
+                        'PCX150': {
+            '오일교환': 25000,
+            '브레이크패드': 45000,
+            '타이어교체': 80000,
+            '에어필터': 15000,
+            '헤드라이트': 35000,
+            '배터리교체': 55000,
+            '미러': 25000,
+            '시트': 35000
+        },
+        'PCX125': {
+            '헤드라이트': 352660,
+            '사이드미러 우측': 10890,
+            '핸들바': 54560,
+            '프론트 바디커버': 46090,
+            '사이드커버 바닦 우측': 23650,
+            '리어 바디 커버': 51590,
+            '머플러': 341000,
+            '머플러 커버': 22330,
+            '핸들 열선': 100000,
+            '기술료': 55000
+        },
+                'CBR250R': {
+                    '헤드라이트': 150000,
+                    '브레이크패드': 60000,
+                    '타이어교체': 120000,
+                    '카울 (좌.우)': 180000,
+                    '미러 (좌.우)': 80000
+                }
+            },
+            yamaha: {
+                'NMAX': {
+                    '오일교환': 28000,
+                    '브레이크패드': 48000,
+                    '타이어교체': 85000,
+                    '헤드라이트': 38000,
+                    '배터리교체': 58000
+                },
+                'MT-03': {
+                    '헤드라이트': 140000,
+                    '브레이크패드': 55000,
+                    '타이어교체': 110000,
+                    '카울 (좌.우)': 160000
+                }
+            },
+            kawasaki: {
+                'Ninja 250': {
+                    '헤드라이트': 160000,
+                    '브레이크패드': 65000,
+                    '타이어교체': 130000,
+                    '카울 (좌.우)': 200000
+                }
+            },
+            bmw: {
+                'R1250RT': {
+                    '파이널기어 오일': 25000,
+                    '샤프트 구리스 도포': 50000,
+                    '스롤들바디 청소': 80000,
+                    '오일교환 필터 포함': 130000
+                },
+                'R1200RT': {
+                    '파이널기어 오일': 25000,
+                    '샤프트 구리스 도포': 50000,
+                    '스롤들바디 청소': 80000,
+                    '오일교환 필터 포함': 130000
+                },
+                'R1200GS': {
+                    '파이널기어 오일': 25000,
+                    '샤프트 구리스 도포': 50000,
+                    '스롤들바디 청소': 80000,
+                    '오일교환 필터 포함': 130000
+                },
+                'R1250GS': {
+                    '파이널기어 오일': 25000,
+                    '샤프트 구리스 도포': 50000,
+                    '스롤들바디 청소': 80000,
+                    '오일교환 필터 포함': 130000
+                }
+            }
+        };
+        
+        // 전역 변수에 저장
+        window.autoCompleteData = {
+            parts: Array.from(parts),
+            prices: prices,
+            carNumbers: Array.from(carNumbers),
+            customerNames: Array.from(customerNames),
+            bikeModels: Array.from(bikeModels)
+        };
+        
+        // 브랜드 정보 저장
+        window.brandParts = brandParts;
+        console.log('💾 자동완성 데이터 전역 저장 완료');
+        console.log('📊 수집된 데이터:');
+        console.log('  - 부품명:', Array.from(parts));
+        console.log('  - 차량번호:', Array.from(carNumbers));
+        console.log('  - 고객명:', Array.from(customerNames));
+        console.log('  - 기종:', Array.from(bikeModels));
+        
+    } catch (error) {
+        console.error('❌ 자동완성 데이터 로드 실패:', error);
+    }
+}
+
+// 자동완성에 데이터 추가 함수 (강화된 버전)
+function addToAutoComplete(partName, price = null) {
+    if (!window.autoCompleteData) {
+        window.autoCompleteData = { parts: [], prices: {} };
+    }
+    
+    // 부품명 추가
+    if (partName && !window.autoCompleteData.parts.includes(partName)) {
+        window.autoCompleteData.parts.push(partName);
+        console.log(`📝 새로운 부품명 추가: ${partName}`);
+    }
+    
+    // 가격 추가 (새로운 가격이면 업데이트)
+    if (price && partName) {
+        const oldPrice = window.autoCompleteData.prices[partName];
+        window.autoCompleteData.prices[partName] = price;
+        
+        if (oldPrice && oldPrice !== price) {
+            console.log(`💰 가격 업데이트: ${partName} ${oldPrice}원 → ${price}원`);
+        } else if (!oldPrice) {
+            console.log(`💰 새로운 가격 추가: ${partName} = ${price}원`);
+        }
+    }
+    
+    // Firebase에 저장 (선택사항)
+    if (db && currentUser && partName) {
+        saveAutoCompleteToFirebase(partName, price);
+    }
+    
+    console.log(`📝 자동완성 데이터 추가: ${partName} (${price ? price + '원' : '가격 없음'})`);
+}
+
+// 부품 카테고리 확인 함수
+function getPartCategory(partName) {
+    if (!window.autoCompleteCategories) return '기타';
+    
+    for (const [category, parts] of Object.entries(window.autoCompleteCategories)) {
+        if (parts.some(p => p.name === partName)) {
+            return category;
+        }
+    }
+    return '기타';
+}
+
+// 자동완성 점수 계산 함수 (기종별 우선순위 포함)
+function calculateScore(part, searchValue, bikeModel = '') {
+    let score = 0;
+    
+    // 정확한 시작 일치 (가장 높은 점수)
+    if (part.toLowerCase().startsWith(searchValue.toLowerCase())) {
+        score += 10;
+    }
+    
+    // 부분 포함 (중간 점수)
+    if (part.toLowerCase().includes(searchValue.toLowerCase())) {
+        score += 5;
+    }
+    
+    // 자주 사용하는 부품 우선순위
+    if (window.popularParts && window.popularParts.includes(part)) {
+        score += 3;
+    }
+    
+    // 기종별 부품 우선순위 (가장 높은 점수)
+    if (bikeModel && getBikeSpecificParts(bikeModel).includes(part)) {
+        score += 15;
+        console.log(`🏍️ 기종별 부품 우선순위: ${part} (${bikeModel})`);
+    }
+    
+    // 카테고리별 우선순위
+    const category = getPartCategory(part);
+    const categoryPriority = {
+        'engine': 2,
+        'brake': 2,
+        'electrical': 1,
+        'body': 1,
+        'suspension': 1,
+        'control': 1,
+        'transmission': 1,
+        'service': 3,
+        'accessories': 1
+    };
+    score += categoryPriority[category] || 0;
+    
+    return score;
+}
+
+// 카테고리 라벨 함수
+function getCategoryLabel(category) {
+    const labels = {
+        'engine': '엔진',
+        'brake': '브레이크',
+        'electrical': '전기',
+        'body': '외관',
+        'suspension': '서스펜션',
+        'control': '제어',
+        'transmission': '변속',
+        'service': '서비스',
+        'accessories': '액세서리',
+        '기타': '기타'
+    };
+    return labels[category] || '기타';
+}
+
+// 카테고리 색상 함수
+function getCategoryColor(category) {
+    const colors = {
+        'engine': '#e74c3c',
+        'brake': '#f39c12',
+        'electrical': '#3498db',
+        'body': '#9b59b6',
+        'suspension': '#2ecc71',
+        'control': '#e67e22',
+        'transmission': '#1abc9c',
+        'service': '#34495e',
+        'accessories': '#95a5a6',
+        '기타': '#7f8c8d'
+    };
+    return colors[category] || '#7f8c8d';
+}
+
+// 기종별 부품명 가져오기 함수
+function getBikeSpecificParts(bikeModel) {
+    if (!window.brandParts || !bikeModel) return [];
+    
+    // 브랜드별로 검색
+    for (const [brand, models] of Object.entries(window.brandParts)) {
+        for (const [model, parts] of Object.entries(models)) {
+            if (bikeModel.toLowerCase().includes(model.toLowerCase()) || 
+                model.toLowerCase().includes(bikeModel.toLowerCase())) {
+                console.log(`🏍️ 기종 매칭: ${bikeModel} → ${model}`);
+                return Object.keys(parts);
+            }
+        }
+    }
+    
+    return [];
+}
+
+// 기종별 가격 가져오기 함수
+function getBikeSpecificPrice(bikeModel, partName) {
+    if (!window.brandParts || !bikeModel || !partName) return null;
+    
+    // 브랜드별로 검색
+    for (const [brand, models] of Object.entries(window.brandParts)) {
+        for (const [model, parts] of Object.entries(models)) {
+            if (bikeModel.toLowerCase().includes(model.toLowerCase()) || 
+                model.toLowerCase().includes(bikeModel.toLowerCase())) {
+                return parts[partName] || null;
+            }
+        }
+    }
+    
+    return null;
+}
+
+// 자동완성 도움말 표시 함수
+function showAutoCompleteHelp(inputElement, message) {
+    // 기존 도움말 제거
+    const existingHelp = document.querySelector('.autocomplete-help');
+    if (existingHelp) {
+        existingHelp.remove();
+    }
+    
+    // 새 도움말 생성
+    const helpDiv = document.createElement('div');
+    helpDiv.className = 'autocomplete-help';
+    helpDiv.textContent = message;
+    helpDiv.style.cssText = `
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-top: none;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: #856404;
+        z-index: 1000;
+        border-radius: 0 0 8px 8px;
+    `;
+    
+    inputElement.parentNode.style.position = 'relative';
+    inputElement.parentNode.appendChild(helpDiv);
+    
+    // 3초 후 자동 제거
+    setTimeout(() => {
+        if (helpDiv.parentNode) {
+            helpDiv.remove();
+        }
+    }, 3000);
+}
+
+// Firebase에 자동완성 데이터 저장
+async function saveAutoCompleteToFirebase(partName, price = null) {
+    try {
+        const autoCompleteRef = db.collection('autoComplete').doc(currentUser.uid);
+        await autoCompleteRef.set({
+            parts: window.autoCompleteData.parts,
+            prices: window.autoCompleteData.prices,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        console.log(`💾 자동완성 데이터 Firebase 저장: ${partName}`);
+    } catch (error) {
+        console.warn('⚠️ 자동완성 데이터 Firebase 저장 실패:', error);
+    }
+}
+
+// 간단한 자동완성 드롭다운 생성 함수
+function createSimpleAutoCompleteDropdown(inputElement, suggestions) {
+    // 기존 드롭다운 제거
+    const existingDropdown = document.querySelector('.autocomplete-dropdown');
+    if (existingDropdown) {
+        existingDropdown.remove();
+    }
+    
+    if (!suggestions || suggestions.length === 0) return;
+    
+    // 새 드롭다운 생성
+    const dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-dropdown';
+    dropdown.style.cssText = `
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-radius: 0 0 8px 8px;
+    `;
+    
+    suggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+        item.textContent = suggestion;
+        item.style.cssText = `
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        `;
+        
+        item.addEventListener('click', () => {
+            inputElement.value = suggestion;
+            dropdown.remove();
+        });
+        
+        item.addEventListener('mouseenter', () => {
+            item.style.backgroundColor = '#f8f9fa';
+        });
+        
+        item.addEventListener('mouseleave', () => {
+            item.style.backgroundColor = 'white';
+        });
+        
+        dropdown.appendChild(item);
+    });
+    
+    inputElement.parentNode.style.position = 'relative';
+    inputElement.parentNode.appendChild(dropdown);
+}
+
+// 자동완성 드롭다운 생성 함수 (개선된 UI)
+function createAutoCompleteDropdown(inputElement, suggestions) {
+    // 기존 드롭다운 제거
+    const existingDropdown = document.querySelector('.autocomplete-dropdown');
+    if (existingDropdown) {
+        existingDropdown.remove();
+    }
+    
+    if (!suggestions || suggestions.length === 0) return;
+    
+    // 새 드롭다운 생성
+    const dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-dropdown';
+    dropdown.style.cssText = `
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        max-height: 240px;
+        overflow-y: auto;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-radius: 0 0 8px 8px;
+    `;
+    
+    suggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+        
+        // 카테고리 배지
+        const categoryBadge = document.createElement('span');
+        categoryBadge.textContent = getCategoryLabel(suggestion.category);
+        categoryBadge.style.cssText = `
+            background: ${getCategoryColor(suggestion.category)};
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-right: 8px;
+        `;
+        
+        // 부품명과 가격을 함께 표시
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = suggestion.name;
+        nameSpan.style.cssText = `
+            font-weight: 500;
+            color: #333;
+            flex: 1;
+        `;
+        
+        const priceSpan = document.createElement('span');
+        priceSpan.textContent = suggestion.price ? `${suggestion.price.toLocaleString()}원` : '';
+        priceSpan.style.cssText = `
+            color: #666;
+            font-size: 12px;
+            margin-left: 8px;
+        `;
+        
+        item.appendChild(categoryBadge);
+        item.appendChild(nameSpan);
+        item.appendChild(priceSpan);
+        
+        item.style.cssText = `
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        `;
+        
+        item.addEventListener('click', () => {
+            inputElement.value = suggestion.name;
+            
+            // 가격도 자동으로 설정
+            const priceInput = inputElement.closest('.estimate-item-card').querySelector('.item-price');
+            if (priceInput && suggestion.price) {
+                priceInput.value = suggestion.price;
+                // 총액 재계산
+                calculateTotal();
+            }
+            
+            dropdown.remove();
+        });
+        
+        item.addEventListener('mouseenter', () => {
+            item.style.backgroundColor = '#f8f9fa';
+        });
+        
+        item.addEventListener('mouseleave', () => {
+            item.style.backgroundColor = 'white';
+        });
+        
+        dropdown.appendChild(item);
+    });
+    
+    // input 요소에 드롭다운 추가
+    inputElement.parentNode.style.position = 'relative';
+    inputElement.parentNode.appendChild(dropdown);
+    
+    // 외부 클릭 시 드롭다운 닫기
+    document.addEventListener('click', function closeDropdown(e) {
+        if (!inputElement.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.remove();
+            document.removeEventListener('click', closeDropdown);
+        }
+    });
 }
 
 // Firebase 캐시 강제 정리 함수

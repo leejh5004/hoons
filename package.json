@@ -2,6 +2,7 @@
   "name": "twohoons-log",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "homepage": "https://leejh5004.github.io/hoons",
   "scripts": {
     "dev": "vite",

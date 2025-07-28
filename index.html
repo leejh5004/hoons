@@ -101,7 +101,7 @@
                         로그인
                     </button>
                     <div class="auth-footer">
-                        <button type="button" class="forgot-password-link" onclick="showPasswordResetModal()">
+                        <button type="button" class="forgot-password-link" onclick="showPasswordResetModal()" title="비밀번호 재설정">
                             <i class="fas fa-key"></i>
                             비밀번호를 잊으셨나요?
                         </button>
@@ -134,7 +134,7 @@
                                 <strong>예시:</strong> 제주서귀포차3107, 부산해운대바1234, 경기수원가5678
                             </small>
                         </div>
-                        <div class="input-validation" id="motorcycleValidation" style="display: none;">
+                        <div class="input-validation hidden" id="motorcycleValidation">
                             <i class="fas fa-exclamation-triangle"></i>
                             <span id="validationMessage"></span>
                         </div>
@@ -197,7 +197,7 @@
                 <div class="search-bar">
                     <i class="fas fa-search search-icon"></i>
                     <input type="text" id="quickSearch" placeholder="정비 이력 검색...">
-                    <button class="filter-toggle" id="filterToggle">
+                    <button class="filter-toggle" id="filterToggle" title="필터 토글">
                         <i class="fas fa-filter"></i>
                     </button>
                 </div>
@@ -250,7 +250,7 @@
                         <!-- Maintenance cards will be dynamically inserted here -->
                     </div>
                     
-                    <div class="empty-state" id="emptyState" style="display: none;">
+                    <div class="empty-state hidden" id="emptyState">
                         <i class="fas fa-inbox"></i>
                         <h3>정비 이력이 없습니다</h3>
                         <p>첫 번째 정비를 등록해보세요!</p>
@@ -274,11 +274,11 @@
                     <p class="taxation-subtitle">간편한 세무 관리 솔루션</p>
                 </div>
                 <div class="taxation-period">
-                    <select id="taxationYear" class="period-select">
+                    <select id="taxationYear" class="period-select" title="세무 연도 선택">
                         <option value="2024">2024년</option>
                         <option value="2023">2023년</option>
                     </select>
-                    <select id="taxationQuarter" class="period-select">
+                    <select id="taxationQuarter" class="period-select" title="세무 분기 선택">
                         <option value="1">1분기</option>
                         <option value="2">2분기</option>
                         <option value="3">3분기</option>
@@ -348,23 +348,23 @@
 
             <!-- Taxation Quick Actions -->
             <div class="taxation-actions">
-                <button class="tax-action-btn primary" onclick="showIncomeModal()">
+                                    <button class="tax-action-btn primary" onclick="showIncomeModal()" title="수입 등록">
                     <i class="fas fa-plus"></i>
                     <span>매출 등록</span>
                 </button>
-                <button class="tax-action-btn secondary" onclick="showExpenseModal()">
+                                    <button class="tax-action-btn secondary" onclick="showExpenseModal()" title="지출 등록">
                     <i class="fas fa-minus"></i>
                     <span>경비 등록</span>
                 </button>
-                <button class="tax-action-btn accent" onclick="showSalaryModal()">
+                                    <button class="tax-action-btn accent" onclick="showSalaryModal()" title="급여 관리">
                     <i class="fas fa-users"></i>
                     <span>급여 관리</span>
                 </button>
-                <button class="tax-action-btn info" onclick="showTaxReport()">
+                                    <button class="tax-action-btn info" onclick="showTaxReport()" title="세무 리포트">
                     <i class="fas fa-file-alt"></i>
                     <span>부가세 신고</span>
                 </button>
-                <button class="tax-action-btn warning" onclick="showTaxReportOptions()">
+                                    <button class="tax-action-btn warning" onclick="showTaxReportOptions()" title="세무 리포트 옵션">
                     <i class="fas fa-download"></i>
                     <span>세무 리포트</span>
                 </button>
@@ -381,7 +381,7 @@
                         <i class="fas fa-chart-pie"></i>
                         분류별 현황
                     </h3>
-                    <button class="category-toggle" onclick="toggleCategoryView()">
+                    <button class="category-toggle" onclick="toggleCategoryView()" title="분류별 현황 토글">
                         <i class="fas fa-expand-alt"></i>
                     </button>
                 </div>
@@ -398,7 +398,7 @@
                         <i class="fas fa-clock"></i>
                         최근 거래
                     </h3>
-                    <button class="view-all-btn" onclick="handleViewAllClick()">
+                    <button class="view-all-btn" onclick="handleViewAllClick()" title="전체 거래 보기">
                         전체보기
                     </button>
                 </div>
@@ -416,7 +416,7 @@
     </button>
 
     <!-- Scroll to Top Button -->
-    <button class="scroll-to-top" id="scrollToTopBtn" title="맨 위로" style="display: none;">
+                    <button class="scroll-to-top hidden" id="scrollToTopBtn" title="맨 위로">
         <i class="fas fa-chevron-up"></i>
     </button>
 
@@ -452,7 +452,7 @@
                     <i class="fas fa-tools"></i>
                     새 정비 등록
                 </h2>
-                <button class="modal-close" onclick="closeMaintenanceModal()">
+                <button class="modal-close" onclick="closeMaintenanceModal()" title="모달 닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -470,7 +470,7 @@
                             <label for="carNumber">오토바이 번호</label>
                             <div class="input-with-icon">
                                 <i class="fas fa-motorcycle"></i>
-                                <input type="text" id="carNumber" required>
+                                <input type="text" id="carNumber" required placeholder="오토바이 번호 입력">
                             </div>
                         </div>
                         
@@ -531,15 +531,16 @@
                             <!-- 정비 전 사진 -->
                             <div class="photo-upload-item">
                                 <div class="photo-upload-area" data-type="before">
-                                    <input type="file" id="beforePhoto" accept="image/*" style="display: none;">
+                                    <label for="beforePhoto" class="sr-only">정비 전 사진 업로드</label>
+                                    <input type="file" id="beforePhoto" accept="image/*" class="file-input-hidden" title="정비 전 사진 업로드">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-camera"></i>
                                         <span>정비 전</span>
                                         <small>사진을 추가하세요</small>
                                     </div>
-                                    <div class="photo-preview" style="display: none;">
+                                    <div class="photo-preview photo-preview-hidden">
                                         <img src="" alt="정비 전">
-                                        <button type="button" class="remove-photo">
+                                        <button type="button" class="remove-photo" title="사진 삭제">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -549,15 +550,16 @@
                             <!-- 정비 중 사진들 -->
                             <div class="photo-upload-item">
                                 <div class="photo-upload-area" data-type="during1">
-                                    <input type="file" id="duringPhoto1" accept="image/*" style="display: none;">
+                                    <label for="duringPhoto1" class="sr-only">정비 중 1 사진 업로드</label>
+                                    <input type="file" id="duringPhoto1" accept="image/*" class="file-input-hidden" title="정비 중 1 사진 업로드">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-camera"></i>
                                         <span>정비 중 1</span>
                                         <small>사진을 추가하세요</small>
                                     </div>
-                                    <div class="photo-preview" style="display: none;">
+                                    <div class="photo-preview photo-preview-hidden">
                                         <img src="" alt="정비 중 1">
-                                        <button type="button" class="remove-photo">
+                                        <button type="button" class="remove-photo" title="사진 삭제">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -566,15 +568,16 @@
                             
                             <div class="photo-upload-item">
                                 <div class="photo-upload-area" data-type="during2">
-                                    <input type="file" id="duringPhoto2" accept="image/*" style="display: none;">
+                                    <label for="duringPhoto2" class="sr-only">정비 중 2 사진 업로드</label>
+                                    <input type="file" id="duringPhoto2" accept="image/*" class="file-input-hidden" title="정비 중 2 사진 업로드">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-camera"></i>
                                         <span>정비 중 2</span>
                                         <small>사진을 추가하세요</small>
                                     </div>
-                                    <div class="photo-preview" style="display: none;">
+                                    <div class="photo-preview photo-preview-hidden">
                                         <img src="" alt="정비 중 2">
-                                        <button type="button" class="remove-photo">
+                                        <button type="button" class="remove-photo" title="사진 삭제">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -583,15 +586,16 @@
                             
                             <div class="photo-upload-item">
                                 <div class="photo-upload-area" data-type="during3">
-                                    <input type="file" id="duringPhoto3" accept="image/*" style="display: none;">
+                                    <label for="duringPhoto3" class="sr-only">정비 중 3 사진 업로드</label>
+                                    <input type="file" id="duringPhoto3" accept="image/*" class="file-input-hidden" title="정비 중 3 사진 업로드">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-camera"></i>
                                         <span>정비 중 3</span>
                                         <small>사진을 추가하세요</small>
                                     </div>
-                                    <div class="photo-preview" style="display: none;">
+                                    <div class="photo-preview photo-preview-hidden">
                                         <img src="" alt="정비 중 3">
-                                        <button type="button" class="remove-photo">
+                                        <button type="button" class="remove-photo" title="사진 삭제">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -600,15 +604,16 @@
                             
                             <div class="photo-upload-item">
                                 <div class="photo-upload-area" data-type="during4">
-                                    <input type="file" id="duringPhoto4" accept="image/*" style="display: none;">
+                                    <label for="duringPhoto4" class="sr-only">정비 중 4 사진 업로드</label>
+                                    <input type="file" id="duringPhoto4" accept="image/*" class="file-input-hidden" title="정비 중 4 사진 업로드">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-camera"></i>
                                         <span>정비 중 4</span>
                                         <small>사진을 추가하세요</small>
                                     </div>
-                                    <div class="photo-preview" style="display: none;">
+                                    <div class="photo-preview photo-preview-hidden">
                                         <img src="" alt="정비 중 4">
-                                        <button type="button" class="remove-photo">
+                                        <button type="button" class="remove-photo" title="사진 삭제">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -618,15 +623,16 @@
                             <!-- 정비 후 사진 -->
                             <div class="photo-upload-item">
                                 <div class="photo-upload-area" data-type="after">
-                                    <input type="file" id="afterPhoto" accept="image/*" style="display: none;">
+                                    <label for="afterPhoto" class="sr-only">정비 후 사진 업로드</label>
+                                    <input type="file" id="afterPhoto" accept="image/*" class="file-input-hidden" title="정비 후 사진 업로드">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-camera"></i>
                                         <span>정비 후</span>
                                         <small>사진을 추가하세요</small>
                                     </div>
-                                    <div class="photo-preview" style="display: none;">
+                                    <div class="photo-preview photo-preview-hidden">
                                         <img src="" alt="정비 후">
-                                        <button type="button" class="remove-photo">
+                                        <button type="button" class="remove-photo" title="사진 삭제">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -692,7 +698,7 @@
                     <i class="fas fa-info-circle"></i>
                     정비 상세
                 </h2>
-                <button class="modal-close" onclick="closeDetailModal()">
+                <button class="modal-close" onclick="closeDetailModal()" title="상세보기 닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -711,7 +717,7 @@
                     <i class="fas fa-search"></i>
                     견적서 조회
                 </h2>
-                <button class="modal-close" onclick="closeEstimateSearchModal()">
+                <button class="modal-close" onclick="closeEstimateSearchModal()" title="견적서 검색 닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -750,7 +756,7 @@
                     <i class="fas fa-receipt"></i>
                     견적서 상세
                 </h2>
-                <button class="modal-close" onclick="closeEstimateDetailModal()">
+                <button class="modal-close" onclick="closeEstimateDetailModal()" title="견적서 상세 닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -780,7 +786,7 @@
                     <i class="fas fa-download"></i>
                     월별 견적서 다운로드
                 </h2>
-                <button class="modal-close" onclick="closeMonthlyEstimateModal()">
+                <button class="modal-close" onclick="closeMonthlyEstimateModal()" title="월별 견적서 닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -788,14 +794,14 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label for="downloadYear">📅 연도</label>
-                    <select id="downloadYear" class="form-control">
+                    <select id="downloadYear" class="form-control" title="다운로드 연도 선택">
                         <!-- Will be populated dynamically -->
                     </select>
                 </div>
                 
                 <div class="form-group">
                     <label for="downloadMonth">📅 월</label>
-                    <select id="downloadMonth" class="form-control">
+                    <select id="downloadMonth" class="form-control" title="다운로드 월 선택">
                         <option value="1">1월</option>
                         <option value="2">2월</option>
                         <option value="3">3월</option>
@@ -811,14 +817,14 @@
                     </select>
                 </div>
                 
-                <div class="progress-container" id="downloadProgress" style="display: none;">
+                <div class="progress-container progress-container-hidden" id="downloadProgress">
                     <div class="progress-bar">
                         <div class="progress-fill" id="downloadProgressBar"></div>
                     </div>
                     <p id="downloadStatusText" class="progress-text">견적서를 검색하고 있습니다...</p>
                 </div>
                 
-                <div class="download-preview" id="downloadPreview" style="display: none;">
+                <div class="download-preview download-preview-hidden" id="downloadPreview">
                     <h4>📋 다운로드 예정 목록</h4>
                     <div id="downloadPreviewList"></div>
                 </div>
@@ -845,7 +851,7 @@
                     <i class="fas fa-key"></i>
                     비밀번호 재설정
                 </h2>
-                <button class="modal-close" onclick="closePasswordResetModal()">
+                <button class="modal-close" onclick="closePasswordResetModal()" title="비밀번호 재설정 닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -865,7 +871,7 @@
                     </div>
                 </form>
                 
-                <div class="reset-success" id="resetSuccess" style="display: none;">
+                <div class="reset-success reset-success-hidden" id="resetSuccess">
                     <div class="success-message">
                         <i class="fas fa-check-circle"></i>
                         <h4>이메일을 보냈습니다!</h4>
@@ -898,7 +904,7 @@
                     <i class="fas fa-users"></i>
                     직원 급여 관리
                 </h2>
-                <button class="modal-close" onclick="closeSalaryModal()">
+                <button class="modal-close" onclick="closeSalaryModal()" title="급여 관리 닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -927,7 +933,7 @@
                 <!-- Employee Management Tab -->
                 <div class="salary-tab-content active" id="employeesTab">
                     <div class="employee-actions">
-                        <button class="btn btn-primary" onclick="showAddEmployeeForm()">
+                        <button class="btn btn-primary" onclick="showAddEmployeeForm()" title="직원 추가">
                             <i class="fas fa-plus"></i>
                             직원 추가
                         </button>
@@ -942,13 +948,13 @@
                     </div>
                     
                     <!-- Add Employee Form -->
-                    <div class="add-employee-form" id="addEmployeeForm" style="display: none;">
+                    <div class="add-employee-form add-employee-form-hidden" id="addEmployeeForm">
                         <h4>새 직원 등록</h4>
                         <form id="employeeForm" onsubmit="saveEmployee(event)">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="empName">이름 *</label>
-                                    <input type="text" id="empName" required class="form-control">
+                                    <input type="text" id="empName" required class="form-control" placeholder="직원 이름 입력">
                                 </div>
                                 <div class="form-group">
                                     <label for="empId">사번</label>
@@ -958,7 +964,7 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="empPosition">직급</label>
-                                    <select id="empPosition" class="form-control">
+                                    <select id="empPosition" class="form-control" title="직원 직급 선택">
                                         <option value="사원">사원</option>
                                         <option value="주임">주임</option>
                                         <option value="대리">대리</option>
@@ -971,7 +977,7 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="empDepartment">부서</label>
-                                    <select id="empDepartment" class="form-control">
+                                    <select id="empDepartment" class="form-control" title="직원 부서 선택">
                                         <option value="정비">정비</option>
                                         <option value="관리">관리</option>
                                         <option value="영업">영업</option>
@@ -986,17 +992,17 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="empPhone">연락처</label>
-                                    <input type="tel" id="empPhone" class="form-control" placeholder="010-1234-5678">
+                                    <input type="tel" id="empPhone" required class="form-control" placeholder="연락처 입력">
                                 </div>
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="empBaseSalary">기본급 (원)</label>
-                                    <input type="number" id="empBaseSalary" class="form-control" placeholder="2000000">
+                                    <input type="number" id="empBaseSalary" required class="form-control" placeholder="기본급 입력">
                                 </div>
                                 <div class="form-group">
                                     <label for="empStatus">상태</label>
-                                    <select id="empStatus" class="form-control">
+                                    <select id="empStatus" class="form-control" title="직원 상태 선택">
                                         <option value="재직">재직</option>
                                         <option value="휴직">휴직</option>
                                         <option value="퇴직">퇴직</option>
@@ -1022,11 +1028,11 @@
                     <div class="salary-calc-header">
                         <div class="calc-period">
                             <label>급여 기간</label>
-                            <select id="salaryYear" class="form-control">
+                            <select id="salaryYear" class="form-control" title="급여 연도 선택">
                                 <option value="2024">2024년</option>
                                 <option value="2023">2023년</option>
                             </select>
-                            <select id="salaryMonth" class="form-control">
+                            <select id="salaryMonth" class="form-control" title="급여 월 선택">
                                 <option value="1">1월</option>
                                 <option value="2">2월</option>
                                 <option value="3">3월</option>
@@ -1057,7 +1063,7 @@
                     <div class="salary-history-header">
                         <div class="history-filters">
                             <input type="month" id="historyMonth" class="form-control">
-                            <select id="historyEmployee" class="form-control">
+                            <select id="historyEmployee" class="form-control" title="급여 내역 직원 선택">
                                 <option value="">전체 직원</option>
                                 <!-- 직원 목록이 동적으로 생성됩니다 -->
                             </select>
@@ -1139,7 +1145,7 @@
                     <i class="fas fa-percentage"></i>
                     부가세 신고 준비
                 </h2>
-                <button class="modal-close" onclick="closeVatReportModal()">
+                <button class="modal-close" onclick="closeVatReportModal()" title="부가세 신고 닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -1170,11 +1176,11 @@
                     <div class="vat-report-header">
                         <div class="report-period-selector">
                             <label>신고 기간</label>
-                            <select id="vatReportYear" class="form-control">
+                            <select id="vatReportYear" class="form-control" title="부가세 연도 선택">
                                 <option value="2024">2024년</option>
                                 <option value="2023">2023년</option>
                             </select>
-                            <select id="vatReportQuarter" class="form-control">
+                            <select id="vatReportQuarter" class="form-control" title="부가세 분기 선택">
                                 <option value="1">1분기 (1-3월)</option>
                                 <option value="2">2분기 (4-6월)</option>
                                 <option value="3">3분기 (7-9월)</option>
@@ -1300,7 +1306,7 @@
                     <i class="fas fa-graduation-cap"></i>
                     세무 도움말 센터
                 </h2>
-                <button class="modal-close" onclick="closeTaxHelpModal()">
+                <button class="modal-close" onclick="closeTaxHelpModal()" title="세무 도움말 닫기">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
