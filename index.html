@@ -398,7 +398,7 @@
                         <i class="fas fa-clock"></i>
                         최근 거래
                     </h3>
-                    <button class="view-all-btn" onclick="showAllTransactions()">
+                    <button class="view-all-btn" onclick="handleViewAllClick()">
                         전체보기
                     </button>
                 </div>
@@ -528,6 +528,7 @@
                         </div>
                         
                         <div class="photo-upload-section">
+                            <!-- 정비 전 사진 -->
                             <div class="photo-upload-item">
                                 <div class="photo-upload-area" data-type="before">
                                     <input type="file" id="beforePhoto" accept="image/*" style="display: none;">
@@ -545,16 +546,17 @@
                                 </div>
                             </div>
                             
+                            <!-- 정비 중 사진들 -->
                             <div class="photo-upload-item">
-                                <div class="photo-upload-area" data-type="during">
-                                    <input type="file" id="duringPhoto" accept="image/*" style="display: none;">
+                                <div class="photo-upload-area" data-type="during1">
+                                    <input type="file" id="duringPhoto1" accept="image/*" style="display: none;">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-camera"></i>
-                                        <span>정비 중</span>
+                                        <span>정비 중 1</span>
                                         <small>사진을 추가하세요</small>
                                     </div>
                                     <div class="photo-preview" style="display: none;">
-                                        <img src="" alt="정비 중">
+                                        <img src="" alt="정비 중 1">
                                         <button type="button" class="remove-photo">
                                             <i class="fas fa-times"></i>
                                         </button>
@@ -562,6 +564,58 @@
                                 </div>
                             </div>
                             
+                            <div class="photo-upload-item">
+                                <div class="photo-upload-area" data-type="during2">
+                                    <input type="file" id="duringPhoto2" accept="image/*" style="display: none;">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>정비 중 2</span>
+                                        <small>사진을 추가하세요</small>
+                                    </div>
+                                    <div class="photo-preview" style="display: none;">
+                                        <img src="" alt="정비 중 2">
+                                        <button type="button" class="remove-photo">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="photo-upload-item">
+                                <div class="photo-upload-area" data-type="during3">
+                                    <input type="file" id="duringPhoto3" accept="image/*" style="display: none;">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>정비 중 3</span>
+                                        <small>사진을 추가하세요</small>
+                                    </div>
+                                    <div class="photo-preview" style="display: none;">
+                                        <img src="" alt="정비 중 3">
+                                        <button type="button" class="remove-photo">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="photo-upload-item">
+                                <div class="photo-upload-area" data-type="during4">
+                                    <input type="file" id="duringPhoto4" accept="image/*" style="display: none;">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-camera"></i>
+                                        <span>정비 중 4</span>
+                                        <small>사진을 추가하세요</small>
+                                    </div>
+                                    <div class="photo-preview" style="display: none;">
+                                        <img src="" alt="정비 중 4">
+                                        <button type="button" class="remove-photo">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 정비 후 사진 -->
                             <div class="photo-upload-item">
                                 <div class="photo-upload-area" data-type="after">
                                     <input type="file" id="afterPhoto" accept="image/*" style="display: none;">

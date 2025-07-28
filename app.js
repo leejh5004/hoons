@@ -109,8 +109,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof firebase !== 'undefined') {
         try {
             db = firebase.firestore();
-            console.log('✅ Firebase initialized');
-            console.log('📊 Firestore 연결 완료');
+                    // console.log('✅ Firebase initialized');
+        // console.log('📊 Firestore 연결 완료');
             
             // 페이지 초기화 시 기존 리스너 정리
             cleanupFirebaseListeners();
@@ -1374,12 +1374,20 @@ async function loadNotifications() {
             activeListeners.notifications = null;
         }
         
-        // Firebase 인덱스 오류 방지를 위해 단순 쿼리 사용 - 최적화: 최신 100개만
-        const snapshot = await db.collection('notifications')
-            .where('userId', '==', currentUser.uid)
-            .orderBy('createdAt', 'desc')
-            .limit(100)
-            .get();
+        // safeFirebaseQuery를 사용하여 Target ID 충돌 방지
+        const snapshot = await safeFirebaseQuery('loadNotifications', async () => {
+            console.log('🔍 Executing Firebase query: loadNotifications');
+            return await db.collection('notifications')
+                .where('userId', '==', currentUser.uid)
+                .orderBy('createdAt', 'desc')
+                .limit(100)
+                .get();
+        });
+        
+        if (!snapshot) {
+            console.log('❌ loadNotifications query returned null, skipping...');
+            return;
+        }
         
         notifications = [];
         unreadCount = 0;
@@ -1421,6 +1429,12 @@ async function loadNotifications() {
             console.warn('⚠️ 네트워크 연결 불안정으로 알림 로딩 실패');
         } else if (error.code === 'permission-denied') {
             console.warn('⚠️ 권한 없음으로 알림 로딩 실패');
+        } else if (error.code === 'already-exists') {
+            console.warn('⚠️ Target ID 충돌로 알림 로딩 실패 - 재시도 예정');
+            // 짧은 지연 후 재시도
+            setTimeout(() => {
+                loadNotifications();
+            }, 1000);
         }
     }
 }
@@ -1430,50 +1444,60 @@ async function markAllAsRead() {
     if (unreadCount === 0) return;
     
     try {
-        const batch = db.batch();
-        
-        notifications.forEach(notification => {
-            if (!notification.read) {
-                notification.read = true;
-                const notificationRef = db.collection('notifications').doc(notification.id);
-                batch.update(notificationRef, { read: true });
-            }
+        await safeFirebaseQuery('markAllAsRead', async () => {
+            const batch = db.batch();
+            
+            notifications.forEach(notification => {
+                if (!notification.read) {
+                    notification.read = true;
+                    const notificationRef = db.collection('notifications').doc(notification.id);
+                    batch.update(notificationRef, { read: true });
+                }
+            });
+            
+            await batch.commit();
+            unreadCount = 0;
+            updateNotificationBadge();
+            
+            console.log('✅ All notifications marked as read');
         });
-        
-        await batch.commit();
-        unreadCount = 0;
-        updateNotificationBadge();
-        
-        console.log('✅ All notifications marked as read');
         
     } catch (error) {
         console.error('❌ Error marking notifications as read:', error);
+        if (error.code === 'already-exists') {
+            console.warn('⚠️ Target ID 충돌로 알림 읽음 처리 실패');
+        }
     }
 }
 
 // 모든 알림 지우기
 async function clearAllNotifications() {
     try {
-        const batch = db.batch();
-        
-        notifications.forEach(notification => {
-            const notificationRef = db.collection('notifications').doc(notification.id);
-            batch.delete(notificationRef);
+        await safeFirebaseQuery('clearAllNotifications', async () => {
+            const batch = db.batch();
+            
+            notifications.forEach(notification => {
+                const notificationRef = db.collection('notifications').doc(notification.id);
+                batch.delete(notificationRef);
+            });
+            
+            await batch.commit();
+            
+            notifications = [];
+            unreadCount = 0;
+            updateNotificationBadge();
+            
+            closeNotificationPanel();
+            showNotification('모든 알림이 삭제되었습니다.', 'success');
+            
+            console.log('🗑️ All notifications cleared');
         });
-        
-        await batch.commit();
-        
-        notifications = [];
-        unreadCount = 0;
-        updateNotificationBadge();
-        
-        closeNotificationPanel();
-        showNotification('모든 알림이 삭제되었습니다.', 'success');
-        
-        console.log('🗑️ All notifications cleared');
         
     } catch (error) {
         console.error('❌ Error clearing notifications:', error);
+        if (error.code === 'already-exists') {
+            console.warn('⚠️ Target ID 충돌로 알림 삭제 실패');
+        }
         showNotification('알림 삭제 실패', 'error');
     }
 }
@@ -1665,7 +1689,7 @@ async function safeFirebaseQuery(queryId, queryFunction, retryCount = 0) {
                 console.log('🔄 Firebase 네트워크 재설정으로 Target ID 충돌 해결 시도');
                 try {
                     await db.disableNetwork();
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                    await new Promise(resolve => setTimeout(resolve, 500)); // 지연 시간 증가
                     await db.enableNetwork();
                     console.log('✅ Firebase 네트워크 재설정 완료');
                 } catch (networkError) {
@@ -1674,7 +1698,7 @@ async function safeFirebaseQuery(queryId, queryFunction, retryCount = 0) {
             }
             
             // 재시도 전 추가 지연 (점진적 증가)
-            await new Promise(resolve => setTimeout(resolve, QUERY_DELAY * (retryCount + 2)));
+            await new Promise(resolve => setTimeout(resolve, QUERY_DELAY * (retryCount + 3)));
             
             // 큐에서 제거 후 재시도
             queryQueue.delete(queryId);
@@ -1716,13 +1740,20 @@ function cleanupFirebaseListeners() {
         // 쿼리 큐 정리
         queryQueue.clear();
         
+        // 전역 변수 정리
+        if (window.editingMaintenanceId) delete window.editingMaintenanceId;
+        if (window.editingEstimateNumber) delete window.editingEstimateNumber;
+        if (window.editingIncomeId) delete window.editingIncomeId;
+        if (window.editingExpenseId) delete window.editingExpenseId;
+        if (window.allTransactionsData) delete window.allTransactionsData;
+        
         // Firebase 네트워크 연결 재설정 (Target ID 충돌 해결)
         if (db) {
             console.log('🔄 Firebase 네트워크 연결 재설정 중...');
             // 네트워크 비활성화 후 다시 활성화하여 Target ID 충돌 해결
             db.disableNetwork()
                 .then(() => {
-                    return new Promise(resolve => setTimeout(resolve, 300));
+                    return new Promise(resolve => setTimeout(resolve, 500)); // 지연 시간 증가
                 })
                 .then(() => {
                     return db.enableNetwork();
@@ -1747,6 +1778,25 @@ window.addEventListener('beforeunload', () => {
     cleanupFirebaseListeners();
 });
 
+// 페이지 로드 시 Firebase 상태 초기화
+window.addEventListener('load', () => {
+    console.log('🔄 페이지 로드 시 Firebase 상태 초기화...');
+    // 짧은 지연 후 리스너 정리 (이전 세션의 잔여 리스너 제거)
+    setTimeout(() => {
+        cleanupFirebaseListeners();
+    }, 1000);
+});
+
+// 페이지 포커스 시 Firebase 연결 상태 확인
+window.addEventListener('focus', () => {
+    if (db && currentUser) {
+        console.log('🔄 페이지 포커스 시 Firebase 연결 상태 확인...');
+        db.enableNetwork().catch(error => {
+            console.warn('⚠️ Firebase 네트워크 활성화 실패:', error);
+        });
+    }
+});
+
 // 페이지 포커스 시 Target ID 충돌 해결
 window.addEventListener('focus', () => {
     console.log('🔍 페이지 포커스 감지 - Target ID 충돌 체크');
@@ -1766,6 +1816,11 @@ window.addEventListener('popstate', () => {
 
 // Firebase 연결 상태 체크 함수
 function checkFirebaseConnection() {
+    console.log('🔍 Firebase 연결 상태 확인 중...');
+    console.log('  - db 객체:', !!db);
+    console.log('  - currentUser:', !!currentUser);
+    console.log('  - currentUser.email:', currentUser?.email);
+    
     if (!db) {
         console.error('❌ Firebase 데이터베이스 연결 없음');
         showNotification('데이터베이스 연결 오류. 페이지를 새로고침해주세요.', 'error');
@@ -1778,6 +1833,13 @@ function checkFirebaseConnection() {
         return false;
     }
     
+    if (!currentUser.email) {
+        console.error('❌ 사용자 이메일 정보 없음');
+        showNotification('사용자 인증 정보가 불완전합니다.', 'error');
+        return false;
+    }
+    
+    console.log('✅ Firebase 연결 상태 정상');
     return true;
 }
 
@@ -2121,7 +2183,7 @@ async function attemptFirebaseReconnection() {
         await db.doc('test/connection').get();
         
         console.log('✅ Firebase 재연결 성공');
-        // 자동 재연결 시에는 알림 제거 - 백그라운드 처리만
+        // 자동 재연결 시에는 알림 제거 - 백그라운드에서만 처리
         
         // 온라인 상태 표시 업데이트
         const offlineIndicator = document.getElementById('offlineIndicator');
@@ -3304,6 +3366,11 @@ async function handleMaintenanceSubmit(e) {
     }
     
     try {
+        // Firebase 연결 상태 확인
+        if (!checkFirebaseConnection()) {
+            return;
+        }
+        
         showNotification('정비 이력을 등록하는 중...', 'info');
         
         // 폼 데이터 수집
@@ -3319,6 +3386,20 @@ async function handleMaintenanceSubmit(e) {
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             photos: []
         };
+        
+        // 데이터 검증
+        console.log('📝 Form data validation:', {
+            carNumber: formData.carNumber,
+            date: formData.date,
+            type: formData.type,
+            adminEmail: formData.adminEmail,
+            hasDescription: !!formData.description
+        });
+        
+        // 필수 필드 검증
+        if (!formData.carNumber || !formData.date || !formData.type || !formData.adminEmail) {
+            throw new Error('필수 정보가 누락되었습니다.');
+        }
         
         console.log('📝 Creating maintenance with status:', formData.status);
         
@@ -3339,7 +3420,7 @@ async function handleMaintenanceSubmit(e) {
             console.log('📸 Processing photos in edit mode (always check)...');
             
             // 새로 업로드한 사진이 있는지 확인
-            const hasNewPhotos = uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after;
+            const hasNewPhotos = uploadedPhotos.before || uploadedPhotos.during1 || uploadedPhotos.during2 || uploadedPhotos.during3 || uploadedPhotos.during4 || uploadedPhotos.after;
             console.log('📸 Has new photos:', hasNewPhotos);
             
             let newPhotos = [];
@@ -3397,10 +3478,15 @@ async function handleMaintenanceSubmit(e) {
             // 사진 업로드 (있는 경우)
             console.log('📸 Checking uploaded photos:', uploadedPhotos);
             console.log('📸 Before photo exists:', !!uploadedPhotos.before);
-            console.log('📸 During photo exists:', !!uploadedPhotos.during);  
+            console.log('📸 During photos exist:', {
+                during1: !!uploadedPhotos.during1,
+                during2: !!uploadedPhotos.during2,
+                during3: !!uploadedPhotos.during3,
+                during4: !!uploadedPhotos.during4
+            });
             console.log('📸 After photo exists:', !!uploadedPhotos.after);
             
-            if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
+            if (uploadedPhotos.before || uploadedPhotos.during1 || uploadedPhotos.during2 || uploadedPhotos.during3 || uploadedPhotos.during4 || uploadedPhotos.after) {
                 const photos = await uploadMaintenancePhotos(docRef.id);
                 console.log('📸 Photos returned from upload:', photos);
                 
@@ -3416,7 +3502,7 @@ async function handleMaintenanceSubmit(e) {
             showNotification('정비 이력이 성공적으로 등록되었습니다!', 'success');
             
             // 사진이 있을 경우 보존 기간 안내
-            if (uploadedPhotos.before || uploadedPhotos.during || uploadedPhotos.after) {
+            if (uploadedPhotos.before || uploadedPhotos.during1 || uploadedPhotos.during2 || uploadedPhotos.during3 || uploadedPhotos.during4 || uploadedPhotos.after) {
                 setTimeout(() => {
                     showNotification(`📸 등록된 사진은 ${PHOTO_RETENTION_DAYS}일 후 자동 삭제됩니다.`, 'info');
                 }, 2000);
@@ -3478,14 +3564,18 @@ function initializePhotoUpload() {
         }
     });
     
-    const photoInputs = ['beforePhoto', 'duringPhoto', 'afterPhoto'];
+    const photoInputs = ['beforePhoto', 'duringPhoto1', 'duringPhoto2', 'duringPhoto3', 'duringPhoto4', 'afterPhoto'];
     photoInputs.forEach(inputId => {
         const input = document.getElementById(inputId);
         if (input && !input.hasAttribute('data-initialized')) {
             input.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (file) {
-                    const photoType = inputId.replace('Photo', '');
+                    let photoType = inputId.replace('Photo', '');
+                    // duringPhoto1, duringPhoto2 등을 during로 통일
+                    if (photoType.startsWith('during')) {
+                        photoType = 'during';
+                    }
                     handlePhotoUpload(file, photoType);
                 }
             });
@@ -3629,12 +3719,17 @@ window.removeExistingPhoto = removeExistingPhoto;
 
 // 사진 업로드 리셋 함수
 function resetPhotoUploads() {
-    uploadedPhotos = { before: null, during: null, after: null };
+    uploadedPhotos = { before: null, during1: null, during2: null, during3: null, during4: null, after: null };
     
-    ['before', 'during', 'after'].forEach(type => {
-        const previewContainer = document.getElementById(`${type}Preview`);
-        if (previewContainer) {
-            previewContainer.innerHTML = '';
+    ['before', 'during1', 'during2', 'during3', 'during4', 'after'].forEach(type => {
+        const uploadArea = document.querySelector(`[data-type="${type}"]`);
+        if (uploadArea) {
+            const placeholder = uploadArea.querySelector('.upload-placeholder');
+            const preview = uploadArea.querySelector('.photo-preview');
+            if (placeholder && preview) {
+                preview.style.display = 'none';
+                placeholder.style.display = 'flex';
+            }
         }
         const input = document.getElementById(`${type}Photo`);
         if (input) {
@@ -4598,7 +4693,7 @@ async function uploadMaintenancePhotos(maintenanceId) {
     console.log('📸 uploadedPhotos keys:', Object.keys(uploadedPhotos));
     
     // 각 타입별로 명시적으로 확인 - 실제 유효한 데이터만 처리
-    const photoTypes = ['before', 'during', 'after'];
+    const photoTypes = ['before', 'during1', 'during2', 'during3', 'during4', 'after'];
     
     for (const type of photoTypes) {
         const base64Data = uploadedPhotos[type];
@@ -4811,7 +4906,10 @@ function showMaintenanceDetailModal(maintenance) {
                                 return {
                                     url: photo.url,
                                     type: photo.type === 'before' ? '정비 전' : 
-                                          photo.type === 'during' ? '정비 중' : 
+                                          photo.type === 'during1' ? '정비 중 1' :
+                                          photo.type === 'during2' ? '정비 중 2' :
+                                          photo.type === 'during3' ? '정비 중 3' :
+                                          photo.type === 'during4' ? '정비 중 4' :
                                           photo.type === 'after' ? '정비 후' : photo.type
                                 };
                             });
@@ -5285,6 +5383,9 @@ window.completeMaintenanceWork = completeMaintenanceWork;
 window.showRejectReasonModal = showRejectReasonModal;
 window.closeRejectReasonModal = closeRejectReasonModal;
 window.submitRejectReason = submitRejectReason;
+window.editEstimate = editEstimate;
+window.updateEstimate = updateEstimate;
+window.regenerateEstimatePDF = regenerateEstimatePDF;
 
 // 테스트 데이터 추가 함수 (관리자 전용)
 async function addTestData() {
@@ -5924,7 +6025,7 @@ function showEstimateModal() {
     }
     
     const modalHTML = `
-        <div id="estimateModal" class="modal-overlay active">
+        <div id="estimateModal" class="modal-overlay active" style="z-index: 10000;">
                          <div class="modal-container" style="
                 max-width: min(700px, 95vw); 
                 max-height: 85vh; 
@@ -6066,6 +6167,24 @@ function closeEstimateModal() {
     const modal = document.getElementById('estimateModal');
     if (modal) {
         modal.remove();
+    }
+    
+    // 수정 모드 초기화
+    if (window.editingEstimateNumber) {
+        delete window.editingEstimateNumber;
+        
+        // 제출 버튼 원래대로 복원
+        const submitBtn = document.querySelector('#estimateModal .estimate-modal-btn-generate');
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="fas fa-file-pdf"></i> 견적서 생성';
+            submitBtn.onclick = generateEstimatePDF;
+        }
+        
+        // 모달 제목 원래대로 복원
+        const modalTitle = document.querySelector('#estimateModal .modal-title');
+        if (modalTitle) {
+            modalTitle.innerHTML = '<i class="fas fa-file-invoice-dollar"></i> 견적서 생성';
+        }
     }
 }
 
@@ -6288,7 +6407,7 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
         ">
             <!-- 🎨 헤더 -->
             <div style="
-                background: linear-gradient(135deg, #333 0%, #111 100%);
+                background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
                 color: white;
                 padding: 20px;
                 border-radius: 10px;
@@ -6296,21 +6415,22 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
             ">
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <div style="
                         width: 50px; 
                         height: 50px; 
-                        background: rgba(255,255,255,0.3);
+                        background: rgba(255,255,255,0.2);
                         border-radius: 50%;
                         display: flex;
                         align-items: center;
                         justify-content: center;
                         overflow: hidden;
-                        border: 2px solid rgba(255,255,255,0.5);
+                        border: 2px solid rgba(255,255,255,0.3);
                     ">
                         <svg width="30" height="30" viewBox="0 0 100 100" style="fill: white;">
-                            <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.2)" stroke="white" stroke-width="2"/>
+                            <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.1)" stroke="white" stroke-width="2"/>
                             <text x="50" y="38" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">TW</text>
                             <text x="50" y="58" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial">GARAGE</text>
                         </svg>
@@ -6328,13 +6448,14 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
             
             <!-- 📋 기본 정보 - 편지 스타일 -->
             <div style="
-                background: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 6px;
-                padding: 15px;
-                margin-bottom: 15px;
+                background: linear-gradient(145deg, #ffffff, #f8fafc);
+                border: 2px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 20px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
             ">
-                <h3 style="margin: 0 0 12px 0; color: #667eea; font-size: 15px; font-weight: bold; text-align: center;">견적 의뢰서</h3>
+                <h3 style="margin: 0 0 15px 0; color: #1e40af; font-size: 16px; font-weight: bold; text-align: center; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">견적 의뢰서</h3>
                 
                 <!-- 편지 스타일 레이아웃 -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
@@ -6440,26 +6561,26 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                 
                 <!-- 총액 - 편지 스타일 (부가세 포함) -->
                 <div style="
-                    margin-top: 12px;
-                    padding: 12px 15px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    margin-top: 15px;
+                    padding: 15px 20px;
+                    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
                     color: white;
-                    border-radius: 6px;
+                    border-radius: 8px;
                     text-align: center;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                    box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
                 ">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="font-size: 13px; font-weight: 500;">공급가액</span>
-                        <span style="font-size: 14px; font-weight: bold;">${totalAmount.toLocaleString()}원</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-size: 14px; font-weight: 500;">공급가액</span>
+                        <span style="font-size: 15px; font-weight: bold;">${totalAmount.toLocaleString()}원</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="font-size: 13px; font-weight: 500;">부가세 (10%)</span>
-                        <span style="font-size: 14px; font-weight: bold;">${Math.round(totalAmount * 0.1).toLocaleString()}원</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-size: 14px; font-weight: 500;">부가세 (10%)</span>
+                        <span style="font-size: 15px; font-weight: bold;">${Math.round(totalAmount * 0.1).toLocaleString()}원</span>
                     </div>
-                    <div style="height: 1px; background: rgba(255,255,255,0.3); margin: 8px 0;"></div>
+                    <div style="height: 1px; background: rgba(255,255,255,0.3); margin: 10px 0;"></div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 16px; font-weight: 700;">합계</span>
-                        <span style="font-size: 18px; font-weight: bold;">${(totalAmount + Math.round(totalAmount * 0.1)).toLocaleString()}원</span>
+                        <span style="font-size: 17px; font-weight: 700;">합계</span>
+                        <span style="font-size: 19px; font-weight: bold;">${(totalAmount + Math.round(totalAmount * 0.1)).toLocaleString()}원</span>
                     </div>
                 </div>
             </div>
@@ -6467,32 +6588,33 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
             ${notes ? `
             <!-- 📝 추가 메모 - 편지 스타일 -->
             <div style="
-                background: #f8f9fa;
-                border: 1px solid #e9ecef;
+                background: linear-gradient(145deg, #ffffff, #f8fafc);
+                border: 2px solid #e2e8f0;
                 border-radius: 8px;
-                padding: 15px;
-                margin-bottom: 15px;
+                padding: 20px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
             ">
-                <h4 style="margin: 0 0 8px 0; color: #667eea; font-size: 13px; font-weight: bold; border-bottom: 1px solid #667eea; padding-bottom: 3px;">특별 사항</h4>
+                <h4 style="margin: 0 0 10px 0; color: #1e40af; font-size: 14px; font-weight: bold; border-bottom: 2px solid #3b82f6; padding-bottom: 5px;">특별 사항</h4>
                 <div style="
                     background: white;
-                    border: 1px solid #e9ecef;
-                    border-radius: 4px;
-                    padding: 12px;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 6px;
+                    padding: 15px;
                     white-space: pre-wrap;
-                    font-size: 12px;
-                    line-height: 1.4;
-                    color: #333;
+                    font-size: 13px;
+                    line-height: 1.5;
+                    color: #374151;
                     font-style: italic;
                 ">${notes}</div>
             </div>
             ` : ''}
             
             <!-- ✍️ 서명란 - 편지 스타일 -->
-            <div style="margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
-                <div style="text-align: center; margin-bottom: 12px;">
-                    <h4 style="margin: 0; color: #667eea; font-size: 13px; font-weight: bold;">서명란</h4>
-                    <p style="margin: 3px 0 0 0; color: #666; font-size: 11px;">위 견적서 내용에 동의하며 서명합니다.</p>
+            <div style="margin-top: 20px; background: linear-gradient(145deg, #ffffff, #f8fafc); padding: 20px; border-radius: 8px; border: 2px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <h4 style="margin: 0; color: #1e40af; font-size: 14px; font-weight: bold; border-bottom: 2px solid #3b82f6; padding-bottom: 5px;">서명란</h4>
+                    <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 12px;">위 견적서 내용에 동의하며 서명합니다.</p>
                 </div>
                 
                 <div style="display: flex; justify-content: space-around; align-items: end;">
@@ -7033,6 +7155,228 @@ function closeEstimateDetailModal() {
     }
 }
 
+// ✏️ 견적서 수정 함수
+async function editEstimate(estimateNumber) {
+    if (!isAdmin) {
+        showNotification('관리자만 견적서를 수정할 수 있습니다.', 'error');
+        return;
+    }
+    
+    try {
+        console.log('✏️ 견적서 수정 시작:', estimateNumber);
+        
+        // 견적서 데이터 가져오기
+        const estimateData = await searchEstimateByNumber(estimateNumber);
+        if (!estimateData) {
+            showNotification('견적서 정보를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        
+        // 상세 모달 닫기
+        closeEstimateDetailModal();
+        
+        // 견적서 생성 모달 열고 기존 데이터로 채우기
+        showEstimateModal();
+        
+        // 데이터 채우기
+        setTimeout(() => {
+            document.getElementById('estimateCarNumber').value = estimateData.carNumber || '';
+            document.getElementById('estimateCustomerName').value = estimateData.customerName || '';
+            document.getElementById('estimateTitle').value = estimateData.title || '';
+            document.getElementById('estimateBikeModel').value = estimateData.bikeModel || '';
+            document.getElementById('estimateBikeYear').value = estimateData.bikeYear || '';
+            document.getElementById('estimateMileage').value = estimateData.mileage || '';
+            document.getElementById('estimateNotes').value = estimateData.notes || '';
+            
+            // 견적 항목들 채우기
+            const itemsContainer = document.getElementById('estimateItems');
+            itemsContainer.innerHTML = ''; // 기존 항목들 제거
+            
+            if (estimateData.items && estimateData.items.length > 0) {
+                estimateData.items.forEach((item, index) => {
+                    addEstimateItem(); // 새 항목 추가
+                    
+                    // 마지막에 추가된 항목에 데이터 채우기
+                    const lastItem = itemsContainer.lastElementChild;
+                    if (lastItem) {
+                        lastItem.querySelector('.item-name').value = item.name || '';
+                        lastItem.querySelector('.item-price').value = item.price || '';
+                        lastItem.querySelector('.item-quantity').value = item.quantity || 1;
+                    }
+                });
+            } else {
+                // 기본 항목 1개 추가
+                addEstimateItem();
+            }
+            
+            // 총액 계산
+            calculateTotal();
+            
+            // 제출 버튼 텍스트 변경
+            const submitBtn = document.querySelector('#estimateModal .estimate-modal-btn-generate');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="fas fa-save"></i> 견적서 수정';
+                submitBtn.onclick = () => updateEstimate(estimateNumber);
+            }
+            
+            // 모달 제목 변경
+            const modalTitle = document.querySelector('#estimateModal .modal-title');
+            if (modalTitle) {
+                modalTitle.innerHTML = '<i class="fas fa-edit"></i> 견적서 수정';
+            }
+            
+            // 수정 모드 플래그 설정
+            window.editingEstimateNumber = estimateNumber;
+            
+            console.log('✅ 견적서 수정 폼 준비 완료');
+        }, 100);
+        
+    } catch (error) {
+        console.error('❌ 견적서 수정 중 오류:', error);
+        showNotification('견적서 수정 중 오류가 발생했습니다: ' + error.message, 'error');
+    }
+}
+
+// 💾 견적서 업데이트 함수
+async function updateEstimate(estimateNumber) {
+    if (!isAdmin) {
+        showNotification('관리자만 견적서를 수정할 수 있습니다.', 'error');
+        return;
+    }
+    
+    try {
+        // 폼 검증
+        const carNumber = document.getElementById('estimateCarNumber').value.trim();
+        const customerName = document.getElementById('estimateCustomerName').value.trim();
+        const title = document.getElementById('estimateTitle').value.trim();
+        
+        if (!carNumber || !customerName || !title) {
+            showNotification('필수 정보를 모두 입력해주세요.', 'error');
+            return;
+        }
+        
+        // 견적 항목 수집
+        const items = [];
+        const itemElements = document.querySelectorAll('.estimate-item-card');
+        let hasValidItem = false;
+        
+        itemElements.forEach(item => {
+            const name = item.querySelector('.item-name').value.trim();
+            const price = parseFloat(item.querySelector('.item-price').value) || 0;
+            const quantity = parseInt(item.querySelector('.item-quantity').value) || 0;
+            
+            if (name && price > 0 && quantity > 0) {
+                items.push({ name, price, quantity, total: price * quantity });
+                hasValidItem = true;
+            }
+        });
+        
+        if (!hasValidItem) {
+            showNotification('최소 1개의 유효한 견적 항목을 입력해주세요.', 'error');
+            return;
+        }
+        
+        const notes = document.getElementById('estimateNotes').value.trim();
+        const bikeModel = document.getElementById('estimateBikeModel').value.trim();
+        const bikeYear = document.getElementById('estimateBikeYear').value.trim();
+        const mileage = document.getElementById('estimateMileage').value.trim();
+        
+        // 공급가액 계산
+        const supplyAmount = items.reduce((sum, item) => sum + item.total, 0);
+        // 부가세 계산 (10%)
+        const vatAmount = Math.round(supplyAmount * 0.1);
+        // 총액 계산 (공급가액 + 부가세)
+        const totalAmount = supplyAmount + vatAmount;
+        
+        // 현재 로그인한 관리자 이름 가져오기
+        let currentManagerName = getCurrentManagerSignature();
+        
+        // 업데이트할 데이터
+        const updateData = {
+            customerName,
+            carNumber,
+            title,
+            items,
+            supplyAmount,
+            vatAmount,
+            totalAmount,
+            notes,
+            bikeModel,
+            bikeYear,
+            mileage,
+            managerName: currentManagerName,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy: currentUser?.email || 'unknown'
+        };
+        
+        // Firebase에 업데이트
+        await db.collection('estimates').doc(estimateNumber).update(updateData);
+        
+        showNotification('견적서가 성공적으로 수정되었습니다! 🎉', 'success');
+        
+        // 수정 모드 플래그 제거
+        delete window.editingEstimateNumber;
+        
+        // 모달 닫기
+        closeEstimateModal();
+        
+        // 견적서 상세 모달 다시 열기 (업데이트된 정보로)
+        const updatedEstimateData = await searchEstimateByNumber(estimateNumber);
+        if (updatedEstimateData) {
+            showEstimateDetailModal(updatedEstimateData);
+        }
+        
+    } catch (error) {
+        console.error('❌ 견적서 업데이트 오류:', error);
+        showNotification('견적서 수정 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+// 📄 견적서 PDF 재생성 함수
+async function regenerateEstimatePDF(estimateNumber) {
+    if (!isAdmin) {
+        showNotification('관리자만 PDF를 재생성할 수 있습니다.', 'error');
+        return;
+    }
+    
+    try {
+        console.log('📄 견적서 PDF 재생성 시작:', estimateNumber);
+        
+        // 견적서 데이터 가져오기
+        const estimateData = await searchEstimateByNumber(estimateNumber);
+        if (!estimateData) {
+            showNotification('견적서 정보를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        
+        showNotification('PDF를 재생성하는 중...', 'info');
+        
+        // HTML 생성
+        const htmlContent = createEstimateHTML(
+            estimateData.customerName,
+            estimateData.carNumber,
+            estimateData.title,
+            estimateData.items || [],
+            estimateData.supplyAmount || 0,
+            estimateData.notes || '',
+            estimateData.bikeModel || '',
+            estimateData.bikeYear || '',
+            estimateData.mileage || '',
+            estimateData.managerName || '정비사',
+            estimateData.estimateNumber
+        );
+        
+        // PDF 생성
+        await generatePDFFromHTML(htmlContent, estimateData.customerName, estimateData.carNumber);
+        
+        showNotification('PDF가 성공적으로 재생성되었습니다! 🎉', 'success');
+        
+    } catch (error) {
+        console.error('❌ PDF 재생성 오류:', error);
+        showNotification('PDF 재생성 중 오류가 발생했습니다.', 'error');
+    }
+}
+
 // 📋 견적서 상세 HTML 생성
 function createEstimateDetailHTML(estimateData) {
     const createdDate = estimateData.createdAt?.toDate?.() 
@@ -7068,6 +7412,18 @@ function createEstimateDetailHTML(estimateData) {
                 </td>
             </tr>
         `;
+    
+    // 수정 버튼 HTML (관리자만 표시)
+    const editButtonHTML = isAdmin ? `
+        <div style="margin-top: 20px; text-align: center;">
+            <button onclick="editEstimate('${estimateData.estimateNumber}')" class="btn btn-primary" style="margin-right: 10px;">
+                <i class="fas fa-edit"></i> 견적서 수정
+            </button>
+            <button onclick="regenerateEstimatePDF('${estimateData.estimateNumber}')" class="btn btn-secondary">
+                <i class="fas fa-file-pdf"></i> PDF 재생성
+            </button>
+        </div>
+    ` : '';
     
     return `
         <div class="estimate-detail-card">
@@ -7175,6 +7531,8 @@ function createEstimateDetailHTML(estimateData) {
                     <span style="font-weight: 700; color: #0f172a;">${createdDate}</span>
                 </div>
             </div>
+            
+            ${editButtonHTML}
         </div>
     `;
 }
@@ -7925,15 +8283,44 @@ async function loadTaxationCategories() {
         // 분류 그리드 업데이트
         const categoryGrid = document.getElementById('categoryGrid');
         categoryGrid.innerHTML = topCategories.map(category => `
-            <div class="category-card" style="border-left: 4px solid ${category.color}; background: white; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb;">
+            <div class="category-card" style="
+                border-left: 4px solid ${category.color}; background: white; padding: 16px; 
+                border-radius: 8px; border: 1px solid #e5e7eb; cursor: pointer; 
+                transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            " onclick="handleCategoryClick('${category.name}')" 
+               onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'" 
+               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <h4 style="margin: 0; font-weight: 700; color: #1f2937; font-size: 14px;">${category.name}</h4>
                     <span style="font-size: 12px; padding: 2px 8px; border-radius: 12px; background: ${category.color}20; color: ${category.color}; font-weight: 600;">${category.type}</span>
                 </div>
                 <p style="margin: 0; font-size: 18px; font-weight: 800; color: ${category.color};">${category.amount.toLocaleString()}원</p>
-                ${category.amount === 0 ? '<p style="margin: 4px 0 0 0; font-size: 11px; color: #9ca3af;">아직 데이터가 없습니다</p>' : ''}
+                ${category.amount === 0 ? '<p style="margin: 4px 0 0 0; font-size: 11px; color: #9ca3af;">아직 데이터가 없습니다</p>' : '<p style="margin: 4px 0 0 0; font-size: 11px; color: #6b7280;">클릭하여 상세보기</p>'}
             </div>
         `).join('');
+        
+        // 다크 모드에서 카드 스타일 적용
+        const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (isDarkMode) {
+            const cards = categoryGrid.querySelectorAll('.category-card');
+            cards.forEach(card => {
+                card.style.background = '#334155';
+                card.style.border = '1px solid #475569';
+                card.style.color = '#f1f5f9';
+                
+                const title = card.querySelector('h4');
+                if (title) title.style.color = '#f8fafc';
+                
+                const hint = card.querySelector('p:last-child');
+                if (hint) hint.style.color = '#cbd5e1';
+            });
+        }
+        
+        // 전역 함수 직접 호출 테스트
+        console.log('전역 함수 확인:', {
+            showCategoryDetailModal: typeof window.showCategoryDetailModal,
+            showAllTransactions: typeof window.showAllTransactions
+        });
         
         console.log('✅ 세무 분류 로딩 완료');
         
@@ -8076,6 +8463,31 @@ async function loadRecentTransactions() {
             `;
         }
         
+        // 다크 모드에서 거래 아이템 스타일 적용
+        const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (isDarkMode) {
+            const items = recentList.querySelectorAll('.transaction-item');
+            items.forEach(item => {
+                item.style.background = '#334155';
+                item.style.border = '1px solid #475569';
+                
+                const desc = item.querySelector('.transaction-desc');
+                if (desc) desc.style.color = '#f8fafc';
+                
+                const date = item.querySelector('.transaction-date');
+                if (date) date.style.color = '#cbd5e1';
+            });
+            
+            const emptyDiv = recentList.querySelector('.empty-transactions');
+            if (emptyDiv) {
+                emptyDiv.style.color = '#cbd5e1';
+                const icon = emptyDiv.querySelector('i');
+                if (icon) icon.style.color = '#64748b';
+            }
+        }
+        
+
+        
         console.log(`✅ 최근 거래 로딩 완료: ${transactions.length}건 (관리자: ${currentUser.email})`);
         
     } catch (error) {
@@ -8107,7 +8519,7 @@ function showIncomeModal() {
     const today = new Date().toISOString().split('T')[0];
     
     const modalHTML = `
-        <div id="incomeModal" class="modal-overlay active">
+        <div id="incomeModal" class="modal-overlay active" style="z-index: 10000;">
             <div class="modal-container" style="max-width: min(600px, 95vw); max-height: 85vh; margin: 10px auto;">
                 <div class="modal-header">
                     <h2 class="modal-title">
@@ -8318,6 +8730,63 @@ async function saveIncomeData(event) {
     }
 }
 
+// ✏️ 매출 데이터 수정
+async function updateIncomeData(event) {
+    event.preventDefault();
+    
+    if (!window.editingIncomeId) {
+        showNotification('수정할 매출을 찾을 수 없습니다.', 'error');
+        return;
+    }
+    
+    try {
+        showLoadingSpinner(true);
+        
+        // 폼 데이터 수집
+        const incomeData = {
+            date: document.getElementById('incomeDate').value,
+            client: document.getElementById('incomeClient').value.trim(),
+            description: document.getElementById('incomeDescription').value.trim(),
+            category: document.getElementById('incomeCategory').value,
+            supplyAmount: parseFloat(document.getElementById('incomeSupplyAmount').value) || 0,
+            vatAmount: Math.round((parseFloat(document.getElementById('incomeSupplyAmount').value) || 0) * 0.1),
+            totalAmount: (parseFloat(document.getElementById('incomeSupplyAmount').value) || 0) + Math.round((parseFloat(document.getElementById('incomeSupplyAmount').value) || 0) * 0.1),
+            memo: document.getElementById('incomeMemo').value.trim(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // 필수 값 검증
+        if (!incomeData.client || !incomeData.description || !incomeData.category || incomeData.supplyAmount <= 0) {
+            showNotification('모든 필수 항목을 입력해주세요.', 'error');
+            showLoadingSpinner(false);
+            return;
+        }
+        
+        // Firebase에 업데이트
+        await db.collection('income').doc(window.editingIncomeId).update(incomeData);
+        
+        // 학습 데이터 저장 (카테고리 패턴 학습)
+        await saveClientCategoryLearning(incomeData.client, incomeData.category, 'income');
+        
+        showNotification('매출이 성공적으로 수정되었습니다.', 'success');
+        
+        // 수정 모드 플래그 제거
+        delete window.editingIncomeId;
+        
+        // 모달 닫기
+        closeIncomeModal();
+        
+        // 세무 대시보드 새로고침
+        await loadTaxationData();
+        
+    } catch (error) {
+        console.error('❌ 매출 수정 실패:', error);
+        showNotification('매출 수정 중 오류가 발생했습니다.', 'error');
+    } finally {
+        showLoadingSpinner(false);
+    }
+}
+
 function showExpenseModal() {
     // 🔒 관리자 권한 확인
     if (!isAdmin) {
@@ -8335,7 +8804,7 @@ function showExpenseModal() {
     const today = new Date().toISOString().split('T')[0];
     
     const modalHTML = `
-        <div id="expenseModal" class="modal-overlay active">
+        <div id="expenseModal" class="modal-overlay active" style="z-index: 10000;">
             <div class="modal-container" style="max-width: min(600px, 95vw); max-height: 85vh; margin: 10px auto;">
                 <div class="modal-header">
                     <h2 class="modal-title">
@@ -8611,6 +9080,78 @@ async function saveExpenseData(event) {
     } catch (error) {
         console.error('❌ 경비 저장 실패:', error);
         showNotification('경비 등록에 실패했습니다.', 'error');
+        showLoadingSpinner(false);
+    }
+}
+
+// ✏️ 경비 데이터 수정
+async function updateExpenseData(event) {
+    event.preventDefault();
+    
+    if (!window.editingExpenseId) {
+        showNotification('수정할 경비를 찾을 수 없습니다.', 'error');
+        return;
+    }
+    
+    try {
+        showLoadingSpinner(true);
+        
+        // 폼 데이터 수집
+        const expenseData = {
+            date: document.getElementById('expenseDate').value,
+            vendor: document.getElementById('expenseVendor').value.trim(),
+            description: document.getElementById('expenseDescription').value.trim(),
+            category: document.getElementById('expenseCategory').value,
+            supplyAmount: parseFloat(document.getElementById('expenseSupplyAmount').value) || 0,
+            vatType: document.getElementById('expenseVatType').value,
+            proof: document.getElementById('expenseProof').value,
+            memo: document.getElementById('expenseMemo').value.trim(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // 부가세 계산
+        if (expenseData.vatType === 'vat') {
+            expenseData.vatAmount = Math.round(expenseData.supplyAmount * 0.1);
+            expenseData.deductibleVat = expenseData.vatAmount;
+            expenseData.totalAmount = expenseData.supplyAmount + expenseData.vatAmount;
+        } else if (expenseData.vatType === 'simple') {
+            expenseData.vatAmount = Math.round(expenseData.supplyAmount * 0.1);
+            expenseData.deductibleVat = 0; // 간이세금계산서는 공제 불가
+            expenseData.totalAmount = expenseData.supplyAmount + expenseData.vatAmount;
+        } else {
+            expenseData.vatAmount = 0;
+            expenseData.deductibleVat = 0;
+            expenseData.totalAmount = expenseData.supplyAmount;
+        }
+        
+        // 필수 값 검증
+        if (!expenseData.vendor || !expenseData.description || !expenseData.category || expenseData.supplyAmount <= 0) {
+            showNotification('모든 필수 항목을 입력해주세요.', 'error');
+            showLoadingSpinner(false);
+            return;
+        }
+        
+        // Firebase에 업데이트
+        await db.collection('expense').doc(window.editingExpenseId).update(expenseData);
+        
+        // 학습 데이터 저장 (카테고리 패턴 학습)
+        await saveClientCategoryLearning(expenseData.vendor, expenseData.category, 'expense');
+        
+        showNotification('경비가 성공적으로 수정되었습니다.', 'success');
+        
+        // 수정 모드 플래그 제거
+        delete window.editingExpenseId;
+        
+        // 모달 닫기
+        closeExpenseModal();
+        
+        // 세무 대시보드 새로고침
+        await loadTaxationData();
+        
+    } catch (error) {
+        console.error('❌ 경비 수정 실패:', error);
+        showNotification('경비 수정 중 오류가 발생했습니다.', 'error');
+    } finally {
         showLoadingSpinner(false);
     }
 }
@@ -10767,11 +11308,737 @@ function getLastDayOfMonth(year, month) {
 }
 
 function toggleCategoryView() {
-    showNotification('분류 상세보기 기능은 준비 중입니다.', 'info');
+    const categoryGrid = document.getElementById('categoryGrid');
+    const toggleBtn = document.querySelector('.category-toggle i');
+    
+    if (categoryGrid.classList.contains('expanded')) {
+        categoryGrid.classList.remove('expanded');
+        toggleBtn.className = 'fas fa-expand-alt';
+        showNotification('분류별 현황을 축소했습니다.', 'info');
+    } else {
+        categoryGrid.classList.add('expanded');
+        toggleBtn.className = 'fas fa-compress-alt';
+        showNotification('분류별 현황을 확장했습니다.', 'info');
+    }
+}
+
+// 📊 분류 상세보기 모달
+function showCategoryDetailModal(categoryName) {
+    console.log('showCategoryDetailModal 시작:', categoryName);
+    
+    if (!isAdmin) {
+        showNotification('관리자만 분류 상세보기에 접근할 수 있습니다.', 'error');
+        return;
+    }
+    
+    // 기존 모달이 있다면 제거
+    const existingModal = document.getElementById('categoryDetailModal');
+    if (existingModal) {
+        existingModal.remove();
+        console.log('기존 모달 제거됨');
+    }
+    
+    const modalHTML = `
+        <div class="modal-overlay active" id="categoryDetailModal" style="
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); z-index: 9999; display: flex; 
+            align-items: center; justify-content: center; padding: 20px;
+        ">
+            <div class="modal-content" style="
+                background: white; border-radius: 12px; max-width: 800px; 
+                width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            ">
+                <div class="modal-header" style="
+                    padding: 20px; border-bottom: 2px solid #e5e7eb; 
+                    display: flex; justify-content: space-between; align-items: center;
+                ">
+                    <h3 style="margin: 0; color: #1f2937; font-size: 20px; font-weight: 700;">
+                        <i class="fas fa-chart-pie"></i> ${categoryName} 상세보기
+                    </h3>
+                    <button onclick="closeCategoryDetailModal()" style="
+                        background: none; border: none; font-size: 24px; 
+                        color: #6b7280; cursor: pointer; padding: 0;
+                    ">&times;</button>
+                </div>
+                
+                <div class="modal-body" style="padding: 20px;">
+                    <div id="categoryDetailContent">
+                        <div style="text-align: center; padding: 40px;">
+                            <div class="spinner" style="
+                                width: 40px; height: 40px; border: 4px solid #f3f4f6; 
+                                border-top: 4px solid #3b82f6; border-radius: 50%; 
+                                animation: spin 1s linear infinite; margin: 0 auto 20px;
+                            "></div>
+                            <p>분류 데이터를 불러오는 중...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    console.log('모달 HTML 추가됨');
+    
+    // 모달이 실제로 DOM에 추가되었는지 확인
+    const modal = document.getElementById('categoryDetailModal');
+    if (modal) {
+        console.log('모달 DOM 확인됨:', modal);
+        modal.style.display = 'flex';
+        modal.style.zIndex = '9999';
+    } else {
+        console.error('모달을 찾을 수 없습니다!');
+        return;
+    }
+    
+    // 다크 모드에서 모달 스타일 적용
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDarkMode) {
+        const modalContent = document.querySelector('#categoryDetailModal .modal-content');
+        const modalHeader = document.querySelector('#categoryDetailModal .modal-header');
+        const modalBody = document.querySelector('#categoryDetailModal .modal-body');
+        const title = document.querySelector('#categoryDetailModal h3');
+        const closeBtn = document.querySelector('#categoryDetailModal button');
+        const loadingText = document.querySelector('#categoryDetailModal p');
+        
+        if (modalContent) modalContent.style.background = '#1e293b';
+        if (modalHeader) modalHeader.style.borderBottom = '2px solid #475569';
+        if (modalBody) modalBody.style.color = '#f1f5f9';
+        if (title) title.style.color = '#f8fafc';
+        if (closeBtn) closeBtn.style.color = '#cbd5e1';
+        if (loadingText) loadingText.style.color = '#cbd5e1';
+    }
+    
+    // 분류 상세 데이터 로딩
+    loadCategoryDetailData(categoryName);
+    console.log('showCategoryDetailModal 완료');
+}
+
+// 📊 분류 상세 데이터 로딩
+async function loadCategoryDetailData(categoryName) {
+    console.log('loadCategoryDetailData 시작:', categoryName);
+    
+    try {
+        const content = document.getElementById('categoryDetailContent');
+        if (!content) {
+            console.error('categoryDetailContent 요소를 찾을 수 없습니다');
+            return;
+        }
+        
+        console.log('데이터베이스 조회 시작...');
+        
+        // 매출 데이터 조회
+        let incomeQuery = db.collection('income');
+        if (isAdmin) {
+            incomeQuery = incomeQuery.where('adminEmail', '==', currentUser.email);
+            console.log('관리자 필터 적용:', currentUser.email);
+        }
+        const incomeSnapshot = await incomeQuery.get();
+        console.log('매출 데이터 개수:', incomeSnapshot.size);
+        
+        // 경비 데이터 조회
+        let expenseQuery = db.collection('expense');
+        if (isAdmin) {
+            expenseQuery = expenseQuery.where('adminEmail', '==', currentUser.email);
+        }
+        const expenseSnapshot = await expenseQuery.get();
+        console.log('경비 데이터 개수:', expenseSnapshot.size);
+        
+        // 분류별 데이터 필터링
+        const incomeData = [];
+        const expenseData = [];
+        
+        console.log('분류별 데이터 필터링 시작...');
+        
+        incomeSnapshot.forEach(doc => {
+            const data = doc.data();
+            console.log('매출 데이터 확인:', data.category, 'vs', categoryName);
+            if (data.category === categoryName) {
+                incomeData.push({
+                    id: doc.id,
+                    ...data,
+                    date: data.createdAt ? data.createdAt.toDate() : new Date(data.date)
+                });
+            }
+        });
+        
+        expenseSnapshot.forEach(doc => {
+            const data = doc.data();
+            console.log('경비 데이터 확인:', data.category, 'vs', categoryName);
+            if (data.category === categoryName) {
+                expenseData.push({
+                    id: doc.id,
+                    ...data,
+                    date: data.createdAt ? data.createdAt.toDate() : new Date(data.date)
+                });
+            }
+        });
+        
+        console.log('필터링 결과:', {
+            incomeData: incomeData.length,
+            expenseData: expenseData.length,
+            categoryName: categoryName
+        });
+        
+        // 통계 계산
+        const totalIncome = incomeData.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+        const totalExpense = expenseData.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+        const netAmount = totalIncome - totalExpense;
+        
+        // 날짜순 정렬
+        const allTransactions = [...incomeData, ...expenseData].sort((a, b) => b.date - a.date);
+        
+        // UI 업데이트
+        content.innerHTML = `
+            <div style="margin-bottom: 24px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                    <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 16px; border-radius: 8px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 14px; opacity: 0.9;">총 매출</h4>
+                        <p style="margin: 0; font-size: 24px; font-weight: 700;">${totalIncome.toLocaleString()}원</p>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 16px; border-radius: 8px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 14px; opacity: 0.9;">총 경비</h4>
+                        <p style="margin: 0; font-size: 24px; font-weight: 700;">${totalExpense.toLocaleString()}원</p>
+                    </div>
+                    <div style="background: linear-gradient(135deg, ${netAmount >= 0 ? '#10b981' : '#ef4444'}, ${netAmount >= 0 ? '#059669' : '#dc2626'}); color: white; padding: 16px; border-radius: 8px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 14px; opacity: 0.9;">순손익</h4>
+                        <p style="margin: 0; font-size: 24px; font-weight: 700;">${netAmount.toLocaleString()}원</p>
+                    </div>
+                </div>
+                
+                <div style="background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 8px 0; color: #374151; font-size: 16px;">
+                        <i class="fas fa-list"></i> 거래 내역 (${allTransactions.length}건)
+                    </h4>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        ${allTransactions.length > 0 ? allTransactions.map(tx => `
+                            <div style="
+                                display: flex; justify-content: space-between; align-items: center;
+                                padding: 12px; background: white; border-radius: 6px; margin-bottom: 8px;
+                                border-left: 4px solid ${tx.client ? '#10b981' : '#ef4444'};
+                            ">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">
+                                        ${tx.client || tx.vendor} - ${tx.description}
+                                    </div>
+                                    <div style="font-size: 12px; color: #6b7280;">
+                                        ${tx.date.toLocaleDateString('ko-KR')} | ${tx.category}
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="text-align: right;">
+                                        <div style="font-weight: 700; color: ${tx.client ? '#10b981' : '#ef4444'};">
+                                            ${tx.totalAmount.toLocaleString()}원
+                                        </div>
+                                        <div style="font-size: 12px; color: #6b7280;">
+                                            ${tx.client ? '매출' : '경비'}
+                                        </div>
+                                    </div>
+                                    <button onclick="editTransaction('${tx.id}', '${tx.client ? 'income' : 'expense'}')" style="
+                                        background: #3b82f6; color: white; border: none; padding: 4px 8px;
+                                        border-radius: 4px; font-size: 11px; cursor: pointer;
+                                        transition: all 0.2s; display: flex; align-items: center; gap: 2px;
+                                    " onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+                                        <i class="fas fa-edit" style="font-size: 9px;"></i>
+                                        수정
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('') : '<p style="text-align: center; color: #6b7280; padding: 20px;">거래 내역이 없습니다.</p>'}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('❌ 분류 상세 데이터 로딩 실패:', error);
+        document.getElementById('categoryDetailContent').innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #ef4444;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
+                <p>분류 데이터를 불러오는데 실패했습니다.</p>
+                <button onclick="loadCategoryDetailData('${categoryName}')" style="
+                    background: #3b82f6; color: white; border: none; padding: 8px 16px; 
+                    border-radius: 6px; cursor: pointer; margin-top: 12px;
+                ">다시 시도</button>
+            </div>
+        `;
+    }
+}
+
+// 📊 분류 상세보기 모달 닫기
+function closeCategoryDetailModal() {
+    const modal = document.getElementById('categoryDetailModal');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 function showAllTransactions() {
-    showNotification('전체 거래 내역 기능은 준비 중입니다.', 'info');
+    console.log('showAllTransactions 시작');
+    
+    if (!isAdmin) {
+        showNotification('관리자만 전체 거래 내역에 접근할 수 있습니다.', 'error');
+        return;
+    }
+    
+    // 기존 모달이 있다면 제거
+    const existingModal = document.getElementById('allTransactionsModal');
+    if (existingModal) {
+        existingModal.remove();
+        console.log('기존 전체보기 모달 제거됨');
+    }
+    
+    const modalHTML = `
+        <div class="modal-overlay active" id="allTransactionsModal" style="
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); z-index: 9999; display: flex; 
+            align-items: center; justify-content: center; padding: 20px;
+        ">
+            <div class="modal-content" style="
+                background: white; border-radius: 12px; max-width: 1000px; 
+                width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            ">
+                <div class="modal-header" style="
+                    padding: 20px; border-bottom: 2px solid #e5e7eb; 
+                    display: flex; justify-content: space-between; align-items: center;
+                ">
+                    <h3 style="margin: 0; color: #1f2937; font-size: 20px; font-weight: 700;">
+                        <i class="fas fa-list"></i> 전체 거래 내역
+                    </h3>
+                    <button onclick="closeAllTransactionsModal()" style="
+                        background: none; border: none; font-size: 24px; 
+                        color: #6b7280; cursor: pointer; padding: 0;
+                    ">&times;</button>
+                </div>
+                
+                <div class="modal-body" style="padding: 20px;">
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                            <input type="text" id="transactionSearch" placeholder="거래 검색..." style="
+                                flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; 
+                                border-radius: 6px; font-size: 14px;
+                            ">
+                            <select id="transactionFilter" style="
+                                padding: 8px 12px; border: 1px solid #d1d5db; 
+                                border-radius: 6px; font-size: 14px;
+                            ">
+                                <option value="all">전체</option>
+                                <option value="income">매출만</option>
+                                <option value="expense">경비만</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="allTransactionsContent">
+                        <div style="text-align: center; padding: 40px;">
+                            <div class="spinner" style="
+                                width: 40px; height: 40px; border: 4px solid #f3f4f6; 
+                                border-top: 4px solid #3b82f6; border-radius: 50%; 
+                                animation: spin 1s linear infinite; margin: 0 auto 20px;
+                            "></div>
+                            <p>거래 내역을 불러오는 중...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    console.log('전체보기 모달 HTML 추가됨');
+    
+    // 모달이 실제로 DOM에 추가되었는지 확인
+    const modal = document.getElementById('allTransactionsModal');
+    if (modal) {
+        console.log('전체보기 모달 DOM 확인됨:', modal);
+        modal.style.display = 'flex';
+        modal.style.zIndex = '9999';
+    } else {
+        console.error('전체보기 모달을 찾을 수 없습니다!');
+        return;
+    }
+    
+    // 전체 거래 데이터 로딩
+    loadAllTransactionsData();
+    
+    // 검색 및 필터 이벤트 리스너 추가
+    setTimeout(() => {
+        const searchInput = document.getElementById('transactionSearch');
+        const filterSelect = document.getElementById('transactionFilter');
+        
+        if (searchInput) {
+            searchInput.addEventListener('input', filterTransactions);
+        }
+        if (filterSelect) {
+            filterSelect.addEventListener('change', filterTransactions);
+        }
+    }, 100);
+    
+    console.log('showAllTransactions 완료');
+}
+
+// 📊 전체 거래 데이터 로딩
+async function loadAllTransactionsData() {
+    try {
+        const content = document.getElementById('allTransactionsContent');
+        
+        // 모든 거래 데이터 수집
+        const allTransactions = [];
+        
+        // 1. 견적서 데이터 조회
+        const estimateSnapshot = await db.collection('estimates').get();
+        estimateSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.createdBy === currentUser.email) {
+                allTransactions.push({
+                    id: doc.id,
+                    type: '매출',
+                    description: `${data.customerName} - ${data.title}`,
+                    amount: data.totalAmount || 0,
+                    date: data.createdAt ? data.createdAt.toDate() : new Date(),
+                    category: '견적서',
+                    icon: 'fa-plus',
+                    color: '#10b981',
+                    timestamp: data.createdAt ? data.createdAt.toDate().getTime() : 0,
+                    source: 'estimate'
+                });
+            }
+        });
+        
+        // 2. 직접 입력 매출 데이터 조회
+        const incomeSnapshot = await db.collection('income').get();
+        incomeSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.adminEmail === currentUser.email) {
+                const incomeDate = data.createdAt ? data.createdAt.toDate() : new Date(data.date);
+                allTransactions.push({
+                    id: doc.id,
+                    type: '매출',
+                    description: `${data.client} - ${data.description}`,
+                    amount: data.totalAmount || 0,
+                    date: incomeDate,
+                    category: data.category || '기타',
+                    icon: 'fa-plus',
+                    color: '#10b981',
+                    timestamp: incomeDate.getTime(),
+                    source: 'income',
+                    data: data
+                });
+            }
+        });
+        
+        // 3. 경비 데이터 조회
+        const expenseSnapshot = await db.collection('expense').get();
+        expenseSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.adminEmail === currentUser.email) {
+                const expenseDate = data.createdAt ? data.createdAt.toDate() : new Date(data.date);
+                allTransactions.push({
+                    id: doc.id,
+                    type: '경비',
+                    description: `${data.vendor} - ${data.description}`,
+                    amount: data.totalAmount || 0,
+                    date: expenseDate,
+                    category: data.category || '기타',
+                    icon: 'fa-minus',
+                    color: '#ef4444',
+                    timestamp: expenseDate.getTime(),
+                    source: 'expense',
+                    data: data
+                });
+            }
+        });
+        
+        // 날짜순 정렬
+        allTransactions.sort((a, b) => b.timestamp - a.timestamp);
+        
+        // 전역 변수에 저장 (필터링용)
+        window.allTransactionsData = allTransactions;
+        
+        // UI 업데이트
+        renderAllTransactions(allTransactions);
+        
+    } catch (error) {
+        console.error('❌ 전체 거래 데이터 로딩 실패:', error);
+        document.getElementById('allTransactionsContent').innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #ef4444;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
+                <p>거래 내역을 불러오는데 실패했습니다.</p>
+                <button onclick="loadAllTransactionsData()" style="
+                    background: #3b82f6; color: white; border: none; padding: 8px 16px; 
+                    border-radius: 6px; cursor: pointer; margin-top: 12px;
+                ">다시 시도</button>
+            </div>
+        `;
+    }
+}
+
+// 📊 전체 거래 렌더링
+function renderAllTransactions(transactions) {
+    const content = document.getElementById('allTransactionsContent');
+    
+    if (transactions.length === 0) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+                <i class="fas fa-receipt" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+                <p style="margin: 0; font-size: 16px;">거래 내역이 없습니다.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // 통계 계산
+    const totalIncome = transactions.filter(t => t.type === '매출').reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = transactions.filter(t => t.type === '경비').reduce((sum, t) => sum + t.amount, 0);
+    const netAmount = totalIncome - totalExpense;
+    
+    content.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 16px; border-radius: 8px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 14px; opacity: 0.9;">총 매출</h4>
+                    <p style="margin: 0; font-size: 20px; font-weight: 700;">${totalIncome.toLocaleString()}원</p>
+                </div>
+                <div style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 16px; border-radius: 8px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 14px; opacity: 0.9;">총 경비</h4>
+                    <p style="margin: 0; font-size: 20px; font-weight: 700;">${totalExpense.toLocaleString()}원</p>
+                </div>
+                <div style="background: linear-gradient(135deg, ${netAmount >= 0 ? '#10b981' : '#ef4444'}, ${netAmount >= 0 ? '#059669' : '#dc2626'}); color: white; padding: 16px; border-radius: 8px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 14px; opacity: 0.9;">순손익</h4>
+                    <p style="margin: 0; font-size: 20px; font-weight: 700;">${netAmount.toLocaleString()}원</p>
+                </div>
+            </div>
+        </div>
+        
+        <div style="max-height: 500px; overflow-y: auto;">
+            ${transactions.map(tx => `
+                <div class="transaction-item" style="
+                    display: flex; justify-content: space-between; align-items: center;
+                    padding: 16px; background: white; border-radius: 8px; margin-bottom: 12px;
+                    border-left: 4px solid ${tx.color}; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    transition: all 0.2s;
+                " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                            <div style="
+                                width: 24px; height: 24px; background: ${tx.color}; 
+                                border-radius: 50%; display: flex; align-items: center; 
+                                justify-content: center; color: white; font-size: 12px;
+                            ">
+                                <i class="fas ${tx.icon}"></i>
+                            </div>
+                            <div style="font-weight: 600; color: #1f2937; font-size: 14px;">
+                                ${tx.description}
+                            </div>
+                            <span style="
+                                font-size: 11px; padding: 2px 6px; border-radius: 10px; 
+                                background: ${tx.color}20; color: ${tx.color}; font-weight: 600;
+                            ">${tx.category}</span>
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280;">
+                            ${tx.date.toLocaleDateString('ko-KR')} | ${tx.type}
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="text-align: right;">
+                            <div style="font-weight: 700; color: ${tx.color}; font-size: 16px;">
+                                ${tx.amount.toLocaleString()}원
+                            </div>
+                            <div style="font-size: 11px; color: #6b7280;">
+                                ${tx.source === 'estimate' ? '견적서' : tx.source === 'income' ? '직접입력' : '경비'}
+                            </div>
+                        </div>
+                        <button onclick="editTransaction('${tx.id}', '${tx.source}')" style="
+                            background: #3b82f6; color: white; border: none; padding: 6px 12px;
+                            border-radius: 6px; font-size: 12px; cursor: pointer;
+                            transition: all 0.2s; display: flex; align-items: center; gap: 4px;
+                        " onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+                            <i class="fas fa-edit" style="font-size: 10px;"></i>
+                            수정
+                        </button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// 🔍 거래 필터링
+function filterTransactions() {
+    const searchTerm = document.getElementById('transactionSearch')?.value?.toLowerCase() || '';
+    const filterType = document.getElementById('transactionFilter')?.value || 'all';
+    
+    if (!window.allTransactionsData) return;
+    
+    let filteredTransactions = window.allTransactionsData;
+    
+    // 타입 필터링
+    if (filterType !== 'all') {
+        filteredTransactions = filteredTransactions.filter(tx => {
+            if (filterType === 'income') return tx.type === '매출';
+            if (filterType === 'expense') return tx.type === '경비';
+            return true;
+        });
+    }
+    
+    // 검색어 필터링
+    if (searchTerm) {
+        filteredTransactions = filteredTransactions.filter(tx => 
+            tx.description.toLowerCase().includes(searchTerm) ||
+            tx.category.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    renderAllTransactions(filteredTransactions);
+}
+
+// ✏️ 거래 수정
+async function editTransaction(transactionId, source) {
+    if (!isAdmin) {
+        showNotification('관리자만 거래를 수정할 수 있습니다.', 'error');
+        return;
+    }
+    
+    try {
+        if (source === 'income') {
+            // 매출 수정
+            const doc = await db.collection('income').doc(transactionId).get();
+            if (doc.exists) {
+                const data = doc.data();
+                showIncomeModal();
+                
+                // 폼에 기존 데이터 채우기
+                setTimeout(() => {
+                    document.getElementById('incomeDate').value = data.date;
+                    document.getElementById('incomeClient').value = data.client || '';
+                    document.getElementById('incomeDescription').value = data.description || '';
+                    document.getElementById('incomeCategory').value = data.category || '';
+                    document.getElementById('incomeSupplyAmount').value = data.supplyAmount || '';
+                    document.getElementById('incomeMemo').value = data.memo || '';
+                    
+                    // 수정 모드 설정
+                    window.editingIncomeId = transactionId;
+                    
+                    // 제출 버튼 변경
+                    const submitBtn = document.querySelector('#incomeModal button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.innerHTML = '<i class="fas fa-save"></i> 수정';
+                        submitBtn.onclick = updateIncomeData;
+                    }
+                }, 100);
+            }
+        } else if (source === 'expense') {
+            // 경비 수정
+            const doc = await db.collection('expense').doc(transactionId).get();
+            if (doc.exists) {
+                const data = doc.data();
+                showExpenseModal();
+                
+                // 폼에 기존 데이터 채우기
+                setTimeout(() => {
+                    document.getElementById('expenseDate').value = data.date;
+                    document.getElementById('expenseVendor').value = data.vendor || '';
+                    document.getElementById('expenseDescription').value = data.description || '';
+                    document.getElementById('expenseCategory').value = data.category || '';
+                    document.getElementById('expenseSupplyAmount').value = data.supplyAmount || '';
+                    document.getElementById('expenseVatType').value = data.vatType || 'vat';
+                    document.getElementById('expenseProof').value = data.proof || 'receipt';
+                    document.getElementById('expenseMemo').value = data.memo || '';
+                    
+                    // 수정 모드 설정
+                    window.editingExpenseId = transactionId;
+                    
+                    // 제출 버튼 변경
+                    const submitBtn = document.querySelector('#expenseModal button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.innerHTML = '<i class="fas fa-save"></i> 수정';
+                        submitBtn.onclick = updateExpenseData;
+                    }
+                }, 100);
+            }
+        } else if (source === 'estimate') {
+            // 견적서 수정
+            const doc = await db.collection('estimates').doc(transactionId).get();
+            if (doc.exists) {
+                const data = doc.data();
+                showEstimateModal();
+                
+                // 폼에 기존 데이터 채우기
+                setTimeout(() => {
+                    console.log('견적서 수정 데이터:', data);
+                    
+                    // 기본 정보 채우기
+                    document.getElementById('estimateCarNumber').value = data.carNumber || '';
+                    document.getElementById('estimateCustomerName').value = data.customerName || '';
+                    document.getElementById('estimateBikeModel').value = data.bikeModel || '';
+                    document.getElementById('estimateBikeYear').value = data.bikeYear || '';
+                    document.getElementById('estimateMileage').value = data.mileage || '';
+                    document.getElementById('estimateTitle').value = data.title || '';
+                    document.getElementById('estimateNotes').value = data.notes || '';
+                    
+                    // 견적 항목 채우기
+                    if (data.items && data.items.length > 0) {
+                        // 기존 항목들 제거
+                        const itemsContainer = document.getElementById('estimateItems');
+                        itemsContainer.innerHTML = '';
+                        
+                        // 데이터의 항목들로 새로 생성
+                        data.items.forEach((item, index) => {
+                            if (index === 0) {
+                                // 첫 번째 항목은 기존 항목 수정
+                                const firstItem = itemsContainer.querySelector('.estimate-item-card');
+                                if (firstItem) {
+                                    firstItem.querySelector('.item-name').value = item.name || '';
+                                    firstItem.querySelector('.item-price').value = item.price || '';
+                                    firstItem.querySelector('.item-quantity').value = item.quantity || 1;
+                                }
+                            } else {
+                                // 추가 항목들 생성
+                                addEstimateItem();
+                                const newItem = itemsContainer.lastElementChild;
+                                newItem.querySelector('.item-name').value = item.name || '';
+                                newItem.querySelector('.item-price').value = item.price || '';
+                                newItem.querySelector('.item-quantity').value = item.quantity || 1;
+                            }
+                        });
+                        
+                        // 총액 계산
+                        calculateTotal();
+                    }
+                    
+                    // 수정 모드 설정
+                    window.editingEstimateNumber = transactionId;
+                    
+                    // 제출 버튼 변경
+                    const submitBtn = document.querySelector('#estimateModal button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.innerHTML = '<i class="fas fa-save"></i> 수정';
+                        submitBtn.onclick = updateEstimate;
+                    }
+                    
+                    // 모달 제목 변경
+                    const modalTitle = document.querySelector('#estimateModal .modal-title');
+                    if (modalTitle) {
+                        modalTitle.innerHTML = '<i class="fas fa-file-invoice-dollar"></i> 견적서 수정';
+                    }
+                }, 100);
+            }
+        } else {
+            showNotification('알 수 없는 거래 유형입니다.', 'error');
+        }
+        
+    } catch (error) {
+        console.error('❌ 거래 수정 실패:', error);
+        showNotification('거래 수정 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+// 📊 전체 거래 모달 닫기
+function closeAllTransactionsModal() {
+    const modal = document.getElementById('allTransactionsModal');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 // 세무 리포트 옵션 모달
@@ -12041,158 +13308,213 @@ async function fixTargetIdConflict() {
     }
 }
 
-// 전역 함수 등록
-window.clearFirebaseCache = clearFirebaseCache;
-window.checkAdminStatus = checkAdminStatus;
-window.verifyAndFixAdminStatus = verifyAndFixAdminStatus;
-window.waitForJsPDFLibrary = waitForJsPDFLibrary;
-window.waitForQRCodeLibrary = waitForQRCodeLibrary;
-window.tryLoadJsPDFManually = tryLoadJsPDFManually;
-window.checkPDFLibraryStatus = checkPDFLibraryStatus;
-window.fixPDFLibraryIssue = fixPDFLibraryIssue;
-window.showPDFLibraryHelp = showPDFLibraryHelp;
-window.showConsoleHelp = showConsoleHelp;
-window.fixTargetIdConflict = fixTargetIdConflict;
-window.loadTaxationData = loadTaxationData;
-window.showIncomeModal = showIncomeModal;
-window.closeIncomeModal = closeIncomeModal;
-window.calculateIncomeTotal = calculateIncomeTotal;
-window.setupIncomeAutoComplete = setupIncomeAutoComplete;
-window.saveIncomeData = saveIncomeData;
-window.showExpenseModal = showExpenseModal;
-window.closeExpenseModal = closeExpenseModal;
-window.calculateExpenseTotal = calculateExpenseTotal;
-window.setupExpenseAutoComplete = setupExpenseAutoComplete;
-window.saveExpenseData = saveExpenseData;
-window.suggestIncomeCategory = suggestIncomeCategory;
-window.suggestExpenseCategory = suggestExpenseCategory;
-window.showCategorySuggestion = showCategorySuggestion;
-window.addSmartSuggestionBadge = addSmartSuggestionBadge;
-window.removeSmartSuggestionBadge = removeSmartSuggestionBadge;
-window.getRecommendationReason = getRecommendationReason;
-window.saveClientCategoryLearning = saveClientCategoryLearning;
-window.findLearnedCategory = findLearnedCategory;
-window.setupAutoComplete = setupAutoComplete;
-window.showSalaryModal = showSalaryModal;
-window.closeSalaryModal = closeSalaryModal;
-window.showSalaryTab = showSalaryTab;
-window.cancelAddEmployee = cancelAddEmployee;
-window.saveEmployee = saveEmployee;
-window.editEmployee = editEmployee;
-window.deleteEmployee = deleteEmployee;
-window.paySalary = paySalary;
-window.showTaxReport = showTaxReport;
-window.setupAdminUser = setupAdminUser;
-window.showTaxReportOptions = showTaxReportOptions;
-window.closeVatReportModal = closeVatReportModal;
-window.showVatTab = showVatTab;
-window.generateVatReport = generateVatReport;
-window.generateMonthlyReport = generateMonthlyReport;
-window.generateQuarterlyReport = generateQuarterlyReport;
-window.generateYearlyReport = generateYearlyReport;
-window.showTaxHelpCenter = showTaxHelpCenter;
-window.closeTaxHelpModal = closeTaxHelpModal;
-window.showHelpTab = showHelpTab;
-window.toggleFAQ = toggleFAQ;
-window.enableBeginnerMode = enableBeginnerMode;
-window.disableBeginnerMode = disableBeginnerMode;
-window.showTaxTermPopup = showTaxTermPopup;
-window.toggleCategoryView = toggleCategoryView;
-window.showAllTransactions = showAllTransactions;
-
-// 월별 다운로드 관련 함수들을 전역으로 등록
-window.showMonthlyEstimateModal = showMonthlyEstimateModal;
-window.closeMonthlyEstimateModal = closeMonthlyEstimateModal;
-window.downloadMonthlyEstimates = downloadMonthlyEstimates;
-window.getEstimatesByMonth = getEstimatesByMonth;
-
-// 누락된 전역 함수들 추가
-window.showAddEmployeeForm = showAddEmployeeForm;
-window.loadSalaryCalculation = loadSalaryCalculation;
-window.loadSalaryHistory = loadSalaryHistory;
-window.saveInsuranceSettings = saveInsuranceSettings;
-window.exportVatData = exportVatData;
-window.generateVatPDF = generateVatPDF;
-window.runVatSimulation = runVatSimulation;
-window.updateMaintenanceStatus = updateMaintenanceStatus;
-window.generatePayslip = generatePayslip;
-window.viewSalaryDetail = viewSalaryDetail;
-window.downloadPayslip = downloadPayslip;
-
-// Firebase 연결 관련 함수들 전역 노출
-window.checkFirebaseConnection = checkFirebaseConnection;
-window.attemptFirebaseReconnection = attemptFirebaseReconnection;
-window.monitorFirebaseConnection = monitorFirebaseConnection;
-window.cleanupFirebaseListeners = cleanupFirebaseListeners;
-window.safeFirebaseQuery = safeFirebaseQuery;
-
-// 정비이력 로딩 디버깅 함수 (브라우저 콘솔에서 실행 가능)
-async function debugMaintenanceLoading() {
-    console.log('🔍 정비이력 로딩 디버깅 시작...');
-    
-    // 1. 사용자 정보 확인
-    console.log('👤 현재 사용자 정보:', {
-        uid: currentUser?.uid,
-        email: currentUser?.email,
-        carNumber: currentUser?.carNumber,
-        role: currentUser?.role,
-        isAdmin: isAdmin
-    });
-    
-    // 2. Firebase 연결 상태 확인
-    console.log('🔥 Firebase 연결 상태:', {
-        dbInitialized: !!db,
-        firebaseLoaded: typeof firebase !== 'undefined'
-    });
-    
-    if (!db) {
-        console.error('❌ Firebase 데이터베이스 초기화되지 않음');
-        return;
-    }
-    
-    try {
-        // 3. 전체 정비 이력 수 확인
-        const totalSnapshot = await db.collection('maintenance').get();
-        console.log('📊 전체 정비 이력 수:', totalSnapshot.size);
+// 전역 함수 등록 통합 함수
+function registerGlobalFunctions() {
+    const globalFunctions = {
+        // Firebase 관련
+        clearFirebaseCache, checkAdminStatus, verifyAndFixAdminStatus,
+        checkFirebaseConnection, attemptFirebaseReconnection, monitorFirebaseConnection,
+        cleanupFirebaseListeners, safeFirebaseQuery, fixTargetIdConflict,
         
-        // 4. 각 정비 이력의 상세 정보 확인
-        const allMaintenances = [];
-        totalSnapshot.forEach(doc => {
-            const data = doc.data();
-            allMaintenances.push({
-                id: doc.id,
-                carNumber: data.carNumber,
-                adminEmail: data.adminEmail,
-                type: data.type,
-                date: data.date,
-                status: data.status
-            });
+        // PDF 라이브러리 관련
+        waitForJsPDFLibrary, waitForQRCodeLibrary, tryLoadJsPDFManually,
+        checkPDFLibraryStatus, fixPDFLibraryIssue, showPDFLibraryHelp, showConsoleHelp,
+        
+        // 세무 관리 관련
+        loadTaxationData, showIncomeModal, closeIncomeModal, calculateIncomeTotal,
+        setupIncomeAutoComplete, saveIncomeData, showExpenseModal, closeExpenseModal,
+        calculateExpenseTotal, setupExpenseAutoComplete, saveExpenseData,
+        suggestIncomeCategory, suggestExpenseCategory, showCategorySuggestion,
+        addSmartSuggestionBadge, removeSmartSuggestionBadge, getRecommendationReason,
+        saveClientCategoryLearning, findLearnedCategory, setupAutoComplete,
+        
+        // 급여 관리 관련
+        showSalaryModal, closeSalaryModal, showSalaryTab, cancelAddEmployee,
+        saveEmployee, editEmployee, deleteEmployee, paySalary, showAddEmployeeForm,
+        loadSalaryCalculation, loadSalaryHistory, saveInsuranceSettings,
+        generatePayslip, viewSalaryDetail, downloadPayslip,
+        
+        // 세무 리포트 관련
+        showTaxReport, setupAdminUser, showTaxReportOptions, closeVatReportModal,
+        showVatTab, generateVatReport, generateMonthlyReport, generateQuarterlyReport,
+        generateYearlyReport, showTaxHelpCenter, closeTaxHelpModal, showHelpTab,
+        toggleFAQ, enableBeginnerMode, disableBeginnerMode, showTaxTermPopup,
+        exportVatData, generateVatPDF, runVatSimulation,
+        
+        // 분류 및 거래 관련
+        toggleCategoryView, showAllTransactions, showCategoryDetailModal,
+        closeCategoryDetailModal, loadCategoryDetailData, closeAllTransactionsModal,
+        loadAllTransactionsData, renderAllTransactions, filterTransactions,
+        editTransaction, updateIncomeData, updateExpenseData,
+        
+        // 견적서 관련
+        showMonthlyEstimateModal, closeMonthlyEstimateModal,
+        downloadMonthlyEstimates, getEstimatesByMonth,
+        
+        // 정비 관리 관련
+        updateMaintenanceStatus
+    };
+    
+    // 전역 함수 등록
+    Object.entries(globalFunctions).forEach(([name, func]) => {
+        if (typeof func === 'function') {
+            window[name] = func;
+        }
+    });
+    
+            // console.log('✅ 전역 함수 등록 완료:', Object.keys(globalFunctions).length + '개');
+}
+
+// 전역 함수 등록 실행
+registerGlobalFunctions();
+
+// 통합 디버깅 및 복구 시스템
+const DebugSystem = {
+    // 정비이력 로딩 디버깅
+    async debugMaintenanceLoading() {
+        console.log('🔍 정비이력 로딩 디버깅 시작...');
+        
+        // 1. 사용자 정보 확인
+        console.log('👤 현재 사용자 정보:', {
+            uid: currentUser?.uid,
+            email: currentUser?.email,
+            carNumber: currentUser?.carNumber,
+            role: currentUser?.role,
+            isAdmin: isAdmin
         });
         
-        console.log('📋 모든 정비 이력:', allMaintenances);
+        // 2. Firebase 연결 상태 확인
+        console.log('🔥 Firebase 연결 상태:', {
+            db: !!db,
+            auth: !!firebase.auth(),
+            projectId: firebase.app().options.projectId
+        });
         
-        // 5. 권한별 필터링 시뮬레이션
-        if (!isAdmin && currentUser?.carNumber) {
-            const userFiltered = allMaintenances.filter(m => m.carNumber === currentUser.carNumber);
-            console.log('🚗 사용자 차량번호로 필터링된 이력:', userFiltered);
-        } else if (isAdmin && currentUser?.email) {
-            const adminFiltered = allMaintenances.filter(m => m.adminEmail === currentUser.email);
-            console.log('👨‍💼 관리자 이메일로 필터링된 이력:', adminFiltered);
+        // 3. 데이터베이스 직접 조회 테스트
+        try {
+            console.log('📊 데이터베이스 조회 테스트...');
+            const maintenanceSnapshot = await db.collection('maintenance').get();
+            console.log('✅ 정비 데이터 개수:', maintenanceSnapshot.size);
+            
+            const incomeSnapshot = await db.collection('income').get();
+            console.log('✅ 매출 데이터 개수:', incomeSnapshot.size);
+            
+            const expenseSnapshot = await db.collection('expense').get();
+            console.log('✅ 경비 데이터 개수:', expenseSnapshot.size);
+            
+            const estimatesSnapshot = await db.collection('estimates').get();
+            console.log('✅ 견적서 데이터 개수:', estimatesSnapshot.size);
+            
+            // 4. 관리자별 데이터 확인
+            if (isAdmin) {
+                console.log('👨‍💼 관리자별 데이터 확인...');
+                const adminMaintenance = await db.collection('maintenance')
+                    .where('adminEmail', '==', currentUser.email)
+                    .get();
+                console.log('✅ 관리자 정비 데이터:', adminMaintenance.size);
+                
+                const adminIncome = await db.collection('income')
+                    .where('adminEmail', '==', currentUser.email)
+                    .get();
+                console.log('✅ 관리자 매출 데이터:', adminIncome.size);
+                
+                const adminExpense = await db.collection('expense')
+                    .where('adminEmail', '==', currentUser.email)
+                    .get();
+                console.log('✅ 관리자 경비 데이터:', adminExpense.size);
+            }
+            
+        } catch (error) {
+            console.error('❌ 데이터베이스 조회 오류:', error);
         }
+    },
+    
+    // 데이터 복구
+    async recoverData() {
+        console.log('🔄 데이터 복구 시도...');
         
-        showNotification('정비이력 디버깅 완료 - 콘솔을 확인하세요', 'info');
-        
-    } catch (error) {
-        console.error('❌ 정비이력 디버깅 실패:', error);
-        showNotification('정비이력 디버깅 실패: ' + error.message, 'error');
+        try {
+            // 1. 캐시 클리어
+            clearCachedData();
+            console.log('✅ 캐시 클리어 완료');
+            
+            // 2. 리스너 정리
+            cleanupFirebaseListeners();
+            console.log('✅ 리스너 정리 완료');
+            
+            // 3. 데이터 재로딩
+            await loadMaintenanceTimeline();
+            await updateTodayStats();
+            await updatePendingStats();
+            await updateMonthStats();
+            await updateAverageStats();
+            await loadNotifications();
+            
+            console.log('✅ 데이터 재로딩 완료');
+            
+            // 4. UI 새로고침
+            showScreen('dashboard');
+            console.log('✅ UI 새로고침 완료');
+            
+        } catch (error) {
+            console.error('❌ 데이터 복구 실패:', error);
+        }
+    },
+    
+    // 시스템 상태 점검
+    checkSystemStatus() {
+        console.log('🔍 시스템 상태 점검...');
+        console.log('📊 현재 상태:', {
+            user: currentUser?.email || 'null',
+            isAdmin: isAdmin,
+            db: !!db,
+            online: navigator.onLine,
+            theme: currentTheme,
+            viewMode: currentViewMode
+        });
+    }
+};
+
+// 디버깅 함수들을 전역으로 노출
+window.debugMaintenanceLoading = DebugSystem.debugMaintenanceLoading.bind(DebugSystem);
+window.recoverData = DebugSystem.recoverData.bind(DebugSystem);
+window.checkSystemStatus = DebugSystem.checkSystemStatus.bind(DebugSystem);
+window.handleCategoryClick = handleCategoryClick;
+window.handleViewAllClick = handleViewAllClick;
+
+// 카테고리 클릭 핸들러
+function handleCategoryClick(categoryName) {
+    console.log('카테고리 클릭 핸들러 호출됨:', categoryName);
+    
+    // 함수 존재 확인
+    if (typeof showCategoryDetailModal === 'function') {
+        console.log('showCategoryDetailModal 함수 호출');
+        showCategoryDetailModal(categoryName);
+    } else if (typeof window.showCategoryDetailModal === 'function') {
+        console.log('window.showCategoryDetailModal 함수 호출');
+        window.showCategoryDetailModal(categoryName);
+    } else {
+        console.error('showCategoryDetailModal 함수를 찾을 수 없습니다');
+        showNotification('상세보기 기능을 불러올 수 없습니다.', 'error');
     }
 }
 
-// 디버깅 함수를 전역으로 노출
-window.debugMaintenanceLoading = debugMaintenanceLoading;
-
-// 전역 함수로 노출
-window.debugMaintenanceLoading = debugMaintenanceLoading;
+// 전체보기 클릭 핸들러
+function handleViewAllClick() {
+    console.log('전체보기 클릭 핸들러 호출됨');
+    
+    // 함수 존재 확인
+    if (typeof showAllTransactions === 'function') {
+        console.log('showAllTransactions 함수 호출');
+        showAllTransactions();
+    } else if (typeof window.showAllTransactions === 'function') {
+        console.log('window.showAllTransactions 함수 호출');
+        window.showAllTransactions();
+    } else {
+        console.error('showAllTransactions 함수를 찾을 수 없습니다');
+        showNotification('전체보기 기능을 불러올 수 없습니다.', 'error');
+    }
+}
 
 // closeDetailModal 함수 정의 (closeMaintenanceDetailModal과 동일)
 window.closeDetailModal = function() {
