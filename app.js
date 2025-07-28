@@ -763,7 +763,11 @@ async function handleAuthStateChange(user) {
                 // 🚀 사용자 인증 완료 이벤트 발생
                 window.dispatchEvent(new CustomEvent('user-authenticated'));
                 
-                showNotification(`환영합니다, ${currentUser.name}님!`, 'success');
+                // 환영 메시지는 한 번만 표시 (자동 로그인 시에는 표시하지 않음)
+                if (!window.hasShownWelcomeMessage) {
+                    showNotification(`환영합니다, ${currentUser.name}님!`, 'success');
+                    window.hasShownWelcomeMessage = true;
+                }
             } else {
                 console.log('📄 User document not found, creating new user...');
                 
@@ -855,6 +859,9 @@ async function handleLogout() {
         // 🔒 모든 사용자 데이터 완전 초기화
         currentUser = null;
         isAdmin = false;
+        
+        // 환영 메시지 플래그 초기화
+        window.hasShownWelcomeMessage = false;
         
         // 🔔 알림 패널 닫기 및 완전 초기화
         closeNotificationPanel();
@@ -1820,6 +1827,8 @@ window.addEventListener('load', () => {
     setTimeout(() => {
         if (firebase.auth().currentUser && !currentUser) {
             console.log('🔄 자동 로그인 상태 확인 중...');
+            // 자동 로그인 시에는 환영 메시지 표시하지 않음
+            window.hasShownWelcomeMessage = true;
             handleAuthStateChange(firebase.auth().currentUser);
         }
     }, 1500);
