@@ -41,13 +41,13 @@ const QUERY_DELAY = 200;
 
 // 🚀 클라이언트 사이드 캐싱 시스템 (무료플랜 최적화)
 const dataCache = {
-    maintenanceTimeline: { data: null, timestamp: null, ttl: 2 * 60 * 1000 }, // 2분
-    todayStats: { data: null, timestamp: null, ttl: 5 * 60 * 1000 }, // 5분
-    pendingStats: { data: null, timestamp: null, ttl: 3 * 60 * 1000 }, // 3분
-    monthStats: { data: null, timestamp: null, ttl: 10 * 60 * 1000 }, // 10분
-    averageStats: { data: null, timestamp: null, ttl: 15 * 60 * 1000 }, // 15분
-    notifications: { data: null, timestamp: null, ttl: 1 * 60 * 1000 }, // 1분
-    recentTransactions: { data: null, timestamp: null, ttl: 5 * 60 * 1000 } // 5분
+    maintenanceTimeline: { data: null, timestamp: null, ttl: 5 * 60 * 1000 }, // 5분 (증가)
+    todayStats: { data: null, timestamp: null, ttl: 10 * 60 * 1000 }, // 10분 (증가)
+    pendingStats: { data: null, timestamp: null, ttl: 8 * 60 * 1000 }, // 8분 (증가)
+    monthStats: { data: null, timestamp: null, ttl: 15 * 60 * 1000 }, // 15분 (증가)
+    averageStats: { data: null, timestamp: null, ttl: 20 * 60 * 1000 }, // 20분 (증가)
+    notifications: { data: null, timestamp: null, ttl: 2 * 60 * 1000 }, // 2분 (증가)
+    recentTransactions: { data: null, timestamp: null, ttl: 8 * 60 * 1000 } // 8분 (증가)
 };
 
 // 캐시 유틸리티 함수들
@@ -63,7 +63,7 @@ function getCachedData(key) {
         return null;
     }
     
-    console.log(`📦 Cache HIT: ${key} (${Math.round((now - cached.timestamp) / 1000)}초 전)`);
+    // console.log(`📦 Cache HIT: ${key} (${Math.round((now - cached.timestamp) / 1000)}초 전)`);
     return cached.data;
 }
 
@@ -71,7 +71,7 @@ function setCachedData(key, data) {
     if (dataCache[key]) {
         dataCache[key].data = data;
         dataCache[key].timestamp = Date.now();
-        console.log(`💾 Cache SET: ${key}`);
+        // console.log(`💾 Cache SET: ${key}`);
     }
 }
 
@@ -115,35 +115,33 @@ document.addEventListener('DOMContentLoaded', function() {
             // 페이지 초기화 시 기존 리스너 정리
             cleanupFirebaseListeners();
             
-            // Target ID 충돌 방지를 위한 네트워크 재설정
-            console.log('🔄 Target ID 충돌 방지를 위한 초기 설정...');
-            db.disableNetwork()
-                .then(() => {
-                    return new Promise(resolve => setTimeout(resolve, 500));
-                })
-                .then(() => {
-                    return db.enableNetwork();
-                })
-                .then(() => {
-                    console.log('🌐 Firebase 네트워크 연결 활성화');
-                    // 연결 테스트
-                    return db.collection('test').limit(1).get();
-                })
-                .then(() => {
-                    console.log('✅ Firebase 연결 테스트 성공');
-                })
-                .catch(err => {
-                    console.warn('⚠️ Firebase 연결 테스트 실패:', err);
-                                // 연결 실패 시 오프라인 상태 확인
-            if (!navigator.onLine) {
-                handleOfflineMode();
-            } else {
-                // 온라인 상태에서 연결 실패 시 자동 재시도
-                setTimeout(() => {
-                    attemptFirebaseReconnection();
-                }, 2000);
-            }
-                });
+            // 최적화된 Firebase 초기화 (빠른 연결)
+            console.log('🔄 Firebase 최적화 초기화...');
+            
+            // 백그라운드에서 네트워크 설정 (사용자 대기 시간 최소화)
+            setTimeout(() => {
+                db.enableNetwork()
+                    .then(() => {
+                        console.log('🌐 Firebase 네트워크 연결 활성화');
+                        // 연결 테스트 (백그라운드)
+                        return db.collection('test').limit(1).get();
+                    })
+                    .then(() => {
+                        console.log('✅ Firebase 연결 테스트 성공');
+                    })
+                    .catch(err => {
+                        console.warn('⚠️ Firebase 연결 테스트 실패:', err);
+                        // 연결 실패 시 오프라인 상태 확인
+                        if (!navigator.onLine) {
+                            handleOfflineMode();
+                        } else {
+                            // 온라인 상태에서 연결 실패 시 자동 재시도
+                            setTimeout(() => {
+                                attemptFirebaseReconnection();
+                            }, 2000);
+                        }
+                    });
+            }, 100); // 짧은 지연으로 사용자 경험 개선
             
         } catch (error) {
             console.error('❌ Firebase 초기화 실패:', error);
@@ -2242,6 +2240,67 @@ function monitorFirebaseConnection() {
 // Dashboard System
 // =============================================
 
+// 캐시 우선 로딩 함수 (즉시 반응을 위한)
+async function loadCachedDataFirst() {
+    console.log('⚡ 캐시된 데이터 우선 표시...');
+    
+    // 캐시된 데이터가 있으면 즉시 표시
+    const cachedStats = {
+        today: getCachedData('todayStats'),
+        pending: getCachedData('pendingStats'),
+        month: getCachedData('monthStats'),
+        average: getCachedData('averageStats'),
+        timeline: getCachedData('maintenanceTimeline')
+    };
+    
+    // 캐시된 데이터가 있으면 즉시 UI 업데이트
+    if (cachedStats.today !== null) {
+        updateStatCard('todayCount', cachedStats.today);
+    }
+    if (cachedStats.pending !== null) {
+        updateStatCard('pendingCount', cachedStats.pending);
+    }
+    if (cachedStats.month !== null) {
+        updateStatCard('monthCount', cachedStats.month);
+    }
+    if (cachedStats.average !== null) {
+        updateStatCard('averageCount', cachedStats.average);
+    }
+    if (cachedStats.timeline !== null) {
+        renderMaintenanceTimeline(cachedStats.timeline);
+    }
+    
+    console.log('⚡ 캐시 데이터 표시 완료');
+}
+
+// 캐시된 세무 데이터 로딩 함수
+async function loadCachedTaxationData() {
+    console.log('⚡ 캐시된 세무 데이터 우선 표시...');
+    
+    // 캐시된 세무 데이터가 있으면 즉시 표시
+    const cachedTaxation = {
+        summary: getCachedData('taxationSummary'),
+        categories: getCachedData('taxationCategories'),
+        recentTransactions: getCachedData('recentTransactions')
+    };
+    
+    // 캐시된 데이터가 있으면 즉시 UI 업데이트
+    if (cachedTaxation.summary !== null) {
+        // 세무 요약 UI 업데이트
+        updateTaxationSummaryUI(cachedTaxation.summary);
+    }
+    if (cachedTaxation.categories !== null) {
+        // 세무 분류 UI 업데이트
+        updateTaxationCategoriesUI(cachedTaxation.categories);
+    }
+    if (cachedTaxation.recentTransactions !== null) {
+        // 최근 거래 UI 업데이트
+        updateRecentTransactionsUI(cachedTaxation.recentTransactions);
+    }
+    
+    console.log('⚡ 캐시된 세무 데이터 표시 완료');
+}
+
 async function loadDashboardData() {
     console.log('📊 Loading dashboard data...');
     
@@ -2261,13 +2320,16 @@ async function loadDashboardData() {
     }
     
     try {
-        // Show loading
-        showLoadingSpinner(true);
+        // Show loading with progress
+        showLoadingSpinner(true, '데이터를 불러오는 중...');
         
-        // Firebase 네트워크 연결 확인
+        // 1단계: 캐시된 데이터 먼저 표시 (즉시 반응)
+        await loadCachedDataFirst();
+        
+        // 2단계: Firebase 네트워크 연결 확인 (백그라운드)
         await db.enableNetwork();
         
-        // Load statistics
+        // 3단계: 최신 데이터 로드 (병렬 처리)
         await Promise.all([
             updateTodayStats(),
             updatePendingStats(),
@@ -2547,25 +2609,32 @@ function updateStatCard(elementId, value) {
 // 로딩 알림 중복 방지를 위한 변수
 let isShowingLoadingNotification = false;
 
-function showLoadingSpinner(show, suppressNotification = false) {
+function showLoadingSpinner(show, message = '데이터를 불러오고 있습니다...') {
     const spinner = document.getElementById('loadingSpinner');
     const content = document.getElementById('timelineContent');
     
     if (spinner) {
         spinner.style.display = show ? 'block' : 'none';
+        
+        // 로딩 메시지 업데이트
+        if (show && message) {
+            const spinnerText = spinner.querySelector('.spinner-text');
+            if (spinnerText) {
+                spinnerText.textContent = message;
+            }
+        }
     }
     
     if (content) {
         content.style.display = show ? 'none' : 'block';
     }
     
-    // 로딩 중일 때 사용자 피드백 (검색 시에는 알림 생략)
+    // 로딩 중일 때 사용자 피드백
     if (show) {
         console.log('🔄 로딩 시작...');
-        // 검색이 아닌 경우에만 알림 표시, 그리고 이미 표시 중이 아닐 때만
-        if (!suppressNotification && !isShowingLoadingNotification) {
+        if (!isShowingLoadingNotification) {
             isShowingLoadingNotification = true;
-            showNotification('데이터를 불러오고 있습니다...', 'info');
+            showNotification(message, 'info');
         }
     } else {
         console.log('✅ 로딩 완료');
@@ -7810,7 +7879,7 @@ async function generateEstimatePDFBlob(estimateData) {
 // TAXATION MANAGEMENT SYSTEM
 // ===============================================
 
-// 세무관리 데이터 로딩
+// 세무관리 데이터 로딩 (최적화)
 async function loadTaxationData() {
     console.log('📊 세무관리 데이터 로딩 중...');
     
@@ -7839,50 +7908,17 @@ async function loadTaxationData() {
         document.getElementById('taxationYear').value = currentYear;
         document.getElementById('taxationQuarter').value = currentQuarter;
         
-        // 세무 데이터 로딩 (관리자만) - 안정성을 위해 개별 로딩
-        let loadedCount = 0;
-        let totalTasks = isAdmin ? 3 : 2;
+        // 1단계: 캐시된 세무 데이터 먼저 표시
+        await loadCachedTaxationData();
         
-        // 1. 세무 요약 로딩
-        try {
-            await loadTaxationSummary(currentYear, currentQuarter);
-            loadedCount++;
-            console.log('✅ 세무 요약 로딩 완료');
-        } catch (error) {
-            console.error('❌ 세무 요약 로딩 실패:', error);
-            showNotification('세무 요약 로딩에 실패했습니다.', 'warning');
-        }
+        // 2단계: 최신 데이터 병렬 로딩
+        const loadingPromises = [
+            loadTaxationSummary(currentYear, currentQuarter),
+            loadTaxationCategories(),
+            isAdmin ? loadRecentTransactions() : Promise.resolve()
+        ];
         
-        // 2. 세무 분류 로딩
-        try {
-            await loadTaxationCategories();
-            loadedCount++;
-            console.log('✅ 세무 분류 로딩 완료');
-        } catch (error) {
-            console.error('❌ 세무 분류 로딩 실패:', error);
-            showNotification('세무 분류 로딩에 실패했습니다.', 'warning');
-        }
-        
-        // 3. 최근 거래 로딩 (관리자만)
-        if (isAdmin) {
-            try {
-                await loadRecentTransactions();
-                loadedCount++;
-                console.log('✅ 최근 거래 로딩 완료');
-            } catch (error) {
-                console.error('❌ 최근 거래 로딩 실패:', error);
-                showNotification('최근 거래 로딩에 실패했습니다.', 'warning');
-            }
-        }
-        
-        // 로딩 결과 알림
-        if (loadedCount === totalTasks) {
-            showNotification('세무 데이터가 성공적으로 로딩되었습니다.', 'success');
-        } else if (loadedCount > 0) {
-            showNotification(`세무 데이터 일부 로딩 완료 (${loadedCount}/${totalTasks})`, 'warning');
-        } else {
-            showNotification('세무 데이터 로딩에 실패했습니다.', 'error');
-        }
+        await Promise.allSettled(loadingPromises);
         
         console.log('✅ 세무관리 데이터 로딩 완료');
         
