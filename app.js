@@ -735,7 +735,11 @@ async function handleAuthStateChange(user) {
                 // Switch to dashboard
                 showScreen('dashboardScreen');
                 updateUI();
-                loadDashboardData();
+                
+                // 자동으로 대시보드 데이터 로드 (새로고침 시에도)
+                setTimeout(() => {
+                    loadDashboardData();
+                }, 300);
                 
                 // Initialize notification system after user is loaded
                 initializeNotificationSystem();
@@ -1776,13 +1780,22 @@ window.addEventListener('beforeunload', () => {
     cleanupFirebaseListeners();
 });
 
-// 페이지 로드 시 Firebase 상태 초기화
+// 페이지 로드 시 Firebase 상태 초기화 및 자동 로그인 확인
 window.addEventListener('load', () => {
     console.log('🔄 페이지 로드 시 Firebase 상태 초기화...');
+    
     // 짧은 지연 후 리스너 정리 (이전 세션의 잔여 리스너 제거)
     setTimeout(() => {
         cleanupFirebaseListeners();
     }, 1000);
+    
+    // 자동 로그인 상태 확인 (새로고침 시에도 로그인 유지)
+    setTimeout(() => {
+        if (firebase.auth().currentUser && !currentUser) {
+            console.log('🔄 자동 로그인 상태 확인 중...');
+            handleAuthStateChange(firebase.auth().currentUser);
+        }
+    }, 1500);
 });
 
 // 페이지 포커스 시 Firebase 연결 상태 확인
@@ -4288,10 +4301,10 @@ function initializeEventListeners() {
         viewToggle.addEventListener('click', toggleViewMode);
     }
     
-    // 페이지 새로고침 시 로그인 화면 표시
-    window.addEventListener('beforeunload', () => {
-        showScreen('loginScreen');
-    });
+    // 페이지 새로고침 시 로그인 화면 표시 (제거 - 사용자 경험 개선)
+    // window.addEventListener('beforeunload', () => {
+    //     showScreen('loginScreen');
+    // });
     
     // 키보드 단축키
     document.addEventListener('keydown', (e) => {
