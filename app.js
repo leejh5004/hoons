@@ -57,15 +57,15 @@ function debugLog(...args) {
     }
 }
 
-// 🚀 클라이언트 사이드 캐싱 시스템 (무료플랜 최적화)
+// 🚀 클라이언트 사이드 캐싱 시스템 (무료플랜 최적화 + 재시도 로직)
 const dataCache = {
-    maintenanceTimeline: { data: null, timestamp: null, ttl: 5 * 60 * 1000 }, // 5분 (증가)
-    todayStats: { data: null, timestamp: null, ttl: 10 * 60 * 1000 }, // 10분 (증가)
-    pendingStats: { data: null, timestamp: null, ttl: 8 * 60 * 1000 }, // 8분 (증가)
-    monthStats: { data: null, timestamp: null, ttl: 15 * 60 * 1000 }, // 15분 (증가)
-    averageStats: { data: null, timestamp: null, ttl: 20 * 60 * 1000 }, // 20분 (증가)
-    notifications: { data: null, timestamp: null, ttl: 2 * 60 * 1000 }, // 2분 (증가)
-    recentTransactions: { data: null, timestamp: null, ttl: 8 * 60 * 1000 } // 8분 (증가)
+    maintenanceTimeline: { data: null, timestamp: null, ttl: 5 * 60 * 1000, retryCount: 0 }, // 5분
+    todayStats: { data: null, timestamp: null, ttl: 10 * 60 * 1000, retryCount: 0 }, // 10분
+    pendingStats: { data: null, timestamp: null, ttl: 8 * 60 * 1000, retryCount: 0 }, // 8분
+    monthStats: { data: null, timestamp: null, ttl: 15 * 60 * 1000, retryCount: 0 }, // 15분
+    averageStats: { data: null, timestamp: null, ttl: 20 * 60 * 1000, retryCount: 0 }, // 20분
+    notifications: { data: null, timestamp: null, ttl: 2 * 60 * 1000, retryCount: 0 }, // 2분
+    recentTransactions: { data: null, timestamp: null, ttl: 8 * 60 * 1000, retryCount: 0 } // 8분
 };
 
 // 캐시 유틸리티 함수들
@@ -98,6 +98,7 @@ function clearCachedData(key = null) {
         if (dataCache[key]) {
             dataCache[key].data = null;
             dataCache[key].timestamp = null;
+            dataCache[key].retryCount = 0; // 재시도 카운트 리셋
             console.log(`🗑️ Cache CLEAR: ${key}`);
         }
     } else {
@@ -105,6 +106,7 @@ function clearCachedData(key = null) {
         Object.keys(dataCache).forEach(k => {
             dataCache[k].data = null;
             dataCache[k].timestamp = null;
+            dataCache[k].retryCount = 0; // 재시도 카운트 리셋
         });
         console.log(`🗑️ Cache CLEAR: ALL`);
     }
@@ -154,7 +156,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     .then(() => {
                         log('🌐 Firebase 네트워크 연결 활성화');
                         // 연결 테스트 (백그라운드)
-                        return db.collection('test').limit(1).get();
+                        return db.collection('maintenance').limit(1).get();
                     })
                     .then(() => {
                         log('✅ Firebase 연결 테스트 성공');
@@ -3576,8 +3578,8 @@ async function submitMaintenanceForm(e) {
             // 🔄 수정 모드에서는 항상 사진 병합 로직 실행
             console.log('📸 Processing photos in edit mode (always check)...');
             
-            // 새로 업로드한 사진이 있는지 확인
-            const hasNewPhotos = uploadedPhotos.before || uploadedPhotos.during1 || uploadedPhotos.during2 || uploadedPhotos.during3 || uploadedPhotos.during4 || uploadedPhotos.after;
+            // 새로 업로드한 사진이 있는지 확인 (새로운 사진 업로드 시스템)
+            const hasNewPhotos = Object.keys(uploadedPhotos).some(key => uploadedPhotos[key]);
             console.log('📸 Has new photos:', hasNewPhotos);
             
             let newPhotos = [];
@@ -3643,7 +3645,7 @@ async function submitMaintenanceForm(e) {
             });
             console.log('📸 After photo exists:', !!uploadedPhotos.after);
             
-            if (uploadedPhotos.before || uploadedPhotos.during1 || uploadedPhotos.during2 || uploadedPhotos.during3 || uploadedPhotos.during4 || uploadedPhotos.after) {
+            if (Object.keys(uploadedPhotos).some(key => uploadedPhotos[key])) {
                 const photos = await uploadMaintenancePhotos(docRef.id);
                 console.log('📸 Photos returned from upload:', photos);
                 
@@ -3659,7 +3661,7 @@ async function submitMaintenanceForm(e) {
             showNotification('정비 이력이 성공적으로 등록되었습니다!', 'success');
             
             // 사진이 있을 경우 보존 기간 안내
-            if (uploadedPhotos.before || uploadedPhotos.during1 || uploadedPhotos.during2 || uploadedPhotos.during3 || uploadedPhotos.during4 || uploadedPhotos.after) {
+            if (Object.keys(uploadedPhotos).some(key => uploadedPhotos[key])) {
                 setTimeout(() => {
                     showNotification(`📸 등록된 사진은 ${PHOTO_RETENTION_DAYS}일 후 자동 삭제됩니다.`, 'info');
                 }, 2000);
@@ -3684,30 +3686,16 @@ async function submitMaintenanceForm(e) {
     }
 }
 
-// 타입 선택기 초기화 함수
-function initializeTypeSelector() {
-    const typeOptions = document.querySelectorAll('.type-option');
-    const typeInput = document.getElementById('maintenanceType');
-    
-    typeOptions.forEach(option => {
-        option.addEventListener('click', () => {
-            // Remove selected from all options
-            typeOptions.forEach(opt => opt.classList.remove('selected'));
-            // Add selected to clicked option
-            option.classList.add('selected');
-            // Update hidden input value
-            if (typeInput) {
-                typeInput.value = option.dataset.type;
-            }
-        });
-    });
-}
-
-// 타입 선택 초기화 함수
+// 타입 선택 초기화 함수 (중복 방지)
 function initializeTypeSelector() {
     const typeOptions = document.querySelectorAll('.type-option');
     
+    // 중복 이벤트 리스너 방지
     typeOptions.forEach(option => {
+        if (option.hasAttribute('data-listener-added')) {
+            return;
+        }
+        
         option.addEventListener('click', () => {
             // 기존 선택 해제
             typeOptions.forEach(opt => opt.classList.remove('selected'));
@@ -3721,6 +3709,8 @@ function initializeTypeSelector() {
                 maintenanceTypeInput.value = option.dataset.type;
             }
         });
+        
+        option.setAttribute('data-listener-added', 'true');
     });
 }
 
