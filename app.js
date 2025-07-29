@@ -3692,42 +3692,98 @@ function initializeTypeSelector() {
     });
 }
 
-// 사진 업로드 초기화 함수
+// 개선된 사진 업로드 초기화 함수
 function initializePhotoUpload() {
-    const photoAreas = document.querySelectorAll('.photo-upload-area');
+    const uploadAllBtn = document.getElementById('uploadAllBtn');
+    const photoInput = document.getElementById('photoInput');
+    const dragDropArea = document.getElementById('dragDropArea');
+    const photoGrid = document.getElementById('photoGrid');
+    const selectedCountElement = document.getElementById('selectedCount');
     
-    photoAreas.forEach((area) => {
-        const type = area.dataset.type;
+    // 업로드 버튼 클릭 이벤트
+    if (uploadAllBtn) {
+        uploadAllBtn.addEventListener('click', () => {
+            photoInput.click();
+        });
+    }
+    
+    // 파일 선택 이벤트
+    if (photoInput) {
+        photoInput.addEventListener('change', handleMultiplePhotoUpload);
+    }
+    
+    // 드래그 앤 드롭 이벤트
+    if (dragDropArea) {
+        dragDropArea.addEventListener('click', () => {
+            photoInput.click();
+        });
         
-        if (!area.hasAttribute('data-initialized')) {
-            area.addEventListener('click', () => {
-                const fileInput = document.getElementById(`${type}Photo`);
-                if (fileInput) {
-                    fileInput.click();
-                }
-            });
-            area.setAttribute('data-initialized', 'true');
-        }
-    });
+        dragDropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dragDropArea.classList.add('dragover');
+        });
+        
+        dragDropArea.addEventListener('dragleave', () => {
+            dragDropArea.classList.remove('dragover');
+        });
+        
+        dragDropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragDropArea.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+            handleMultiplePhotoUpload({ target: { files } });
+        });
+    }
     
-    const photoInputs = ['beforePhoto', 'duringPhoto1', 'duringPhoto2', 'duringPhoto3', 'duringPhoto4', 'afterPhoto'];
-    photoInputs.forEach(inputId => {
-        const input = document.getElementById(inputId);
-        if (input && !input.hasAttribute('data-initialized')) {
-            input.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    let photoType = inputId.replace('Photo', '');
-                    // duringPhoto1, duringPhoto2 등을 during로 통일
-                    if (photoType.startsWith('during')) {
-                        photoType = 'during';
-                    }
-                    handlePhotoUpload(file, photoType);
-                }
-            });
-            input.setAttribute('data-initialized', 'true');
-        }
-    });
+    // 사진 삭제 버튼 이벤트
+    if (photoGrid) {
+        photoGrid.addEventListener('click', (e) => {
+            if (e.target.closest('.remove-photo')) {
+                const photoSlot = e.target.closest('.photo-slot');
+                const photoType = photoSlot.dataset.type;
+                removePhoto(photoType);
+                updatePhotoCount();
+            }
+        });
+    }
+    
+    // 초기 카운트 업데이트
+    updatePhotoCount();
+}
+
+// 다중 사진 업로드 처리
+async function handleMultiplePhotoUpload(event) {
+    const files = Array.from(event.target.files).filter(file => file.type.startsWith('image/'));
+    
+    if (files.length === 0) {
+        showNotification('이미지 파일을 선택해주세요.', 'warning');
+        return;
+    }
+    
+    if (files.length > 6) {
+        showNotification('최대 6장까지만 선택할 수 있습니다.', 'warning');
+        return;
+    }
+    
+    // 사용 가능한 슬롯 찾기
+    const availableSlots = ['before', 'during1', 'during2', 'during3', 'during4', 'after'];
+    const usedSlots = Object.keys(uploadedPhotos).filter(key => uploadedPhotos[key]);
+    const emptySlots = availableSlots.filter(slot => !usedSlots.includes(slot));
+    
+    if (emptySlots.length < files.length) {
+        showNotification(`사진 슬롯이 부족합니다. (${emptySlots.length}개 슬롯 남음)`, 'warning');
+        return;
+    }
+    
+    // 파일들을 순서대로 업로드
+    for (let i = 0; i < files.length && i < emptySlots.length; i++) {
+        const file = files[i];
+        const slotType = emptySlots[i];
+        await handlePhotoUpload(file, slotType);
+    }
+    
+    updatePhotoCount();
+    showNotification(`${files.length}장의 사진이 업로드되었습니다.`, 'success');
 }
 
 // 사진 업로드 처리 함수
@@ -3751,17 +3807,17 @@ async function handlePhotoUpload(file, type) {
     }
 }
 
-// 사진 미리보기 표시 함수
+// 개선된 사진 미리보기 표시 함수
 function showPhotoPreview(base64, type) {
-    const uploadArea = document.querySelector(`[data-type="${type}"]`);
-    if (!uploadArea) return;
+    const photoSlot = document.querySelector(`[data-type="${type}"]`);
+    if (!photoSlot) return;
     
-    const placeholder = uploadArea.querySelector('.upload-placeholder');
-    const preview = uploadArea.querySelector('.photo-preview');
+    const placeholder = photoSlot.querySelector('.photo-placeholder');
+    const preview = photoSlot.querySelector('.photo-preview');
     
     if (placeholder && preview) {
         placeholder.style.display = 'none';
-        preview.style.display = 'block';
+        preview.classList.remove('hidden');
         
         const img = preview.querySelector('img');
         if (img) {
@@ -3770,26 +3826,48 @@ function showPhotoPreview(base64, type) {
     }
 }
 
-// 사진 제거 함수
+// 사진 개수 업데이트 함수
+function updatePhotoCount() {
+    const selectedCountElement = document.getElementById('selectedCount');
+    if (!selectedCountElement) return;
+    
+    const usedSlots = Object.keys(uploadedPhotos).filter(key => uploadedPhotos[key]);
+    const count = usedSlots.length;
+    
+    selectedCountElement.textContent = count;
+    
+    // 상태에 따른 스타일 변경
+    if (count === 0) {
+        selectedCountElement.style.color = 'var(--text-tertiary)';
+    } else if (count >= 6) {
+        selectedCountElement.style.color = 'var(--success)';
+    } else {
+        selectedCountElement.style.color = 'var(--primary-600)';
+    }
+}
+
+// 개선된 사진 제거 함수
 function removePhoto(type) {
     uploadedPhotos[type] = null;
     
-    const uploadArea = document.querySelector(`[data-type="${type}"]`);
-    if (uploadArea) {
-        const placeholder = uploadArea.querySelector('.upload-placeholder');
-        const preview = uploadArea.querySelector('.photo-preview');
+    const photoSlot = document.querySelector(`[data-type="${type}"]`);
+    if (photoSlot) {
+        const placeholder = photoSlot.querySelector('.photo-placeholder');
+        const preview = photoSlot.querySelector('.photo-preview');
         
         if (placeholder && preview) {
-            preview.style.display = 'none';
-            placeholder.style.display = 'flex';
+            preview.classList.add('hidden');
+            placeholder.style.display = 'block';
         }
     }
     
-    const input = document.getElementById(`${type}Photo`);
-    if (input) {
-        input.value = '';
+    // 파일 입력 초기화
+    const photoInput = document.getElementById('photoInput');
+    if (photoInput) {
+        photoInput.value = '';
     }
     
+    updatePhotoCount();
     showNotification(`${type} 사진이 제거되었습니다.`, 'info');
 }
 
