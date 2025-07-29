@@ -8,8 +8,10 @@ const firebaseConfig = {
   appId: "1:129637551362:web:3bb671f51fdb3a2cd9061b"
 };
 
-// Firebase 초기화
-firebase.initializeApp(firebaseConfig);
+// Firebase 초기화 (중복 방지)
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 
 // Firebase 서비스 초기화
 const auth = firebase.auth();

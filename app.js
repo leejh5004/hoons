@@ -114,9 +114,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize Firebase with enhanced error handling
     if (typeof firebase !== 'undefined') {
         try {
+            // Firebase 앱이 초기화되었는지 확인
+            if (!firebase.apps.length) {
+                console.error('❌ Firebase 앱이 초기화되지 않았습니다');
+                showNotification('Firebase 초기화 실패. 페이지를 새로고침해주세요.', 'error');
+                return;
+            }
+            
             db = firebase.firestore();
-                    // console.log('✅ Firebase initialized');
-        // console.log('📊 Firestore 연결 완료');
+            console.log('📊 Firestore 연결 완료');
             
             // 페이지 초기화 시 기존 리스너 정리
             cleanupFirebaseListeners();
