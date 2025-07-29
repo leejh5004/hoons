@@ -39,6 +39,24 @@ let queryQueue = new Set();
 // 강제 지연 시간 (ms)
 const QUERY_DELAY = 200;
 
+// 프로덕션 환경에서 로그 출력 제어
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const shouldLog = !isProduction || window.location.search.includes('debug=true');
+const isDebugMode = window.location.search.includes('debug=true');
+
+function log(...args) {
+    if (shouldLog) {
+        console.log(...args);
+    }
+}
+
+// 디버그 모드가 아닐 때는 더 적은 로그만 출력
+function debugLog(...args) {
+    if (isDebugMode) {
+        console.log(...args);
+    }
+}
+
 // 🚀 클라이언트 사이드 캐싱 시스템 (무료플랜 최적화)
 const dataCache = {
     maintenanceTimeline: { data: null, timestamp: null, ttl: 5 * 60 * 1000 }, // 5분 (증가)
@@ -109,7 +127,7 @@ const DELETE_WARNING_DAYS = 5;
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 TWOHOONS GARAGE - Starting application...');
+    log('🚀 TWOHOONS GARAGE - Starting application...');
     
     // Initialize Firebase with enhanced error handling
     if (typeof firebase !== 'undefined') {
@@ -122,24 +140,24 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             db = firebase.firestore();
-            console.log('📊 Firestore 연결 완료');
+            log('📊 Firestore 연결 완료');
             
             // 페이지 초기화 시 기존 리스너 정리
             cleanupFirebaseListeners();
             
             // 최적화된 Firebase 초기화 (빠른 연결)
-            console.log('🔄 Firebase 최적화 초기화...');
+            log('🔄 Firebase 최적화 초기화...');
             
             // 백그라운드에서 네트워크 설정 (사용자 대기 시간 최소화)
             setTimeout(() => {
                 db.enableNetwork()
                     .then(() => {
-                        console.log('🌐 Firebase 네트워크 연결 활성화');
+                        log('🌐 Firebase 네트워크 연결 활성화');
                         // 연결 테스트 (백그라운드)
                         return db.collection('test').limit(1).get();
                     })
                     .then(() => {
-                        console.log('✅ Firebase 연결 테스트 성공');
+                        log('✅ Firebase 연결 테스트 성공');
                     })
                     .catch(err => {
                         console.warn('⚠️ Firebase 연결 테스트 실패:', err);
@@ -2800,7 +2818,7 @@ async function loadMaintenanceTimeline(searchTerm = '') {
             };
             
             maintenances.push(maintenance);
-            console.log('📋 Added maintenance:', maintenance.id, maintenance.type, maintenance.carNumber);
+                            debugLog('📋 Added maintenance:', maintenance.id, maintenance.type, maintenance.carNumber);
         });
         
         // 날짜순 정렬 (클라이언트에서)
@@ -2825,7 +2843,7 @@ async function loadMaintenanceTimeline(searchTerm = '') {
             // 일반 사용자: 자신의 차량번호만
             console.log('🚗 일반 사용자 필터링 적용 중...');
             filteredMaintenances = maintenances.filter(m => {
-                console.log(`📋 정비 이력 체크: ${m.id} - 차량번호: ${m.carNumber} vs 사용자: ${currentUser.carNumber}`);
+                debugLog(`📋 정비 이력 체크: ${m.id} - 차량번호: ${m.carNumber} vs 사용자: ${currentUser.carNumber}`);
                 return m.carNumber === currentUser.carNumber;
             });
             console.log('🚗 User filtered by car number:', currentUser.carNumber, filteredMaintenances.length);
@@ -2833,7 +2851,7 @@ async function loadMaintenanceTimeline(searchTerm = '') {
             // 관리자: 자신이 작업한 정비만
             console.log('👨‍💼 관리자 필터링 적용 중...');
             filteredMaintenances = maintenances.filter(m => {
-                console.log(`📋 정비 이력 체크: ${m.id} - 관리자: ${m.adminEmail} vs 사용자: ${currentUser.email}`);
+                debugLog(`📋 정비 이력 체크: ${m.id} - 관리자: ${m.adminEmail} vs 사용자: ${currentUser.email}`);
                 return m.adminEmail === currentUser.email;
             });
             console.log('👨‍💼 Admin filtered by email:', currentUser.email, filteredMaintenances.length);
