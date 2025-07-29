@@ -458,7 +458,7 @@
             </div>
             
             <div class="modal-body">
-                <form id="maintenanceForm" class="maintenance-form">
+                <form id="maintenanceForm" class="maintenance-form" onsubmit="submitMaintenanceForm(event)">
                     <!-- Step 1: Basic Info -->
                     <div class="form-step active" data-step="1">
                         <div class="step-header">
@@ -545,96 +545,14 @@
                                     <div class="drag-drop-content">
                                         <i class="fas fa-cloud-upload-alt"></i>
                                         <h5>사진을 여기에 드래그하거나 클릭하세요</h5>
-                                        <p>정비 전, 중, 후 사진을 한 번에 선택할 수 있습니다</p>
-                                        <small>최대 6장까지 업로드 가능</small>
+                                        <p>정비 사진을 자유롭게 업로드할 수 있습니다</p>
+                                        <small>최대 10장까지 업로드 가능</small>
                                     </div>
                                 </div>
                                 
                                 <!-- 사진 미리보기 그리드 -->
                                 <div class="photo-grid" id="photoGrid">
-                                    <!-- 정비 전 -->
-                                    <div class="photo-slot" data-type="before">
-                                        <div class="photo-placeholder">
-                                            <i class="fas fa-camera"></i>
-                                            <span>정비 전</span>
-                                        </div>
-                                        <div class="photo-preview hidden">
-                                            <img src="" alt="정비 전">
-                                            <button type="button" class="remove-photo" title="삭제">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- 정비 중 1 -->
-                                    <div class="photo-slot" data-type="during1">
-                                        <div class="photo-placeholder">
-                                            <i class="fas fa-camera"></i>
-                                            <span>정비 중 1</span>
-                                        </div>
-                                        <div class="photo-preview hidden">
-                                            <img src="" alt="정비 중 1">
-                                            <button type="button" class="remove-photo" title="삭제">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- 정비 중 2 -->
-                                    <div class="photo-slot" data-type="during2">
-                                        <div class="photo-placeholder">
-                                            <i class="fas fa-camera"></i>
-                                            <span>정비 중 2</span>
-                                        </div>
-                                        <div class="photo-preview hidden">
-                                            <img src="" alt="정비 중 2">
-                                            <button type="button" class="remove-photo" title="삭제">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- 정비 중 3 -->
-                                    <div class="photo-slot" data-type="during3">
-                                        <div class="photo-placeholder">
-                                            <i class="fas fa-camera"></i>
-                                            <span>정비 중 3</span>
-                                        </div>
-                                        <div class="photo-preview hidden">
-                                            <img src="" alt="정비 중 3">
-                                            <button type="button" class="remove-photo" title="삭제">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- 정비 중 4 -->
-                                    <div class="photo-slot" data-type="during4">
-                                        <div class="photo-placeholder">
-                                            <i class="fas fa-camera"></i>
-                                            <span>정비 중 4</span>
-                                        </div>
-                                        <div class="photo-preview hidden">
-                                            <img src="" alt="정비 중 4">
-                                            <button type="button" class="remove-photo" title="삭제">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- 정비 후 -->
-                                    <div class="photo-slot" data-type="after">
-                                        <div class="photo-placeholder">
-                                            <i class="fas fa-camera"></i>
-                                            <span>정비 후</span>
-                                        </div>
-                                        <div class="photo-preview hidden">
-                                            <img src="" alt="정비 후">
-                                            <button type="button" class="remove-photo" title="삭제">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <!-- 동적으로 생성될 사진 슬롯들 -->
                                 </div>
                                 
                                 <!-- 업로드 상태 표시 -->
@@ -642,7 +560,7 @@
                                     <div class="status-item">
                                         <span class="status-text">선택된 사진: </span>
                                         <span class="status-count" id="selectedCount">0</span>
-                                        <span class="status-text">/ 6</span>
+                                        <span class="status-text">/ 10</span>
                                     </div>
                                 </div>
                             </div>

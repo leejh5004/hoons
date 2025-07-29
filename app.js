@@ -3353,12 +3353,15 @@ function initializeMaintenanceModal() {
     }
     
     if (form) {
-        form.addEventListener('submit', handleMaintenanceSubmit);
+        form.addEventListener('submit', submitMaintenanceForm);
     }
     
     // Initialize type selector
     initializeTypeSelector();
     initializePhotoUpload();
+    
+    // 타입 선택 이벤트 초기화
+    initializeTypeSelector();
 }
 
 function openMaintenanceModal() {
@@ -3372,6 +3375,19 @@ function openMaintenanceModal() {
         modal.classList.add('active');
         resetMaintenanceForm();
         showStep(1);
+        
+            // 사진 슬롯이 없으면 10개만 생성
+    const photoGrid = document.getElementById('photoGrid');
+    if (photoGrid && photoGrid.children.length === 0) {
+        for (let i = 0; i < 10; i++) {
+            createPhotoSlot(i);
+        }
+    }
+    
+    // 타입 선택 초기화
+    document.querySelectorAll('.type-option').forEach(option => {
+        option.classList.remove('selected');
+    });
     } else {
         showNotification('페이지를 새로고침 후 다시 시도해주세요.', 'error');
     }
@@ -3381,7 +3397,6 @@ function closeMaintenanceModal() {
     const modal = document.getElementById('maintenanceModal');
     if (modal) {
         modal.classList.remove('active');
-        resetMaintenanceForm();
         
         // 모달을 닫을 때만 사진 데이터 완전히 리셋
         resetPhotoUploads();
@@ -3413,13 +3428,9 @@ function resetMaintenanceForm() {
         form.reset();
     }
     
-    // Reset type selector
-    document.querySelectorAll('.type-option').forEach(option => {
-        option.classList.remove('selected');
-    });
+    // 타입 선택 초기화는 하지 않음 (모달이 열릴 때만 수행)
     
-    // 사진 리셋은 모달을 완전히 닫을 때만 수행
-    // uploadedPhotos 초기화와 resetPhotoUploads() 제거
+    // 사진 관련 초기화는 하지 않음 (모달 닫을 때만 수행)
     
     // Set default date
     const dateInput = document.getElementById('maintenanceDate');
@@ -3504,7 +3515,7 @@ function validateCurrentStep() {
 }
 
 // 정비 등록 처리 함수
-async function handleMaintenanceSubmit(e) {
+async function submitMaintenanceForm(e) {
     e.preventDefault();
     
     if (!validateCurrentStep()) {
@@ -3692,8 +3703,34 @@ function initializeTypeSelector() {
     });
 }
 
+// 타입 선택 초기화 함수
+function initializeTypeSelector() {
+    const typeOptions = document.querySelectorAll('.type-option');
+    
+    typeOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            // 기존 선택 해제
+            typeOptions.forEach(opt => opt.classList.remove('selected'));
+            
+            // 현재 옵션 선택
+            option.classList.add('selected');
+            
+            // hidden input 업데이트
+            const maintenanceTypeInput = document.getElementById('maintenanceType');
+            if (maintenanceTypeInput) {
+                maintenanceTypeInput.value = option.dataset.type;
+            }
+        });
+    });
+}
+
 // 개선된 사진 업로드 초기화 함수
 function initializePhotoUpload() {
+    // 중복 초기화 방지
+    if (window.photoUploadInitialized) {
+        return;
+    }
+    
     const uploadAllBtn = document.getElementById('uploadAllBtn');
     const photoInput = document.getElementById('photoInput');
     const dragDropArea = document.getElementById('dragDropArea');
@@ -3747,8 +3784,20 @@ function initializePhotoUpload() {
         });
     }
     
-    // 초기 카운트 업데이트
+    // 초기 슬롯 생성 및 카운트 업데이트
     updatePhotoCount();
+    
+    // 정확히 10개 슬롯만 생성
+    const grid = document.getElementById('photoGrid');
+    if (grid) {
+        grid.innerHTML = ''; // 기존 슬롯 모두 제거
+        for (let i = 0; i < 10; i++) {
+            createPhotoSlot(i);
+        }
+    }
+    
+    // 초기화 완료 표시
+    window.photoUploadInitialized = true;
 }
 
 // 다중 사진 업로드 처리
@@ -3760,26 +3809,20 @@ async function handleMultiplePhotoUpload(event) {
         return;
     }
     
-    if (files.length > 6) {
-        showNotification('최대 6장까지만 선택할 수 있습니다.', 'warning');
-        return;
-    }
+    // 현재 업로드된 사진 개수 확인
+    const currentCount = Object.keys(uploadedPhotos).filter(key => uploadedPhotos[key]).length;
     
-    // 사용 가능한 슬롯 찾기
-    const availableSlots = ['before', 'during1', 'during2', 'during3', 'during4', 'after'];
-    const usedSlots = Object.keys(uploadedPhotos).filter(key => uploadedPhotos[key]);
-    const emptySlots = availableSlots.filter(slot => !usedSlots.includes(slot));
-    
-    if (emptySlots.length < files.length) {
-        showNotification(`사진 슬롯이 부족합니다. (${emptySlots.length}개 슬롯 남음)`, 'warning');
+    if (currentCount + files.length > 10) {
+        showNotification(`사진이 너무 많습니다. (${10 - currentCount}장 더 추가 가능)`, 'warning');
         return;
     }
     
     // 파일들을 순서대로 업로드
-    for (let i = 0; i < files.length && i < emptySlots.length; i++) {
+    for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const slotType = emptySlots[i];
-        await handlePhotoUpload(file, slotType);
+        const photoIndex = currentCount + i;
+        const photoKey = `photo${photoIndex}`;
+        await handlePhotoUpload(file, photoKey);
     }
     
     updatePhotoCount();
@@ -3826,6 +3869,31 @@ function showPhotoPreview(base64, type) {
     }
 }
 
+// 사진 슬롯 생성 함수
+function createPhotoSlot(index) {
+    const photoGrid = document.getElementById('photoGrid');
+    if (!photoGrid) return;
+    
+    const photoSlot = document.createElement('div');
+    photoSlot.className = 'photo-slot';
+    photoSlot.dataset.type = `photo${index}`;
+    
+    photoSlot.innerHTML = `
+        <div class="photo-placeholder">
+            <i class="fas fa-camera"></i>
+            <span>사진 ${index + 1}</span>
+        </div>
+        <div class="photo-preview hidden">
+            <img src="" alt="사진 ${index + 1}">
+            <button type="button" class="remove-photo" title="삭제">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    photoGrid.appendChild(photoSlot);
+}
+
 // 사진 개수 업데이트 함수
 function updatePhotoCount() {
     const selectedCountElement = document.getElementById('selectedCount');
@@ -3839,10 +3907,19 @@ function updatePhotoCount() {
     // 상태에 따른 스타일 변경
     if (count === 0) {
         selectedCountElement.style.color = 'var(--text-tertiary)';
-    } else if (count >= 6) {
+    } else if (count >= 10) {
         selectedCountElement.style.color = 'var(--success)';
     } else {
         selectedCountElement.style.color = 'var(--primary-600)';
+    }
+    
+    // 슬롯은 항상 10개만 유지
+    const grid = document.getElementById('photoGrid');
+    if (grid && grid.children.length !== 10) {
+        grid.innerHTML = ''; // 기존 슬롯 모두 제거
+        for (let i = 0; i < 10; i++) {
+            createPhotoSlot(i);
+        }
     }
 }
 
@@ -3940,26 +4017,34 @@ function removeExistingPhoto(type) {
 // 전역 함수로 만들어서 HTML에서 호출 가능하게 함
 window.removePhoto = removePhoto;
 window.removeExistingPhoto = removeExistingPhoto;
+window.submitMaintenanceForm = submitMaintenanceForm;
 
 // 사진 업로드 리셋 함수
 function resetPhotoUploads() {
-    uploadedPhotos = { before: null, during1: null, during2: null, during3: null, during4: null, after: null };
+    uploadedPhotos = {};
     
-    ['before', 'during1', 'during2', 'during3', 'during4', 'after'].forEach(type => {
-        const uploadArea = document.querySelector(`[data-type="${type}"]`);
-        if (uploadArea) {
-            const placeholder = uploadArea.querySelector('.upload-placeholder');
-            const preview = uploadArea.querySelector('.photo-preview');
+    // 모든 사진 슬롯 초기화 (슬롯은 유지, 내용만 리셋)
+    const photoGrid = document.getElementById('photoGrid');
+    if (photoGrid) {
+        photoGrid.querySelectorAll('.photo-slot').forEach(slot => {
+            const placeholder = slot.querySelector('.photo-placeholder');
+            const preview = slot.querySelector('.photo-preview');
+            
             if (placeholder && preview) {
-                preview.style.display = 'none';
-                placeholder.style.display = 'flex';
+                preview.classList.add('hidden');
+                placeholder.style.display = 'block';
             }
-        }
-        const input = document.getElementById(`${type}Photo`);
-        if (input) {
-            input.value = '';
-        }
-    });
+        });
+    }
+    
+    // 파일 입력 초기화
+    const photoInput = document.getElementById('photoInput');
+    if (photoInput) {
+        photoInput.value = '';
+    }
+    
+    // 카운터 업데이트
+    updatePhotoCount();
 }
 
 // Continue with more functions...
@@ -4912,19 +4997,19 @@ function getImageOrientation(arrayBuffer) {
     return 1; // Default orientation
 }
 
-// ImgBB 업로드만 사용하는 함수로 고정
+// 개선된 사진 업로드 함수 - 최대 10장까지
 async function uploadMaintenancePhotos(maintenanceId) {
     const photos = [];
     console.log('📸 Uploading photos for maintenance:', maintenanceId);
     console.log('📸 Photos to upload:', uploadedPhotos);
     console.log('📸 uploadedPhotos keys:', Object.keys(uploadedPhotos));
     
-    // 각 타입별로 명시적으로 확인 - 실제 유효한 데이터만 처리
-    const photoTypes = ['before', 'during1', 'during2', 'during3', 'during4', 'after'];
+    // 업로드된 사진들을 순서대로 처리
+    const uploadedPhotoKeys = Object.keys(uploadedPhotos).filter(key => uploadedPhotos[key]);
     
-    for (const type of photoTypes) {
-        const base64Data = uploadedPhotos[type];
-        console.log(`📸 Checking ${type} photo:`, !!base64Data, base64Data ? 'length: ' + base64Data.length : 'no data');
+    for (const photoKey of uploadedPhotoKeys) {
+        const base64Data = uploadedPhotos[photoKey];
+        console.log(`📸 Checking ${photoKey} photo:`, !!base64Data, base64Data ? 'length: ' + base64Data.length : 'no data');
         
         // 더 엄격한 검증: 실제 이미지 데이터가 있는지 확인
         const isValidPhotoData = base64Data && 
@@ -4934,12 +5019,12 @@ async function uploadMaintenancePhotos(maintenanceId) {
         
         if (isValidPhotoData) {
             try {
-                console.log(`📸 Starting upload for ${type} photo...`);
+                console.log(`📸 Starting upload for ${photoKey} photo...`);
                 
                 // Base64 데이터 검증
                 if (!base64Data.includes('data:image')) {
-                    console.error(`❌ Invalid base64 format for ${type}:`, base64Data.substring(0, 50));
-                    showNotification(`${type} 사진 형식이 올바르지 않습니다.`, 'error');
+                    console.error(`❌ Invalid base64 format for ${photoKey}:`, base64Data.substring(0, 50));
+                    showNotification(`${photoKey} 사진 형식이 올바르지 않습니다.`, 'error');
                     continue;
                 }
                 
@@ -4947,63 +5032,63 @@ async function uploadMaintenancePhotos(maintenanceId) {
                 const base64Image = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
                 
                 if (!base64Image || base64Image.length < 100) {
-                    console.error(`❌ Invalid base64 content for ${type}:`, base64Image ? base64Image.length : 'empty');
-                    showNotification(`${type} 사진 데이터가 손상되었습니다.`, 'error');
+                    console.error(`❌ Invalid base64 content for ${photoKey}:`, base64Image ? base64Image.length : 'empty');
+                    showNotification(`${photoKey} 사진 데이터가 손상되었습니다.`, 'error');
                     continue;
                 }
                 
-                console.log(`📸 Base64 processed for ${type}, length: ${base64Image.length}`);
+                console.log(`📸 Base64 processed for ${photoKey}, length: ${base64Image.length}`);
                 
                 // ImgBB API 호출
                 const formData = new FormData();
                 formData.append('key', IMGBB_API_KEY);
                 formData.append('image', base64Image);
-                formData.append('name', `maintenance_${maintenanceId}_${type}_${Date.now()}`);
+                formData.append('name', `maintenance_${maintenanceId}_${photoKey}_${Date.now()}`);
                 
-                console.log(`📸 Calling ImgBB API for ${type}...`);
+                console.log(`📸 Calling ImgBB API for ${photoKey}...`);
                 const response = await fetch('https://api.imgbb.com/1/upload', {
                     method: 'POST',
                     body: formData
                 });
                 
-                console.log(`📸 ImgBB response status for ${type}:`, response.status, response.statusText);
+                console.log(`📸 ImgBB response status for ${photoKey}:`, response.status, response.statusText);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
                 const result = await response.json();
-                console.log(`📸 ImgBB response for ${type}:`, result.success ? 'SUCCESS' : 'FAILED');
+                console.log(`📸 ImgBB response for ${photoKey}:`, result.success ? 'SUCCESS' : 'FAILED');
                 
                 if (result.error) {
-                    console.error(`❌ ImgBB error for ${type}:`, result.error);
+                    console.error(`❌ ImgBB error for ${photoKey}:`, result.error);
                 }
                 
                 if (result.success) {
                     const photoData = {
-                        type,
+                        type: photoKey,
                         url: result.data.url,
                         thumbnailUrl: result.data.thumb ? result.data.thumb.url : result.data.url,
                         deleteUrl: result.data.delete_url, // 🗑️ 삭제 URL 저장
                         imgbbId: result.data.id, // 📸 imgbb ID 저장
                         createdAt: new Date().toISOString(),
-                        filename: `${type}_${Date.now()}.jpg`
+                        filename: `${photoKey}_${Date.now()}.jpg`
                     };
                     
                     photos.push(photoData);
-                    console.log(`✅ ${type} photo uploaded successfully:`, result.data.url);
+                    console.log(`✅ ${photoKey} photo uploaded successfully:`, result.data.url);
                     console.log('🗑️ Delete URL saved:', result.data.delete_url);
-                    showNotification(`${type} 사진 업로드 성공!`, 'success');
+                    showNotification(`${photoKey} 사진 업로드 성공!`, 'success');
                 } else {
-                    console.error(`❌ ImgBB upload failed for ${type}:`, result);
-                    showNotification(`${type} 사진 업로드 실패: ${result.error?.message || '알 수 없는 오류'}`, 'error');
+                    console.error(`❌ ImgBB upload failed for ${photoKey}:`, result);
+                    showNotification(`${photoKey} 사진 업로드 실패: ${result.error?.message || '알 수 없는 오류'}`, 'error');
                 }
             } catch (err) {
-                console.error(`❌ Error uploading ${type} photo:`, err);
-                showNotification(`${type} 사진 업로드 실패: ${err.message}`, 'error');
+                console.error(`❌ Error uploading ${photoKey} photo:`, err);
+                showNotification(`${photoKey} 사진 업로드 실패: ${err.message}`, 'error');
             }
         } else {
-            console.log(`📸 No ${type} photo to upload`);
+            console.log(`📸 No ${photoKey} photo to upload`);
         }
     }
     
@@ -5368,7 +5453,13 @@ function closeMaintenanceDetailModal() {
     const modal = document.getElementById('maintenanceDetailModal');
     if (modal) {
         try {
-            modal.remove();
+            modal.classList.remove('active');
+            // DOM에서 완전히 제거하지 않고 숨김만 처리
+            setTimeout(() => {
+                if (modal && !modal.classList.contains('active')) {
+                    modal.remove();
+                }
+            }, 300);
         } catch (error) {
             console.log('Modal already removed:', error);
         }
@@ -5448,8 +5539,10 @@ async function editMaintenance(maintenanceId) {
         // 상세 모달 닫기
         closeMaintenanceDetailModal();
         
-        // 정비 등록 모달 열고 기존 데이터로 채우기
-        openMaintenanceModal();
+        // 정비 등록 모달 열고 기존 데이터로 채우기 (지연시켜서 충돌 방지)
+        setTimeout(() => {
+            openMaintenanceModal();
+        }, 100);
         
         // 데이터 채우기
         setTimeout(() => {
@@ -5459,32 +5552,44 @@ async function editMaintenance(maintenanceId) {
             document.getElementById('mileage').value = maintenance.mileage || '';
             document.getElementById('description').value = maintenance.description || '';
             
-            // 🖼️ 기존 사진들을 미리보기로 표시 (하지만 uploadedPhotos에는 추가하지 않음)
+            // 🖼️ 기존 사진들을 미리보기로 표시 (최대 10장으로 제한)
             console.log('🖼️ 수정 모드: 기존 사진 미리보기 표시');
             
             if (maintenance.photos && maintenance.photos.length > 0) {
-                // 신규 방식: photos 배열
+                // 신규 방식: photos 배열 (최대 10장)
                 console.log('🖼️ 신규 방식 사진 로드:', maintenance.photos.length + '장');
-                maintenance.photos.forEach(photo => {
+                const maxPhotos = Math.min(maintenance.photos.length, 10);
+                
+                for (let i = 0; i < maxPhotos; i++) {
+                    const photo = maintenance.photos[i];
                     if (photo.url && photo.type) {
                         showPhotoPreviewFromUrl(photo.url, photo.type);
                         console.log(`🖼️ ${photo.type} 사진 미리보기 표시:`, photo.url.substring(0, 50) + '...');
                     }
-                });
+                }
+                
+                if (maintenance.photos.length > 10) {
+                    showNotification('기존 사진이 10장을 초과하여 처음 10장만 표시됩니다.', 'warning');
+                }
             } else {
-                // 기존 방식: 개별 필드
+                // 기존 방식: 개별 필드 (최대 10장)
                 console.log('🖼️ 기존 방식 사진 확인');
-                if (maintenance.beforePhoto) {
+                let photoCount = 0;
+                
+                if (maintenance.beforePhoto && photoCount < 10) {
                     showPhotoPreviewFromUrl(maintenance.beforePhoto, 'before');
                     console.log('🖼️ before 사진 미리보기 표시');
+                    photoCount++;
                 }
-                if (maintenance.duringPhoto) {
+                if (maintenance.duringPhoto && photoCount < 10) {
                     showPhotoPreviewFromUrl(maintenance.duringPhoto, 'during');
                     console.log('🖼️ during 사진 미리보기 표시');
+                    photoCount++;
                 }
-                if (maintenance.afterPhoto) {
+                if (maintenance.afterPhoto && photoCount < 10) {
                     showPhotoPreviewFromUrl(maintenance.afterPhoto, 'after');
                     console.log('🖼️ after 사진 미리보기 표시');
+                    photoCount++;
                 }
             }
             
