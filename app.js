@@ -9867,45 +9867,72 @@ async function updateExpenseData(event) {
 
 // 급여 모달 열기
 function showSalaryModal() {
+    console.log('💰 급여 모달 열기 시작');
+    console.log('👤 현재 사용자:', { isAdmin, currentUser: currentUser?.email });
+    
     // 관리자 권한 확인
     if (!isAdmin) {
+        console.log('❌ 관리자 권한 없음');
         showNotification('관리자만 접근할 수 있습니다.', 'error');
         return;
     }
     
     const modal = document.getElementById('salaryModal');
+    console.log('🔍 급여 모달 요소:', modal);
+    
     if (modal) {
+        console.log('✅ 급여 모달 활성화');
         modal.classList.add('active');
+        
         // 초기 탭 설정
         showSalaryTab('employees');
+        
         // 직원 목록 로드
         loadEmployeeList();
+        
         // 4대보험 설정 로드
         loadInsuranceSettings();
+        
         // 급여 계산 기간 설정
         setupSalaryPeriod();
+        
+        console.log('✅ 급여 모달 열기 완료');
+    } else {
+        console.error('❌ 급여 모달 요소를 찾을 수 없음');
+        showNotification('급여 관리 모달을 찾을 수 없습니다.', 'error');
     }
 }
 
 // 급여 모달 닫기
 function closeSalaryModal() {
+    console.log('❌ 급여 모달 닫기');
+    
     const modal = document.getElementById('salaryModal');
     if (modal) {
         modal.classList.remove('active');
         // 폼 초기화
         resetSalaryForms();
+        console.log('✅ 급여 모달 닫기 완료');
+    } else {
+        console.error('❌ 급여 모달 요소를 찾을 수 없음');
     }
 }
 
 // 급여 탭 전환
 function showSalaryTab(tabName) {
+    console.log('📋 급여 탭 전환:', tabName);
+    
     // 모든 탭 버튼 비활성화
-    document.querySelectorAll('.salary-tab').forEach(tab => {
+    const allTabs = document.querySelectorAll('.salary-tab');
+    console.log('🔍 찾은 탭 버튼 수:', allTabs.length);
+    allTabs.forEach(tab => {
         tab.classList.remove('active');
     });
     
     // 모든 탭 컨텐츠 숨김
-    document.querySelectorAll('.salary-tab-content').forEach(content => {
+    const allContents = document.querySelectorAll('.salary-tab-content');
+    console.log('🔍 찾은 탭 컨텐츠 수:', allContents.length);
+    allContents.forEach(content => {
         content.classList.remove('active');
     });
     
@@ -9913,23 +9940,38 @@ function showSalaryTab(tabName) {
     const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
     const activeContent = document.getElementById(`${tabName}Tab`);
     
-    if (activeTab) activeTab.classList.add('active');
-    if (activeContent) activeContent.classList.add('active');
+    console.log('🎯 활성화할 탭:', activeTab);
+    console.log('🎯 활성화할 컨텐츠:', activeContent);
+    
+    if (activeTab) {
+        activeTab.classList.add('active');
+        console.log('✅ 탭 활성화 완료');
+    }
+    if (activeContent) {
+        activeContent.classList.add('active');
+        console.log('✅ 컨텐츠 활성화 완료');
+    }
     
     // 탭별 데이터 로드
     switch(tabName) {
         case 'employees':
+            console.log('👥 직원 목록 로드 시작');
             loadEmployeeList();
             break;
         case 'calculation':
+            console.log('🧮 급여 계산 로드 시작');
             loadSalaryCalculation();
             break;
         case 'history':
+            console.log('📜 지급 이력 로드 시작');
             loadSalaryHistory();
             break;
         case 'insurance':
+            console.log('🛡️ 4대보험 설정 로드 시작');
             loadInsuranceSettings();
             break;
+        default:
+            console.warn('⚠️ 알 수 없는 탭:', tabName);
     }
 }
 
@@ -10027,21 +10069,57 @@ function createEmployeeCard(employeeId, employee) {
 }
 
 // 직원 추가 폼 표시
-function showAddEmployeeForm() {
+function showAddEmployeeForm(isEditMode = false) {
+    console.log('👥 직원 폼 표시:', { isEditMode });
+    
     const form = document.getElementById('addEmployeeForm');
+    console.log('🔍 직원 폼 요소:', form);
+    
     if (form) {
-        form.style.display = 'block';
-        // 사번 자동 생성
-        generateEmployeeId();
+        // CSS 클래스 제거로 표시 (style.display보다 우선순위 높음)
+        form.classList.remove('add-employee-form-hidden');
+        console.log('✅ 직원 폼 표시 완료');
+        
+        // 수정 모드가 아닐 때만 사번 자동 생성
+        if (!isEditMode) {
+            generateEmployeeId();
+        }
+        
+        // 폼 제출 이벤트 설정
+        const employeeForm = document.getElementById('employeeForm');
+        if (employeeForm) {
+            if (isEditMode) {
+                // 수정 모드일 때는 이벤트 리스너를 제거하고 나중에 설정
+                employeeForm.onsubmit = null;
+            } else {
+                // 추가 모드일 때는 기본 저장 함수 설정
+                employeeForm.onsubmit = saveEmployee;
+            }
+        }
+    } else {
+        console.error('❌ 직원 폼 요소를 찾을 수 없음');
+        showNotification('직원 폼을 찾을 수 없습니다.', 'error');
     }
 }
 
 // 직원 추가 폼 취소
 function cancelAddEmployee() {
+    console.log('❌ 직원 추가 폼 취소');
+    
     const form = document.getElementById('addEmployeeForm');
     if (form) {
-        form.style.display = 'none';
+        // CSS 클래스 추가로 숨김
+        form.classList.add('add-employee-form-hidden');
         resetEmployeeForm();
+        
+        // 폼 제출 이벤트 원래대로 복원
+        const employeeForm = document.getElementById('employeeForm');
+        if (employeeForm) {
+            employeeForm.onsubmit = saveEmployee;
+        }
+        console.log('✅ 직원 폼 숨김 완료');
+    } else {
+        console.error('❌ 직원 폼 요소를 찾을 수 없음');
     }
 }
 
@@ -10065,6 +10143,7 @@ async function generateEmployeeId() {
 // 직원 저장
 async function saveEmployee(event) {
     event.preventDefault();
+    console.log('💾 직원 저장 시작');
     
     const formData = {
         name: document.getElementById('empName').value,
@@ -10079,8 +10158,11 @@ async function saveEmployee(event) {
         createdAt: new Date().toISOString()
     };
     
+    console.log('📋 저장할 데이터:', formData);
+    
     try {
         await db.collection('employees').add(formData);
+        console.log('✅ 직원 저장 성공');
         showNotification('직원이 성공적으로 등록되었습니다.', 'success');
         
         // 폼 초기화 및 목록 새로고침
@@ -10089,13 +10171,15 @@ async function saveEmployee(event) {
         loadEmployeeList();
         
     } catch (error) {
-        console.error('직원 저장 실패:', error);
+        console.error('❌ 직원 저장 실패:', error);
         showNotification('직원 등록에 실패했습니다.', 'error');
     }
 }
 
 // 직원 수정
 async function editEmployee(employeeId) {
+    console.log('✏️ 직원 수정 시작:', employeeId);
+    
     try {
         const doc = await db.collection('employees').doc(employeeId).get();
         if (!doc.exists) {
@@ -10104,35 +10188,41 @@ async function editEmployee(employeeId) {
         }
         
         const employee = doc.data();
+        console.log('👥 직원 정보 로드:', employee);
         
         // 폼에 기존 데이터 입력
-        document.getElementById('empName').value = employee.name;
-        document.getElementById('empId').value = employee.employeeId;
-        document.getElementById('empPosition').value = employee.position;
-        document.getElementById('empDepartment').value = employee.department;
-        document.getElementById('empJoinDate').value = employee.joinDate;
-        document.getElementById('empPhone').value = employee.phone;
-        document.getElementById('empBaseSalary').value = employee.baseSalary;
-        document.getElementById('empStatus').value = employee.status;
+        document.getElementById('empName').value = employee.name || '';
+        document.getElementById('empId').value = employee.employeeId || '';
+        document.getElementById('empPosition').value = employee.position || '';
+        document.getElementById('empDepartment').value = employee.department || '';
+        document.getElementById('empJoinDate').value = employee.joinDate || '';
+        document.getElementById('empPhone').value = employee.phone || '';
+        document.getElementById('empBaseSalary').value = employee.baseSalary || '';
+        document.getElementById('empStatus').value = employee.status || '재직';
         
         // 수정 모드로 전환
-        showAddEmployeeForm();
+        showAddEmployeeForm(true);
         
-        // 폼 제출 이벤트 변경
+        // 폼 제출 이벤트 설정
         const form = document.getElementById('employeeForm');
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            await updateEmployee(employeeId);
-        };
+        if (form) {
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                console.log('📝 직원 정보 업데이트 시작:', employeeId);
+                await updateEmployee(employeeId);
+            };
+        }
         
     } catch (error) {
-        console.error('직원 정보 로드 실패:', error);
+        console.error('❌ 직원 정보 로드 실패:', error);
         showNotification('직원 정보를 불러오는데 실패했습니다.', 'error');
     }
 }
 
 // 직원 정보 업데이트
 async function updateEmployee(employeeId) {
+    console.log('📝 직원 정보 업데이트 시작:', employeeId);
+    
     const formData = {
         name: document.getElementById('empName').value,
         employeeId: document.getElementById('empId').value,
@@ -10145,8 +10235,11 @@ async function updateEmployee(employeeId) {
         updatedAt: new Date().toISOString()
     };
     
+    console.log('📋 업데이트할 데이터:', formData);
+    
     try {
         await db.collection('employees').doc(employeeId).update(formData);
+        console.log('✅ 직원 정보 업데이트 성공');
         showNotification('직원 정보가 성공적으로 수정되었습니다.', 'success');
         
         // 폼 초기화 및 목록 새로고침
@@ -10156,10 +10249,12 @@ async function updateEmployee(employeeId) {
         
         // 폼 제출 이벤트 원래대로 복원
         const form = document.getElementById('employeeForm');
-        form.onsubmit = saveEmployee;
+        if (form) {
+            form.onsubmit = saveEmployee;
+        }
         
     } catch (error) {
-        console.error('직원 정보 수정 실패:', error);
+        console.error('❌ 직원 정보 수정 실패:', error);
         showNotification('직원 정보 수정에 실패했습니다.', 'error');
     }
 }
@@ -10205,8 +10300,18 @@ function setupEmployeeSearch() {
 
 // 직원 폼 초기화
 function resetEmployeeForm() {
-    document.getElementById('employeeForm').reset();
-    generateEmployeeId();
+    console.log('🔄 직원 폼 초기화');
+    
+    const form = document.getElementById('employeeForm');
+    if (form) {
+        form.reset();
+    }
+    
+    // 사번 필드 초기화 (generateEmployeeId는 추가 모드에서만 호출)
+    const empIdField = document.getElementById('empId');
+    if (empIdField) {
+        empIdField.value = '';
+    }
 }
 
 // 급여 계산 기간 설정
@@ -13175,9 +13280,22 @@ function addBeginnerTooltips() {
     
     // 급여 관리 버튼
     const salaryBtn = document.querySelector('[onclick="showSalaryModal()"]');
+    console.log('💰 급여 관리 버튼 찾기:', salaryBtn);
+    
     if (salaryBtn && !salaryBtn.hasAttribute('data-beginner-tooltip')) {
         salaryBtn.setAttribute('data-beginner-tooltip', '직원의 급여와 4대보험(국민연금, 건강보험, 고용보험, 산재보험)을 관리합니다. 급여 계산 시 자동으로 세금과 보험료가 계산됩니다.');
         salaryBtn.setAttribute('data-beginner-added', 'true');
+        
+        // 클릭 이벤트 리스너 추가 (기존 onclick과 함께)
+        if (!salaryBtn.hasAttribute('data-click-listener')) {
+            salaryBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('💰 급여 관리 버튼 클릭됨');
+                showSalaryModal();
+            });
+            salaryBtn.setAttribute('data-click-listener', 'true');
+        }
     }
     
     // 부가세 신고 버튼
