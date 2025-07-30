@@ -1585,22 +1585,34 @@ function showContextMenu(options) {
 // Firebase Connection System
 // =============================================
 
-// Firebase 쿼리 안전 실행 함수 (간단한 버전)
+// Firebase 쿼리 안전 실행 함수 (강화된 버전)
 async function safeFirebaseQuery(queryId, queryFunction) {
     try {
         // 중복 실행 방지
         if (queryQueue.has(queryId)) {
+            console.log(`⚠️ Query ${queryId} already in progress, skipping...`);
             return null;
         }
         
         // 쿼리 큐에 추가
         queryQueue.add(queryId);
         
+        // Target ID 오류 방지를 위한 지연
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // 실제 쿼리 실행
         const result = await queryFunction();
         return result;
         
     } catch (error) {
+        console.error(`❌ Firebase query error for ${queryId}:`, error);
+        
+        // Target ID already exists 오류 처리
+        if (error.message?.includes('Target ID already exists')) {
+            console.log(`⚠️ Target ID conflict for ${queryId}`);
+            // 사용자가 직접 재시도하도록 오류 전파
+        }
+        
         // 오프라인 에러 처리
         if (error.code === 'unavailable' || error.message?.includes('offline') || error.message?.includes('client is offline')) {
             showNotification('네트워크 연결을 확인해주세요.', 'error');
@@ -2570,6 +2582,8 @@ async function loadMaintenanceTimeline(searchTerm = '') {
         
         // 안전한 Firebase 쿼리 실행 (최적화: 최신 50개만 조회)
         const queryId = searchTerm ? `maintenanceTimeline_search_${searchTerm}` : 'maintenanceTimeline';
+        
+        // 단순한 Firebase 쿼리 실행
         const snapshot = await safeFirebaseQuery(queryId, async () => {
             let query = db.collection('maintenance')
                 .orderBy('createdAt', 'desc')
