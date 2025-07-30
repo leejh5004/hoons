@@ -179,6 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeModals();
         initializeEventListeners();
         initializeSearchAndFilters();
+        initializeNotificationSystem(); // 알림 시스템 초기화 추가
         loadViewMode();
         
         // Firebase 연결 상태 모니터링 시작
@@ -1222,13 +1223,37 @@ let unreadCount = 0;
 function initializeNotificationSystem() {
     console.log('🔔 Initializing notification system...');
     
+    // 중복 초기화 방지
+    if (window.notificationSystemInitialized) {
+        console.log('⚠️ Notification system already initialized');
+        return;
+    }
+    
     const notificationBtn = document.getElementById('notificationBtn');
     if (notificationBtn) {
-        notificationBtn.addEventListener('click', showNotificationPanel);
+        console.log('🔔 Adding notification button event listener');
+        
+        // 기존 이벤트 리스너 제거
+        const newBtn = notificationBtn.cloneNode(true);
+        notificationBtn.parentNode.replaceChild(newBtn, notificationBtn);
+        
+        // 새로운 이벤트 리스너 추가
+        newBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🔔 Notification button clicked');
+            showNotificationPanel();
+        });
+    } else {
+        console.log('⚠️ Notification button not found');
     }
     
     // 기존 알림 로딩
     loadNotifications();
+    
+    // 초기화 완료 표시
+    window.notificationSystemInitialized = true;
+    console.log('✅ Notification system initialized successfully');
 }
 
 // 알림 패널 표시
@@ -1254,24 +1279,85 @@ function showNotificationPanel() {
     }
     
     const panelHTML = `
-        <div id="notificationPanel" class="notification-panel">
-            <div class="notification-panel-header">
-                <h3><i class="fas fa-bell"></i> 알림</h3>
-                <button class="clear-all-btn" onclick="clearAllNotifications()">
+        <div id="notificationPanel" class="notification-panel" style="
+            position: fixed;
+            top: 60px;
+            right: 16px;
+            width: 380px;
+            max-width: calc(100vw - 32px);
+            max-height: calc(100vh - 60px - 32px);
+            background: var(--surface, #ffffff);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            overflow: hidden;
+            animation: slideInFromRight 0.2s ease-out;
+        ">
+            <div class="notification-panel-header" style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 16px;
+                border-bottom: 1px solid var(--secondary-200, #e5e7eb);
+                background: var(--bg-secondary, #f9fafb);
+            ">
+                <h3 style="
+                    margin: 0;
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: var(--text-primary, #111827);
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                "><i class="fas fa-bell"></i> 알림</h3>
+                <button class="clear-all-btn" onclick="clearAllNotifications()" style="
+                    background: none;
+                    border: none;
+                    color: var(--primary-600, #2563eb);
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    padding: 8px;
+                    border-radius: 6px;
+                    transition: all 0.2s ease;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                ">
                     <i class="fas fa-check-double"></i> 모두 읽음
                 </button>
             </div>
-            <div class="notification-panel-body" id="notificationPanelBody">
+            <div class="notification-panel-body" id="notificationPanelBody" style="
+                max-height: 400px;
+                overflow-y: auto;
+            ">
                 ${notifications.length > 0 ? 
                     notifications.map(notification => createNotificationItem(notification)).join('') :
-                    '<div class="no-notifications"><i class="fas fa-inbox"></i><p>새로운 알림이 없습니다</p></div>'
+                    '<div class="no-notifications" style="text-align: center; padding: 40px 20px; color: var(--text-secondary, #6b7280);"><i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i><p style="margin: 0;">새로운 알림이 없습니다</p></div>'
                 }
             </div>
         </div>
-        <div class="notification-panel-backdrop" onclick="closeNotificationPanel()"></div>
+        <div class="notification-panel-backdrop" onclick="closeNotificationPanel()" style="
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 9999;
+        "></div>
     `;
     
     document.body.insertAdjacentHTML('beforeend', panelHTML);
+    
+    // 애니메이션 추가
+    const panel = document.getElementById('notificationPanel');
+    if (panel) {
+        panel.style.transform = 'translateX(100%)';
+        panel.style.opacity = '0';
+        
+        setTimeout(() => {
+            panel.style.transform = 'translateX(0)';
+            panel.style.opacity = '1';
+        }, 10);
+    }
     
     // 모든 알림을 읽음으로 표시
     markAllAsRead();
@@ -1279,14 +1365,34 @@ function showNotificationPanel() {
 
 // 알림 패널 닫기
 function closeNotificationPanel() {
+    console.log('🔔 Closing notification panel...');
+    
     const panel = document.getElementById('notificationPanel');
     const backdrop = document.querySelector('.notification-panel-backdrop');
     
-    try {
-        if (panel) panel.remove();
-        if (backdrop) backdrop.remove();
-    } catch (error) {
-        console.log('Panel/backdrop already removed:', error);
+    if (panel) {
+        // 애니메이션으로 닫기
+        panel.style.transform = 'translateX(100%)';
+        panel.style.opacity = '0';
+        
+        setTimeout(() => {
+            try {
+                panel.remove();
+            } catch (error) {
+                console.log('Panel already removed:', error);
+            }
+        }, 200);
+    }
+    
+    if (backdrop) {
+        backdrop.style.opacity = '0';
+        setTimeout(() => {
+            try {
+                backdrop.remove();
+            } catch (error) {
+                console.log('Backdrop already removed:', error);
+            }
+        }, 200);
     }
 }
 
@@ -1296,17 +1402,20 @@ function createNotificationItem(notification) {
     const iconClass = getNotificationIcon(notification.type);
     const statusColor = getNotificationColor(notification.type);
     
+    const unreadStyle = !notification.read ? 'background: var(--primary-25, #f8faff);' : '';
+    const unreadIndicator = !notification.read ? '<div class="unread-indicator" style="position: absolute; top: 16px; right: 16px; width: 8px; height: 8px; border-radius: 50%; background: var(--primary-500, #3b82f6);"></div>' : '';
+    
     return `
-        <div class="notification-item ${notification.read ? 'read' : 'unread'}" data-id="${notification.id}">
-            <div class="notification-icon" style="background: ${statusColor}">
+        <div class="notification-item ${notification.read ? 'read' : 'unread'}" data-id="${notification.id}" style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; border-bottom: 1px solid var(--secondary-100, #f3f4f6); position: relative; transition: all 0.2s ease; ${unreadStyle}">
+            <div class="notification-icon" style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: ${statusColor}; color: white; font-size: 16px; flex-shrink: 0;">
                 <i class="${iconClass}"></i>
             </div>
-            <div class="notification-content">
-                <h4 class="notification-title">${notification.title}</h4>
-                <p class="notification-message">${notification.message}</p>
-                <span class="notification-time">${timeAgo}</span>
+            <div class="notification-content" style="flex: 1; min-width: 0;">
+                <h4 class="notification-title" style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: var(--text-primary, #111827); line-height: 1.4;">${notification.title}</h4>
+                <p class="notification-message" style="margin: 0 0 8px 0; font-size: 13px; color: var(--text-secondary, #6b7280); line-height: 1.4;">${notification.message}</p>
+                <span class="notification-time" style="font-size: 12px; color: var(--text-tertiary, #9ca3af);">${timeAgo}</span>
             </div>
-            ${!notification.read ? '<div class="unread-indicator"></div>' : ''}
+            ${unreadIndicator}
         </div>
     `;
 }
@@ -4320,36 +4429,95 @@ async function updateMaintenanceStatusWithReason(maintenanceId, newStatus, rejec
 
 // 알림 표시
 function showNotification(message, type = 'info') {
-    const container = document.getElementById('notificationContainer');
-    if (!container) return;
+    console.log('🔔 알림 표시:', { message, type });
+    
+    // 알림 컨테이너 확인 및 생성
+    let container = document.getElementById('notificationContainer');
+    if (!container) {
+        console.log('📦 알림 컨테이너가 없어서 생성합니다');
+        container = document.createElement('div');
+        container.id = 'notificationContainer';
+        container.className = 'notification-container';
+        container.style.cssText = `
+            position: fixed;
+            top: calc(var(--header-height, 60px) + 16px);
+            right: 16px;
+            z-index: 10000;
+            max-width: 400px;
+            width: calc(100vw - 32px);
+        `;
+        document.body.appendChild(container);
+    }
+    
+    // 기존 알림들 정리 (최대 3개까지만 유지)
+    const existingNotifications = container.querySelectorAll('.notification');
+    if (existingNotifications.length >= 3) {
+        existingNotifications[0].remove();
+    }
     
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.innerHTML = `
-        <div style="display: flex; align-items: center; gap: var(--space-sm);">
-            <i class="fas fa-${getNotificationIcon(type)}"></i>
-            <span>${message}</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-${getNotificationIcon(type)}" style="font-size: 16px;"></i>
+            <span style="flex: 1;">${message}</span>
         </div>
+    `;
+    
+    // 스타일 직접 적용
+    notification.style.cssText = `
+        background: var(--surface, #ffffff);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border-left: 4px solid ${getNotificationColor(type)};
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        transform: translateX(100%);
+        transition: all 0.3s ease;
+        max-width: 400px;
+        width: calc(100vw - 32px);
+        position: relative;
+        z-index: 10000;
     `;
     
     container.appendChild(notification);
     
-    // Show notification
-    setTimeout(() => notification.classList.add('show'), 100);
-    
-    // Auto hide after 1.5 seconds
+    // 알림 표시 애니메이션
     setTimeout(() => {
-        notification.classList.remove('show');
+        notification.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // 자동 숨김 (2초 후)
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
         setTimeout(() => {
             try {
                 if (notification.parentNode) {
                     notification.remove();
                 }
             } catch (error) {
-                console.log('Notification already removed:', error);
+                console.log('알림 제거 중 오류:', error);
             }
         }, 300);
-    }, 1500);
+    }, 2000);
+}
+
+function getNotificationIcon(type) {
+    switch (type) {
+        case 'success': return 'check-circle';
+        case 'error': return 'exclamation-circle';
+        case 'warning': return 'exclamation-triangle';
+        default: return 'info-circle';
+    }
+}
+
+function getNotificationColor(type) {
+    switch (type) {
+        case 'success': return '#10b981';
+        case 'error': return '#ef4444';
+        case 'warning': return '#f59e0b';
+        default: return '#3b82f6';
+    }
 }
 
 function getNotificationIcon(type) {
