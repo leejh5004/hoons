@@ -7,7 +7,7 @@
 let currentUser = null;
 let isAdmin = false;
 let db = null;
-let uploadedPhotos = { before: null, during: null, after: null };
+let uploadedPhotos = {}; // 정비전/정비중/정비후 구분 없이 단순화
 let adminNameCache = {};
 let currentStep = 1;
 let currentTheme = 'light';
@@ -2569,7 +2569,8 @@ async function loadMaintenanceTimeline(searchTerm = '') {
         isLoadingStats.timeline = true;
         
         // 안전한 Firebase 쿼리 실행 (최적화: 최신 50개만 조회)
-        const snapshot = await safeFirebaseQuery('maintenanceTimeline', async () => {
+        const queryId = searchTerm ? `maintenanceTimeline_search_${searchTerm}` : 'maintenanceTimeline';
+        const snapshot = await safeFirebaseQuery(queryId, async () => {
             let query = db.collection('maintenance')
                 .orderBy('createdAt', 'desc')
                 .limit(50); // 최신 50개만 조회하여 읽기 횟수 대폭 감소
@@ -3627,7 +3628,7 @@ function initializePhotoUpload() {
     window.photoUploadInitialized = true;
 }
 
-// 다중 사진 업로드 처리
+// 다중 사진 업로드 처리 (진행률 표시 개선)
 async function handleMultiplePhotoUpload(event) {
     const files = Array.from(event.target.files).filter(file => file.type.startsWith('image/'));
     
@@ -3644,15 +3645,27 @@ async function handleMultiplePhotoUpload(event) {
         return;
     }
     
+    // 진행률 표시 시작
+    showUploadProgress(0, files.length);
+    
     // 파일들을 순서대로 업로드
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const photoIndex = currentCount + i;
         const photoKey = `photo${photoIndex}`;
-        await handlePhotoUpload(file, photoKey);
+        
+        try {
+            await handlePhotoUpload(file, photoKey);
+            // 진행률 업데이트
+            showUploadProgress(i + 1, files.length);
+        } catch (error) {
+            console.error(`❌ 사진 업로드 실패: ${photoKey}`, error);
+            showNotification(`${photoKey} 사진 업로드 실패: ${error.message}`, 'error');
+        }
     }
     
     updatePhotoCount();
+    hideUploadProgress();
     showNotification(`${files.length}장의 사진이 업로드되었습니다.`, 'success');
 }
 
@@ -3669,11 +3682,69 @@ async function handlePhotoUpload(file, type) {
         // 미리보기 표시
         showPhotoPreview(base64, type);
         
-        showNotification(`${type} 사진이 업로드되었습니다.`, 'success');
-        
     } catch (error) {
         console.error(`❌ Error uploading ${type} photo:`, error);
-        showNotification(`${type} 사진 업로드 실패: ${error.message}`, 'error');
+        throw error; // 상위 함수에서 처리하도록 에러 전파
+    }
+}
+
+// 업로드 진행률 표시 함수
+function showUploadProgress(current, total) {
+    const progress = Math.round((current / total) * 100);
+    
+    // 기존 진행률 표시 제거
+    let existingProgress = document.getElementById('uploadProgress');
+    if (existingProgress) {
+        existingProgress.remove();
+    }
+    
+    // 새로운 진행률 표시 생성
+    const progressHTML = `
+        <div id="uploadProgress" style="
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 10000;
+            text-align: center;
+            min-width: 300px;
+        ">
+            <div style="margin-bottom: 15px;">
+                <i class="fas fa-upload" style="font-size: 24px; margin-bottom: 10px;"></i>
+                <h4 style="margin: 0 0 10px 0;">사진 업로드 중...</h4>
+                <p style="margin: 0; opacity: 0.8;">${current}/${total} 장 완료</p>
+            </div>
+            <div style="
+                width: 100%;
+                height: 8px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 4px;
+                overflow: hidden;
+                margin-bottom: 10px;
+            ">
+                <div style="
+                    width: ${progress}%;
+                    height: 100%;
+                    background: linear-gradient(90deg, #4CAF50, #45a049);
+                    transition: width 0.3s ease;
+                "></div>
+            </div>
+            <div style="font-size: 14px; opacity: 0.8;">${progress}% 완료</div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', progressHTML);
+}
+
+// 업로드 진행률 숨기기 함수
+function hideUploadProgress() {
+    const progress = document.getElementById('uploadProgress');
+    if (progress) {
+        progress.remove();
     }
 }
 
@@ -4800,7 +4871,9 @@ async function uploadMaintenancePhotos(maintenanceId) {
     }
     
     console.log(`📸 Preparing to upload ${photosToUpload.length} photos in batch...`);
-    showNotification(`${photosToUpload.length}장의 사진을 업로드하는 중...`, 'info');
+    
+    // 진행률 표시 시작
+    showUploadProgress(0, photosToUpload.length);
     
     // 배치 업로드 실행 (병렬 처리 + 재시도 로직)
     const uploadWithRetry = async (photoData, retryCount = 0) => {
@@ -4876,6 +4949,9 @@ async function uploadMaintenancePhotos(maintenanceId) {
         const progress = Math.round((completedUploads / totalUploads) * 100);
         console.log(`📸 Upload progress: ${progress}% (${completedUploads}/${totalUploads})`);
         
+        // 진행률 표시 업데이트
+        showUploadProgress(completedUploads, totalUploads);
+        
         // 진행률 알림 (25%, 50%, 75%, 100%)
         if (progress === 25 || progress === 50 || progress === 75 || progress === 100) {
             showNotification(`사진 업로드 진행률: ${progress}%`, 'info');
@@ -4893,6 +4969,9 @@ async function uploadMaintenancePhotos(maintenanceId) {
         const failedKeys = failedUploads.map(f => f.key).join(', ');
         showNotification(`${failedKeys} 사진 업로드에 실패했습니다.`, 'error');
     }
+    
+    // 진행률 표시 숨기기
+    hideUploadProgress();
     
     // 성공한 업로드 알림
     if (successfulUploads.length > 0) {
