@@ -920,25 +920,34 @@ function initializeMobileOptimization() {
 // =============================================
 
 function initializeNavigation() {
-    // 중복 초기화 방지
+    console.log('🎯 Initializing navigation system...');
+    
+    // 기존 이벤트 리스너 정리
     if (window.navigationInitialized) {
-        console.log('⚠️ Navigation already initialized, skipping...');
-        return;
+        console.log('⚠️ Navigation already initialized, cleaning up...');
+        // 기존 이벤트 리스너 제거
+        const existingNavItems = document.querySelectorAll('.nav-item');
+        existingNavItems.forEach(item => {
+            item.replaceWith(item.cloneNode(true));
+        });
     }
     
+    // 새로운 네비게이션 요소들 찾기
     const navItems = document.querySelectorAll('.nav-item');
     const profileBtn = document.getElementById('profileBtn');
     
-    // 기존 이벤트 리스너 제거
-    navItems.forEach(item => {
-        const newItem = item.cloneNode(true);
-        item.parentNode.replaceChild(newItem, item);
-    });
+    console.log('📱 Found navigation items:', navItems.length);
     
-    // Bottom navigation
-    navItems.forEach(item => {
-        item.addEventListener('click', () => {
+    // Bottom navigation 이벤트 리스너 등록
+    navItems.forEach((item, index) => {
+        console.log(`🔗 Adding event listener to nav item ${index + 1}:`, item.dataset.screen);
+        
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
             const screen = item.dataset.screen;
+            console.log('🎯 Navigation clicked:', screen);
             
             // Update active nav item
             navItems.forEach(nav => nav.classList.remove('active'));
@@ -947,13 +956,16 @@ function initializeNavigation() {
             // Handle navigation
             switch (screen) {
                 case 'dashboard':
+                    console.log('🏠 Navigating to dashboard');
                     showScreen('dashboardScreen');
                     loadDashboardData();
                     break;
                 case 'add':
+                    console.log('➕ Opening maintenance modal');
                     openMaintenanceModal();
                     break;
                 case 'taxation':
+                    console.log('💰 Navigating to taxation');
                     // 🔒 세무 화면 접근 권한 확인 - 관리자만 허용
                     if (!isAdmin) {
                         showNotification('관리자만 세무 화면에 접근할 수 있습니다.', 'error');
@@ -963,31 +975,32 @@ function initializeNavigation() {
                     loadTaxationData();
                     break;
                 case 'search':
+                    console.log('🔍 Focusing search input');
                     focusSearchInput();
                     break;
                 case 'profile':
+                    console.log('👤 Showing profile options');
                     showProfileOptions();
                     break;
+                default:
+                    console.warn('⚠️ Unknown navigation screen:', screen);
             }
         });
     });
     
-    // Profile button
+    // Profile button 이벤트 리스너
     if (profileBtn) {
-        // 기존 이벤트 리스너 제거
-        const newProfileBtn = profileBtn.cloneNode(true);
-        profileBtn.parentNode.replaceChild(newProfileBtn, profileBtn);
-        
-        // 새로운 이벤트 리스너 등록
-        const newProfileBtnRef = document.getElementById('profileBtn');
-        if (newProfileBtnRef) {
-            newProfileBtnRef.addEventListener('click', showProfileOptions);
-        }
+        console.log('👤 Adding profile button event listener');
+        profileBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showProfileOptions();
+        });
     }
     
     // 초기화 완료 표시
     window.navigationInitialized = true;
-    console.log('✅ Navigation initialized');
+    console.log('✅ Navigation system initialized successfully');
 }
 
 function showScreen(screenId) {
