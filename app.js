@@ -888,8 +888,20 @@ function toggleTheme() {
 // =============================================
 
 function initializeNavigation() {
+    // 중복 초기화 방지
+    if (window.navigationInitialized) {
+        console.log('⚠️ Navigation already initialized, skipping...');
+        return;
+    }
+    
     const navItems = document.querySelectorAll('.nav-item');
     const profileBtn = document.getElementById('profileBtn');
+    
+    // 기존 이벤트 리스너 제거
+    navItems.forEach(item => {
+        const newItem = item.cloneNode(true);
+        item.parentNode.replaceChild(newItem, item);
+    });
     
     // Bottom navigation
     navItems.forEach(item => {
@@ -930,8 +942,20 @@ function initializeNavigation() {
     
     // Profile button
     if (profileBtn) {
-        profileBtn.addEventListener('click', showProfileOptions);
+        // 기존 이벤트 리스너 제거
+        const newProfileBtn = profileBtn.cloneNode(true);
+        profileBtn.parentNode.replaceChild(newProfileBtn, profileBtn);
+        
+        // 새로운 이벤트 리스너 등록
+        const newProfileBtnRef = document.getElementById('profileBtn');
+        if (newProfileBtnRef) {
+            newProfileBtnRef.addEventListener('click', showProfileOptions);
+        }
     }
+    
+    // 초기화 완료 표시
+    window.navigationInitialized = true;
+    console.log('✅ Navigation initialized');
 }
 
 function showScreen(screenId) {
