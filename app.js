@@ -13,31 +13,20 @@ let currentStep = 1;
 let currentTheme = 'light';
 let currentViewMode = 'card'; // 'card' or 'list'
 
-// Firebase 리스너 관리용 전역 변수
-let activeListeners = {
-    todayStats: null,
-    pendingStats: null,
-    monthStats: null,
-    averageStats: null,
-    notifications: null,
-    maintenanceTimeline: null
-};
-
-// 로딩 상태 관리용 전역 변수
+// Firebase 관련 전역 변수들
+let activeListeners = {};
 let isLoadingStats = {
     today: false,
     pending: false,
     month: false,
-    average: false,
-    notifications: false,
-    timeline: false
+    average: false
 };
-
-// Firebase 쿼리 실행 큐 (중복 방지)
 let queryQueue = new Set();
 
-// 강제 지연 시간 (ms)
-const QUERY_DELAY = 200;
+// Firebase 쿼리 지연 설정
+const QUERY_DELAY = 1000; // 1초
+
+
 
 // 프로덕션 환경에서 로그 출력 제어
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -142,38 +131,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             db = firebase.firestore();
-            log('📊 Firestore 연결 완료');
             
-            // 페이지 초기화 시 기존 리스너 정리
-            cleanupFirebaseListeners();
-            
-            // 최적화된 Firebase 초기화 (빠른 연결)
-            log('🔄 Firebase 최적화 초기화...');
-            
-            // 백그라운드에서 네트워크 설정 (사용자 대기 시간 최소화)
-            setTimeout(() => {
-                db.enableNetwork()
-                    .then(() => {
-                        log('🌐 Firebase 네트워크 연결 활성화');
-                        // 연결 테스트 (백그라운드)
-                        return db.collection('maintenance').limit(1).get();
-                    })
-                    .then(() => {
-                        log('✅ Firebase 연결 테스트 성공');
-                    })
-                    .catch(err => {
-                        console.warn('⚠️ Firebase 연결 테스트 실패:', err);
-                        // 연결 실패 시 오프라인 상태 확인
-                        if (!navigator.onLine) {
-                            handleOfflineMode();
-                        } else {
-                            // 온라인 상태에서 연결 실패 시 자동 재시도
-                            setTimeout(() => {
-                                attemptFirebaseReconnection();
-                            }, 2000);
-                        }
-                    });
-            }, 100); // 짧은 지연으로 사용자 경험 개선
+            // 기본 Firebase 초기화만 수행
+
             
         } catch (error) {
             console.error('❌ Firebase 초기화 실패:', error);
@@ -207,13 +167,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeAuthSystem();
     initializeThemeSystem();
     
-        // 자동완성 데이터 로드 (즉시 실행)
-    console.log('🚀 자동완성 데이터 즉시 로드 시작');
-    loadAutoCompleteData().then(() => {
-        console.log('✅ 자동완성 데이터 로드 완료');
-    }).catch(error => {
-        console.warn('⚠️ 자동완성 데이터 로드 실패:', error);
-    });
+
     
     // Check authentication state
     firebase.auth().onAuthStateChanged(handleAuthStateChange);
@@ -231,33 +185,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
 
         
-        // 📸 사진 정리 시스템 시작 (로그인 후 5초 후 실행)
-        setTimeout(() => {
-            schedulePhotoCleanup();
-            checkPhotoWarnings(); // 삭제 임박 사진 경고 체크
-        }, 5000);
+
     });
     
-    console.log('✅ Application initialized successfully');
+    console.log('Application initialized successfully');
     console.log('💡 개발자 도구 명령어를 보려면 showConsoleHelp() 를 실행하세요');
     
-    // PDF 라이브러리 상태 초기 확인 (백그라운드에서)
-    setTimeout(() => {
-        console.log('🔍 PDF 라이브러리 상태 백그라운드 확인');
-        checkPDFLibraryStatus();
-        
-        // PDF 라이브러리가 로드되지 않은 경우 미리 로드 시도
-        if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
-            console.log('⚠️ PDF 라이브러리 미로드 감지, 사전 로드 시도');
-            waitForJsPDFLibrary(5000, false).then(success => {
-                if (success) {
-                    console.log('✅ PDF 라이브러리 사전 로드 성공');
-                } else {
-                    console.warn('⚠️ PDF 라이브러리 사전 로드 실패 - 세무 리포트 사용 시 수동 로드됩니다');
-                }
-            });
-        }
-    }, 3000); // 앱 로딩 후 3초 뒤 체크
+
 });
 
 // =============================================
@@ -669,7 +603,7 @@ async function handlePasswordReset(e) {
 
 async function handleAuthStateChange(user) {
     if (user) {
-        console.log('✅ User authenticated:', user.email);
+        console.log('User authenticated:', user.email);
         
         try {
             // 네트워크 연결 상태 확인
@@ -693,42 +627,34 @@ async function handleAuthStateChange(user) {
                 return;
             }
             
-            // Firebase 재연결 시도 (오프라인 에러 방지)
-            console.log('🔄 Firebase 연결 상태 확인 및 복구 시도');
+            // Firebase 네트워크 활성화 (안전하게)
             try {
-                await db.enableNetwork();
-                console.log('✅ Firebase 네트워크 활성화됨');
+                if (db && typeof db.enableNetwork === 'function') {
+                    await db.enableNetwork();
+                }
             } catch (networkError) {
-                console.warn('⚠️ Firebase 네트워크 활성화 실패, 재시도:', networkError);
-                await attemptFirebaseReconnection();
+                console.warn('⚠️ Firebase 네트워크 활성화 실패:', networkError);
             }
             
-            // Get user data from Firestore with retry logic
-            console.log('📄 사용자 데이터 로딩 시작...');
+            // 사용자 데이터 로딩 (간단하게)
             let userDoc;
-            let retryCount = 0;
-            const maxRetries = 3;
-            
-            while (retryCount < maxRetries) {
-                try {
-                    userDoc = await db.collection('users').doc(user.uid).get();
-                    console.log('✅ 사용자 데이터 로딩 성공');
-                    break;
-                } catch (error) {
-                    console.warn(`⚠️ 사용자 데이터 로딩 실패 (${retryCount + 1}/${maxRetries}):`, error);
-                    
-                    if (error.code === 'unavailable' || error.message.includes('offline')) {
-                        console.log('🔄 오프라인 에러 감지 - Firebase 재연결 시도');
-                        await attemptFirebaseReconnection();
-                    }
-                    
-                    retryCount++;
-                    if (retryCount < maxRetries) {
-                        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // 점진적 지연
-                    } else {
-                        throw error; // 최대 재시도 후에도 실패하면 에러 던지기
-                    }
-                }
+            try {
+                userDoc = await db.collection('users').doc(user.uid).get();
+            } catch (error) {
+                // 오프라인 모드로 즉시 전환
+                const isAdminEmail = ADMIN_EMAILS.includes(user.email);
+                currentUser = {
+                    uid: user.uid,
+                    email: user.email,
+                    name: isAdminEmail ? '관리자' : '사용자',
+                    carNumber: isAdminEmail ? 'admin1' : '',
+                    role: isAdminEmail ? 'admin' : 'user'
+                };
+                isAdmin = isAdminEmail;
+                
+                showScreen('dashboardScreen');
+                showNotification('오프라인 모드로 실행 중입니다.', 'warning');
+                return;
             }
             
             if (userDoc && userDoc.exists) {
@@ -770,10 +696,6 @@ async function handleAuthStateChange(user) {
                     });
                 }
                 
-                console.log('👤 User role:', currentUser.role);
-                console.log('🔧 Is admin (email check):', ADMIN_EMAILS.includes(user.email));
-                console.log('🔧 Is admin (final):', isAdmin);
-                
                 // Switch to dashboard
                 showScreen('dashboardScreen');
                 updateUI();
@@ -782,9 +704,6 @@ async function handleAuthStateChange(user) {
                 setTimeout(() => {
                     loadDashboardData();
                 }, 300);
-                
-                // Initialize notification system after user is loaded
-                initializeNotificationSystem();
                 
                 // 🚀 사용자 인증 완료 이벤트 발생
                 window.dispatchEvent(new CustomEvent('user-authenticated'));
@@ -821,12 +740,9 @@ async function handleAuthStateChange(user) {
                     };
                     
                     isAdmin = true;
-                    console.log('✅ Admin user document created');
                     
                 } else {
                     // 일반 사용자 계정 자동 생성
-                    console.log('📄 Creating user document for general user...');
-                    
                     const userData = {
                         name: user.displayName || user.email.split('@')[0], // 이메일 앞부분을 이름으로 사용
                         email: user.email,
@@ -846,8 +762,6 @@ async function handleAuthStateChange(user) {
                     };
                     
                     isAdmin = false;
-                    console.log('✅ User document created automatically');
-                    showNotification(`환영합니다! 계정이 자동으로 생성되었습니다.`, 'success');
                 }
                 
                 // 공통 처리: 로그인 완료 후 대시보드 이동
@@ -855,8 +769,7 @@ async function handleAuthStateChange(user) {
                 updateUI();
                 loadDashboardData();
                 
-                // Initialize notification system after user is loaded
-                initializeNotificationSystem();
+
                 
                 // 🚀 사용자 인증 완료 이벤트 발생
                 window.dispatchEvent(new CustomEvent('user-authenticated'));
@@ -1672,167 +1585,47 @@ function showContextMenu(options) {
 // Firebase Connection System
 // =============================================
 
-// Firebase 쿼리 안전 실행 함수
-async function safeFirebaseQuery(queryId, queryFunction, retryCount = 0) {
-    const maxRetries = 3;
-    
+// Firebase 쿼리 안전 실행 함수 (간단한 버전)
+async function safeFirebaseQuery(queryId, queryFunction) {
     try {
         // 중복 실행 방지
         if (queryQueue.has(queryId)) {
-            console.log(`⚠️ Query ${queryId} already in progress, skipping...`);
             return null;
         }
         
         // 쿼리 큐에 추가
         queryQueue.add(queryId);
         
-        // 지연 실행 (Target ID 충돌 방지)
-        if (retryCount === 0) {
-            await new Promise(resolve => setTimeout(resolve, QUERY_DELAY));
-        }
-        
-        console.log(`🔄 Executing Firebase query: ${queryId}`);
-        
         // 실제 쿼리 실행
         const result = await queryFunction();
-        
-        console.log(`✅ Query ${queryId} completed successfully`);
         return result;
         
-            } catch (error) {
-        console.error(`❌ Query ${queryId} failed:`, error);
-        
+    } catch (error) {
         // 오프라인 에러 처리
         if (error.code === 'unavailable' || error.message?.includes('offline') || error.message?.includes('client is offline')) {
-            console.warn(`⚠️ 오프라인 에러 감지 - ${queryId}`);
-            
-            if (retryCount < maxRetries) {
-                console.log(`🔄 오프라인 에러 재시도 - ${queryId} (${retryCount + 1}/${maxRetries})`);
-                
-                // 오프라인 상태 표시
-                if (!navigator.onLine) {
-                    handleOfflineMode();
-                    throw error; // 브라우저가 오프라인이면 재시도하지 않고 바로 종료
-                }
-                
-                // Firebase 재연결 시도
-                await attemptFirebaseReconnection();
-                
-                // 재시도 전 지연
-                await new Promise(resolve => setTimeout(resolve, QUERY_DELAY * (retryCount + 2)));
-                
-                // 큐에서 제거 후 재시도
-                queryQueue.delete(queryId);
-                return await safeFirebaseQuery(queryId, queryFunction, retryCount + 1);
-            } else {
-                console.error(`❌ 오프라인 에러 최대 재시도 초과 - ${queryId}`);
-                showNotification('네트워크 연결을 확인해주세요.', 'error');
-                throw error;
-            }
+            showNotification('네트워크 연결을 확인해주세요.', 'error');
         }
         
-        // Target ID already exists 오류 처리
-        if (error.code === 'already-exists' && retryCount < maxRetries) {
-            console.log(`🔄 Target ID 충돌 감지 - ${queryId} 재시도 (${retryCount + 1}/${maxRetries})`);
-            
-            // 더 강력한 리스너 정리
-            try {
-                console.log('🧹 기존 리스너 정리 중...');
-                await cleanupFirebaseListeners();
-                
-                // Firebase 네트워크 재설정으로 Target ID 충돌 해결
-                if (db && retryCount === 0) {
-                    console.log('🔄 Firebase 네트워크 재설정으로 Target ID 충돌 해결 시도');
-                    try {
-                        await db.disableNetwork();
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // 지연 시간 증가
-                        await db.enableNetwork();
-                        console.log('✅ Firebase 네트워크 재설정 완료');
-                    } catch (networkError) {
-                        console.warn('⚠️ 네트워크 재설정 실패:', networkError);
-                    }
-                }
-                
-                // 추가 대기 시간
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-            } catch (resetError) {
-                console.warn('⚠️ 리스너 정리 실패:', resetError);
-            }
-            
-            // 재시도 전 추가 지연 (점진적 증가)
-            await new Promise(resolve => setTimeout(resolve, QUERY_DELAY * (retryCount + 3)));
-            
-            // 큐에서 제거 후 재시도
-            queryQueue.delete(queryId);
-            return await safeFirebaseQuery(queryId, queryFunction, retryCount + 1);
+        // Firebase 내부 오류 처리
+        if (error.message?.includes('INTERNAL ASSERTION FAILED') || error.message?.includes('Unexpected state')) {
+            showNotification('Firebase 연결 오류. 페이지를 새로고침해주세요.', 'error');
         }
         
         throw error;
-        
     } finally {
         // 쿼리 큐에서 제거
         queryQueue.delete(queryId);
     }
 }
 
-// Firebase 리스너 정리 함수
-async function cleanupFirebaseListeners() {
-    console.log('🧹 Firebase 리스너 정리 시작...');
-    
-    try {
-        // 모든 활성 리스너 정리
-        Object.keys(activeListeners).forEach(key => {
-            if (activeListeners[key]) {
-                console.log(`🧹 ${key} 리스너 정리 중...`);
-                try {
-                    activeListeners[key](); // 리스너 해제
-                    activeListeners[key] = null;
-                    console.log(`✅ ${key} 리스너 정리 완료`);
-                } catch (error) {
-                    console.error(`❌ ${key} 리스너 정리 실패:`, error);
-                }
-            }
-        });
-        
-        // 로딩 상태 초기화
-        Object.keys(isLoadingStats).forEach(key => {
-            isLoadingStats[key] = false;
-        });
-        
-        // 쿼리 큐 정리
-        queryQueue.clear();
-        
-        // 전역 변수 정리
-        if (window.editingMaintenanceId) delete window.editingMaintenanceId;
-        if (window.editingEstimateNumber) delete window.editingEstimateNumber;
-        if (window.editingIncomeId) delete window.editingIncomeId;
-        if (window.editingExpenseId) delete window.editingExpenseId;
-        if (window.allTransactionsData) delete window.allTransactionsData;
-        
-        // Firebase 네트워크 연결 재설정 (Target ID 충돌 해결) - 강화된 버전
-        if (db && typeof db.disableNetwork === 'function' && typeof db.enableNetwork === 'function') {
-            console.log('🔄 Firebase 네트워크 연결 재설정 중...');
-            
-            try {
-                // 더 긴 지연 시간과 오류 처리
-                await db.disableNetwork();
-                await new Promise(resolve => setTimeout(resolve, 2000)); // 지연 시간 증가
-                await db.enableNetwork();
-                console.log('✅ Firebase 네트워크 연결 재설정 완료');
-            } catch (networkError) {
-                console.warn('⚠️ Firebase 네트워크 재설정 실패 (무시됨):', networkError);
-                // 오류가 발생해도 앱이 계속 작동하도록 함
-            }
-        } else {
-            console.log('⚠️ Firebase 네트워크 재설정 건너뜀 (함수 없음)');
+// Firebase 리스너 정리 함수 (기본 버전)
+function cleanupFirebaseListeners() {
+    Object.keys(activeListeners).forEach(key => {
+        if (activeListeners[key]) {
+            activeListeners[key]();
+            activeListeners[key] = null;
         }
-        
-        console.log('✅ 모든 Firebase 리스너 정리 완료');
-        
-    } catch (error) {
-        console.error('❌ Firebase 리스너 정리 중 오류:', error);
-    }
+    });
 }
 
 // 페이지 언로드 시 리스너 정리
@@ -1840,14 +1633,13 @@ window.addEventListener('beforeunload', () => {
     cleanupFirebaseListeners();
 });
 
-// 페이지 로드 시 Firebase 상태 초기화 및 자동 로그인 확인
+// 페이지 로드 시 초기화 (한 번만 실행)
+let pageLoaded = false;
 window.addEventListener('load', () => {
-    console.log('🔄 페이지 로드 시 Firebase 상태 초기화...');
+    if (pageLoaded) return;
+    pageLoaded = true;
     
-    // 짧은 지연 후 리스너 정리 (이전 세션의 잔여 리스너 제거)
-    setTimeout(async () => {
-        await cleanupFirebaseListeners();
-    }, 1000);
+    console.log('🔄 페이지 로드 시 초기화...');
     
     // 자동 로그인 상태 확인 (새로고침 시에도 로그인 유지)
     setTimeout(() => {
@@ -1857,32 +1649,24 @@ window.addEventListener('load', () => {
             window.hasShownWelcomeMessage = true;
             handleAuthStateChange(firebase.auth().currentUser);
         }
-    }, 1500);
+    }, 1000); // 1초 지연
 });
 
-// 페이지 포커스 시 Firebase 연결 상태 확인
+// 페이지 포커스 시 간단한 상태 확인
+let focusTimeout;
 window.addEventListener('focus', () => {
-    if (db && currentUser) {
-        console.log('🔄 페이지 포커스 시 Firebase 연결 상태 확인...');
-        db.enableNetwork().catch(error => {
-            console.warn('⚠️ Firebase 네트워크 활성화 실패:', error);
-        });
+    if (focusTimeout) {
+        clearTimeout(focusTimeout);
     }
-});
-
-// 페이지 포커스 시 Target ID 충돌 해결 (안전한 버전)
-window.addEventListener('focus', () => {
-    console.log('🔍 페이지 포커스 감지 - Target ID 충돌 체크');
-    // 더 긴 지연 후 리스너 정리 (다른 탭에서 돌아온 경우)
-    setTimeout(async () => {
+    
+    focusTimeout = setTimeout(() => {
         if (db && currentUser) {
-            try {
-                await cleanupFirebaseListeners();
-            } catch (error) {
-                console.warn('⚠️ 포커스 시 리스너 정리 실패 (무시됨):', error);
-            }
+            // 간단한 네트워크 활성화만
+            db.enableNetwork().catch(error => {
+                console.warn('⚠️ Firebase 네트워크 활성화 실패:', error);
+            });
         }
-    }, 500); // 지연 시간 증가
+    }, 1000);
 });
 
 // 네비게이션 시 리스너 정리
@@ -2405,18 +2189,26 @@ async function loadDashboardData() {
         // 1단계: 캐시된 데이터 먼저 표시 (즉시 반응)
         await loadCachedDataFirst();
         
-        // 2단계: Firebase 네트워크 연결 확인 (백그라운드)
-        await db.enableNetwork();
+        // 2단계: Firebase 네트워크 연결 안전하게 확인
+        try {
+            await db.enableNetwork();
+            console.log('✅ Firebase 네트워크 연결 확인됨');
+        } catch (networkError) {
+            console.warn('⚠️ Firebase 네트워크 연결 실패, 계속 진행:', networkError);
+            // 네트워크 연결 실패해도 계속 진행
+        }
         
-        // 3단계: 최신 데이터 로드 (병렬 처리)
-        await Promise.all([
-            updateTodayStats(),
-            updatePendingStats(),
-            updateMonthStats(),
-            updateAverageStats(),
-            loadMaintenanceTimeline()
-        ]);
+        // 3단계: 최신 데이터 로드 (순차 처리로 변경)
+        console.log('🔄 대시보드 데이터 순차 로드 시작...');
         
+        // 순차적으로 로드하여 Firebase 부하 감소
+        await updateTodayStats();
+        await updatePendingStats();
+        await updateMonthStats();
+        await updateAverageStats();
+        await loadMaintenanceTimeline();
+        
+        console.log('✅ 대시보드 데이터 로드 완료');
         showLoadingSpinner(false);
         
     } catch (error) {
@@ -3307,9 +3099,19 @@ function renderListView(maintenances) {
 // =============================================
 
 function initializeModals() {
+    // 중복 초기화 방지
+    if (window.modalsInitialized) {
+        console.log('⚠️ Modals already initialized, skipping...');
+        return;
+    }
+    
     initializeMaintenanceModal();
     initializeSearchAndFilters();
     initializePasswordResetModal();
+    
+    // 초기화 완료 표시
+    window.modalsInitialized = true;
+    console.log('✅ All modals initialized');
 }
 
 function initializePasswordResetModal() {
@@ -3333,6 +3135,12 @@ function initializePasswordResetModal() {
 }
 
 function initializeMaintenanceModal() {
+    // 중복 초기화 방지
+    if (window.maintenanceModalInitialized) {
+        console.log('⚠️ Maintenance modal already initialized, skipping...');
+        return;
+    }
+    
     const fab = document.getElementById('addMaintenanceFab');
     const prevBtn = document.getElementById('prevStep');
     const nextBtn = document.getElementById('nextStep');
@@ -3346,24 +3154,29 @@ function initializeMaintenanceModal() {
         console.log('✅ FAB 이벤트 리스너 등록');
     }
     
-    if (prevBtn) {
+    // 버튼 이벤트 리스너 (중복 방지)
+    if (prevBtn && !prevBtn.hasAttribute('data-listener-added')) {
         prevBtn.addEventListener('click', goToPreviousStep);
+        prevBtn.setAttribute('data-listener-added', 'true');
     }
     
-    if (nextBtn) {
+    if (nextBtn && !nextBtn.hasAttribute('data-listener-added')) {
         nextBtn.addEventListener('click', goToNextStep);
+        nextBtn.setAttribute('data-listener-added', 'true');
     }
     
-    if (form) {
+    if (form && !form.hasAttribute('data-listener-added')) {
         form.addEventListener('submit', submitMaintenanceForm);
+        form.setAttribute('data-listener-added', 'true');
     }
     
-    // Initialize type selector
+    // Initialize type selector (한 번만)
     initializeTypeSelector();
     initializePhotoUpload();
     
-    // 타입 선택 이벤트 초기화
-    initializeTypeSelector();
+    // 초기화 완료 표시
+    window.maintenanceModalInitialized = true;
+    console.log('✅ Maintenance modal initialized');
 }
 
 function openMaintenanceModal() {
@@ -3520,13 +3333,23 @@ function validateCurrentStep() {
 async function submitMaintenanceForm(e) {
     e.preventDefault();
     
+    // 중복 실행 방지
+    if (window.isSubmittingMaintenance) {
+        console.log('⚠️ Maintenance submission already in progress, skipping...');
+        return;
+    }
+    
     if (!validateCurrentStep()) {
         return;
     }
     
     try {
+        // 중복 실행 플래그 설정
+        window.isSubmittingMaintenance = true;
+        
         // Firebase 연결 상태 확인
         if (!checkFirebaseConnection()) {
+            window.isSubmittingMaintenance = false;
             return;
         }
         
@@ -3563,6 +3386,7 @@ async function submitMaintenanceForm(e) {
         console.log('📝 Creating maintenance with status:', formData.status);
         
         // 수정 모드인지 확인
+        console.log('🔍 Debug - window.editingMaintenanceId:', window.editingMaintenanceId);
         if (window.editingMaintenanceId) {
             // 수정 모드
             console.log('📝 Updating existing maintenance:', window.editingMaintenanceId);
@@ -3683,11 +3507,20 @@ async function submitMaintenanceForm(e) {
     } catch (error) {
         console.error('❌ Error submitting maintenance:', error);
         showNotification('정비 이력 등록 실패: ' + error.message, 'error');
+    } finally {
+        // 중복 실행 플래그 해제
+        window.isSubmittingMaintenance = false;
     }
 }
 
 // 타입 선택 초기화 함수 (중복 방지)
 function initializeTypeSelector() {
+    // 중복 초기화 방지
+    if (window.typeSelectorInitialized) {
+        console.log('⚠️ Type selector already initialized, skipping...');
+        return;
+    }
+    
     const typeOptions = document.querySelectorAll('.type-option');
     
     // 중복 이벤트 리스너 방지
@@ -3712,6 +3545,10 @@ function initializeTypeSelector() {
         
         option.setAttribute('data-listener-added', 'true');
     });
+    
+    // 초기화 완료 표시
+    window.typeSelectorInitialized = true;
+    console.log('✅ Type selector initialized');
 }
 
 // 개선된 사진 업로드 초기화 함수
@@ -4051,62 +3888,7 @@ async function getAdminNameByEmail(email) {
     return email;
 }
 
-// 정비카드 생성 함수 비동기로 변경
-async function createMaintenanceCard(maintenance) {
-    const card = document.createElement('div');
-    card.className = 'maintenance-card glass-card';
-    card.onclick = () => showMaintenanceDetail(maintenance);
 
-    // 관리자 이름 가져오기
-    let adminName = maintenance.adminName;
-    if (!adminName && maintenance.adminEmail) {
-        adminName = await getAdminNameByEmail(maintenance.adminEmail);
-    }
-
-    // 상태별 활성화/비활성화 클래스
-    const approvedClass = maintenance.status === 'approved' ? '' : ' badge-inactive';
-    const rejectedClass = maintenance.status === 'rejected' ? '' : ' badge-inactive';
-    const pendingClass = maintenance.status === 'pending' ? '' : ' badge-inactive';
-
-            // 도장(관리자 이름) 노출 조건: 확인/거절 상태일 때만
-    const showAdminSeal = maintenance.status === 'approved' || maintenance.status === 'rejected';
-
-    card.innerHTML = `
-        <div class="maintenance-card-header">
-            <span class="maintenance-type-icon">${getTypeIcon(maintenance.type)}</span>
-            <span class="maintenance-card-title">${maintenance.type || ''}</span>
-            <span class="maintenance-date text-muted mb-1">${maintenance.date || ''}</span>
-            <span class="maintenance-status-badge ${maintenance.status}">${getStatusText(maintenance.status)}</span>
-        </div>
-        <div class="maintenance-card-body">
-            <div class="maintenance-motorcycle-number">
-                <i class="fas fa-motorcycle"></i> 오토바이 번호: ${maintenance.carNumber}
-            </div>
-            ${maintenance.mileage ? `
-                <div class="maintenance-mileage">
-                    <i class="fas fa-tachometer-alt"></i> 키로수: ${maintenance.mileage}km
-                </div>
-            ` : ''}
-            <div class="maintenance-description">${maintenance.description || ''}</div>
-        </div>
-        <div class="maintenance-card-footer">
-            ${showAdminSeal ? `
-                <span class="maintenance-admin">
-                    <i class="fas fa-user-shield"></i> 관리자: ${adminName}
-                </span>
-            ` : ''}
-            ${!isAdmin && maintenance.status === 'pending' ? `
-                <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'approved')">
-                                            <i class="fas fa-check"></i> 확인
-                </button>
-                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); updateMaintenanceStatus('${maintenance.id}', 'rejected')">
-                    <i class="fas fa-times"></i> 거절
-                </button>
-            ` : ''}
-        </div>
-    `;
-    return card;
-}
 
 // 정비 이력 목록을 비동기로 렌더링
 async function loadMaintenanceHistory(search = '') {
@@ -4413,16 +4195,6 @@ function getNotificationIcon(type) {
         case 'warning': return 'exclamation-triangle';
         default: return 'info-circle';
     }
-}
-
-function showScreen(screenId) {
-    const screens = document.querySelectorAll('.screen');
-    screens.forEach(screen => {
-        screen.classList.remove('active');
-        if (screen.id === screenId) {
-            screen.classList.add('active');
-        }
-    });
 }
 
 function updateUI() {
@@ -4987,112 +4759,147 @@ function getImageOrientation(arrayBuffer) {
     return 1; // Default orientation
 }
 
-// 개선된 사진 업로드 함수 - 최대 10장까지
+// 개선된 사진 업로드 함수 - 배치 처리로 성능 향상
 async function uploadMaintenancePhotos(maintenanceId) {
-    const photos = [];
-    console.log('📸 Uploading photos for maintenance:', maintenanceId);
-    console.log('📸 Photos to upload:', uploadedPhotos);
-    console.log('📸 uploadedPhotos keys:', Object.keys(uploadedPhotos));
+    console.log('📸 Starting batch photo upload for maintenance:', maintenanceId);
+    console.log('📸 Photos to upload:', Object.keys(uploadedPhotos).filter(key => uploadedPhotos[key]));
     
-    // 업로드된 사진들을 순서대로 처리
+    // 업로드할 사진들을 미리 검증하고 준비
+    const photosToUpload = [];
     const uploadedPhotoKeys = Object.keys(uploadedPhotos).filter(key => uploadedPhotos[key]);
     
     for (const photoKey of uploadedPhotoKeys) {
         const base64Data = uploadedPhotos[photoKey];
-        console.log(`📸 Checking ${photoKey} photo:`, !!base64Data, base64Data ? 'length: ' + base64Data.length : 'no data');
         
-        // 더 엄격한 검증: 실제 이미지 데이터가 있는지 확인
+        // 사진 데이터 검증
         const isValidPhotoData = base64Data && 
                                 base64Data.trim() && 
                                 base64Data.includes('data:image') && 
                                 base64Data.length > 100;
         
         if (isValidPhotoData) {
-            try {
-                console.log(`📸 Starting upload for ${photoKey} photo...`);
-                
-                // Base64 데이터 검증
-                if (!base64Data.includes('data:image')) {
-                    console.error(`❌ Invalid base64 format for ${photoKey}:`, base64Data.substring(0, 50));
-                    showNotification(`${photoKey} 사진 형식이 올바르지 않습니다.`, 'error');
-                    continue;
-                }
-                
-                // Base64 데이터에서 data:image/... 부분 제거
-                const base64Image = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-                
-                if (!base64Image || base64Image.length < 100) {
-                    console.error(`❌ Invalid base64 content for ${photoKey}:`, base64Image ? base64Image.length : 'empty');
-                    showNotification(`${photoKey} 사진 데이터가 손상되었습니다.`, 'error');
-                    continue;
-                }
-                
-                console.log(`📸 Base64 processed for ${photoKey}, length: ${base64Image.length}`);
-                
-                // ImgBB API 호출
-                const formData = new FormData();
-                formData.append('key', IMGBB_API_KEY);
-                formData.append('image', base64Image);
-                formData.append('name', `maintenance_${maintenanceId}_${photoKey}_${Date.now()}`);
-                
-                console.log(`📸 Calling ImgBB API for ${photoKey}...`);
-                const response = await fetch('https://api.imgbb.com/1/upload', {
-                    method: 'POST',
-                    body: formData
+            // Base64 데이터에서 data:image/... 부분 제거
+            const base64Image = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+            
+            if (base64Image && base64Image.length >= 100) {
+                photosToUpload.push({
+                    key: photoKey,
+                    base64Data: base64Image,
+                    timestamp: Date.now()
                 });
-                
-                console.log(`📸 ImgBB response status for ${photoKey}:`, response.status, response.statusText);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const result = await response.json();
-                console.log(`📸 ImgBB response for ${photoKey}:`, result.success ? 'SUCCESS' : 'FAILED');
-                
-                if (result.error) {
-                    console.error(`❌ ImgBB error for ${photoKey}:`, result.error);
-                }
-                
-                if (result.success) {
-                    const photoData = {
-                        type: photoKey,
-                        url: result.data.url,
-                        thumbnailUrl: result.data.thumb ? result.data.thumb.url : result.data.url,
-                        deleteUrl: result.data.delete_url, // 🗑️ 삭제 URL 저장
-                        imgbbId: result.data.id, // 📸 imgbb ID 저장
-                        createdAt: new Date().toISOString(),
-                        filename: `${photoKey}_${Date.now()}.jpg`
-                    };
-                    
-                    photos.push(photoData);
-                    console.log(`✅ ${photoKey} photo uploaded successfully:`, result.data.url);
-                    console.log('🗑️ Delete URL saved:', result.data.delete_url);
-                    showNotification(`${photoKey} 사진 업로드 성공!`, 'success');
-                } else {
-                    console.error(`❌ ImgBB upload failed for ${photoKey}:`, result);
-                    showNotification(`${photoKey} 사진 업로드 실패: ${result.error?.message || '알 수 없는 오류'}`, 'error');
-                }
-            } catch (err) {
-                console.error(`❌ Error uploading ${photoKey} photo:`, err);
-                showNotification(`${photoKey} 사진 업로드 실패: ${err.message}`, 'error');
+            } else {
+                console.error(`❌ Invalid base64 content for ${photoKey}`);
+                showNotification(`${photoKey} 사진 데이터가 손상되었습니다.`, 'error');
             }
-        } else {
-            console.log(`📸 No ${photoKey} photo to upload`);
         }
     }
     
-    console.log('📸 Final uploaded photos count:', photos.length);
-    console.log('📸 Final uploaded photos:', photos.map(p => ({ type: p.type, url: p.url })));
-    
-    if (photos.length === 0) {
-        console.warn('⚠️ No photos were successfully uploaded');
-        showNotification('사진 업로드에 실패했습니다. 다시 시도해주세요.', 'warning');
-    } else {
-        showNotification(`${photos.length}장의 사진이 성공적으로 업로드되었습니다!`, 'success');
+    if (photosToUpload.length === 0) {
+        console.log('📸 No valid photos to upload');
+        return [];
     }
     
-    return photos;
+    console.log(`📸 Preparing to upload ${photosToUpload.length} photos in batch...`);
+    showNotification(`${photosToUpload.length}장의 사진을 업로드하는 중...`, 'info');
+    
+    // 배치 업로드 실행 (병렬 처리 + 재시도 로직)
+    const uploadWithRetry = async (photoData, retryCount = 0) => {
+        const maxRetries = 2;
+        
+        try {
+            const { key, base64Data, timestamp } = photoData;
+            
+            // ImgBB API 호출
+            const formData = new FormData();
+            formData.append('key', IMGBB_API_KEY);
+            formData.append('image', base64Data);
+            formData.append('name', `maintenance_${maintenanceId}_${key}_${timestamp}`);
+            
+            console.log(`📸 Uploading ${key} photo... (attempt ${retryCount + 1})`);
+            const response = await fetch('https://api.imgbb.com/1/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                const photoInfo = {
+                    type: key,
+                    url: result.data.url,
+                    thumbnailUrl: result.data.thumb ? result.data.thumb.url : result.data.url,
+                    deleteUrl: result.data.delete_url,
+                    imgbbId: result.data.id,
+                    createdAt: new Date().toISOString(),
+                    filename: `${key}_${timestamp}.jpg`
+                };
+                
+                console.log(`✅ ${key} photo uploaded successfully`);
+                return { success: true, data: photoInfo };
+            } else {
+                throw new Error(result.error?.message || '알 수 없는 오류');
+            }
+        } catch (err) {
+            console.error(`❌ Error uploading ${photoData.key} photo (attempt ${retryCount + 1}):`, err);
+            
+            // 재시도 로직
+            if (retryCount < maxRetries) {
+                console.log(`🔄 Retrying ${photoData.key} photo upload... (${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // 지수 백오프
+                return uploadWithRetry(photoData, retryCount + 1);
+            }
+            
+            return { success: false, error: err.message, key: photoData.key };
+        }
+    };
+    
+    // 진행률 추적을 위한 변수
+    let completedUploads = 0;
+    const totalUploads = photosToUpload.length;
+    
+    // 배치 업로드 실행 (병렬 처리, 최대 3개 동시)
+    const batchSize = 3;
+    const results = [];
+    
+    for (let i = 0; i < photosToUpload.length; i += batchSize) {
+        const batch = photosToUpload.slice(i, i + batchSize);
+        const batchPromises = batch.map(uploadWithRetry);
+        
+        const batchResults = await Promise.all(batchPromises);
+        results.push(...batchResults);
+        
+        completedUploads += batch.length;
+        const progress = Math.round((completedUploads / totalUploads) * 100);
+        console.log(`📸 Upload progress: ${progress}% (${completedUploads}/${totalUploads})`);
+        
+        // 진행률 알림 (25%, 50%, 75%, 100%)
+        if (progress === 25 || progress === 50 || progress === 75 || progress === 100) {
+            showNotification(`사진 업로드 진행률: ${progress}%`, 'info');
+        }
+    }
+    
+    // 결과 분석
+    const successfulUploads = results.filter(r => r.success).map(r => r.data);
+    const failedUploads = results.filter(r => !r.success);
+    
+    console.log(`📸 Batch upload completed: ${successfulUploads.length} success, ${failedUploads.length} failed`);
+    
+    // 실패한 업로드가 있으면 알림
+    if (failedUploads.length > 0) {
+        const failedKeys = failedUploads.map(f => f.key).join(', ');
+        showNotification(`${failedKeys} 사진 업로드에 실패했습니다.`, 'error');
+    }
+    
+    // 성공한 업로드 알림
+    if (successfulUploads.length > 0) {
+        showNotification(`${successfulUploads.length}장의 사진이 성공적으로 업로드되었습니다!`, 'success');
+    }
+    
+    return successfulUploads;
 }
 
 // 파일을 Base64로 변환하는 함수
@@ -5858,6 +5665,12 @@ async function schedulePhotoCleanup() {
     try {
         console.log('🧹 시작: 30일 이상 된 사진 정리 체크');
         
+        // Firebase 상태 확인
+        if (!db || !currentUser) {
+            console.log('⚠️ Firebase 연결 또는 사용자 정보 없음 - 사진 정리 건너뜀');
+            return;
+        }
+        
         // 30일 전 날짜 계산
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - PHOTO_RETENTION_DAYS);
@@ -5865,17 +5678,21 @@ async function schedulePhotoCleanup() {
         
         console.log(`📅 삭제 기준일: ${cutoffDate.toLocaleDateString('ko-KR')} (${PHOTO_RETENTION_DAYS}일 전)`);
         
-        // 30일 이상 된 정비 이력 찾기
-        const oldMaintenances = await db.collection('maintenance')
-            .where('createdAt', '<', cutoffTimestamp)
-            .get();
+        // 안전한 Firebase 쿼리 실행
+        const result = await safeFirebaseQuery('photoCleanup', async () => {
+            // 30일 이상 된 정비 이력 찾기 (제한 추가)
+            return await db.collection('maintenance')
+                .where('createdAt', '<', cutoffTimestamp)
+                .limit(10) // 처리 개수 제한
+                .get();
+        });
         
-        if (oldMaintenances.empty) {
+        if (!result || result.empty) {
             console.log('✅ 삭제할 오래된 사진이 없습니다.');
             return;
         }
         
-        console.log(`🔍 ${oldMaintenances.size}개의 오래된 정비 이력 발견`);
+        console.log(`🔍 ${result.size}개의 오래된 정비 이력 발견`);
         
         let processedMaintenances = 0;
         let totalMaintenances = 0;
@@ -5883,25 +5700,33 @@ async function schedulePhotoCleanup() {
         let totalPhotosFromImgbb = 0;
         let failedPhotosFromImgbb = 0;
         
-        // 각 정비 이력의 사진들 삭제
-        for (const doc of oldMaintenances.docs) {
-            const maintenanceId = doc.id;
-            const data = doc.data();
-            
-            // 사진이 있는지 확인 (신규/기존 방식 모두 체크)
-            const hasPhotos = (data.photos && data.photos.length > 0) || 
-                             data.beforePhoto || data.duringPhoto || data.afterPhoto;
-            
-            if (hasPhotos) {
-                totalMaintenances++;
-                const result = await deleteMaintenancePhotos(maintenanceId, data);
+        // 각 정비 이력의 사진들 삭제 (안전한 처리)
+        for (const doc of result.docs) {
+            try {
+                const maintenanceId = doc.id;
+                const data = doc.data();
                 
-                if (result.success) {
-                    processedMaintenances++;
-                    totalPhotosFromDB += result.totalPhotos;
-                    totalPhotosFromImgbb += result.deletedFromImgbb;
-                    failedPhotosFromImgbb += result.failedFromImgbb;
+                // 사진이 있는지 확인 (신규/기존 방식 모두 체크)
+                const hasPhotos = (data.photos && data.photos.length > 0) || 
+                                 data.beforePhoto || data.duringPhoto || data.afterPhoto;
+                
+                if (hasPhotos) {
+                    totalMaintenances++;
+                    const deleteResult = await deleteMaintenancePhotos(maintenanceId, data);
+                    
+                    if (deleteResult.success) {
+                        processedMaintenances++;
+                        totalPhotosFromDB += deleteResult.totalPhotos;
+                        totalPhotosFromImgbb += deleteResult.deletedFromImgbb;
+                        failedPhotosFromImgbb += deleteResult.failedFromImgbb;
+                    }
                 }
+                
+                // 처리 간격을 늘려서 Firebase 부하 감소
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+            } catch (error) {
+                console.error(`❌ 정비 ${doc.id} 처리 중 오류:`, error);
             }
         }
         
@@ -7627,13 +7452,10 @@ function showEstimateDetails(estimateData) {
 
 // 🔍 견적서 검색 모달 표시
 function showEstimateSearchModal() {
-    console.log('🔍 견적서 검색 모달 표시');
-    
     const modal = document.getElementById('estimateSearchModal');
     const input = document.getElementById('estimateNumberInput');
     
     if (!modal || !input) {
-        console.error('❌ 견적서 검색 모달 요소를 찾을 수 없음');
         // 백업: 프롬프트 사용
         const estimateNumber = prompt('견적서 번호를 입력하세요 (6자리 숫자):');
         if (estimateNumber && estimateNumber.length === 6 && /^\d+$/.test(estimateNumber)) {
@@ -7694,13 +7516,10 @@ function closeEstimateSearchModal() {
 
 // 📋 견적서 상세 모달 표시
 function showEstimateDetailModal(estimateData) {
-    console.log('📋 견적서 상세 모달 표시:', estimateData);
-    
     const modal = document.getElementById('estimateDetailModal');
     const body = document.getElementById('estimateDetailBody');
     
     if (!modal || !body) {
-        console.error('❌ 견적서 상세 모달 요소를 찾을 수 없음');
         // 백업: alert 사용
         const summary = `
 📋 견적서 No. ${estimateData.estimateNumber}
@@ -13580,75 +13399,89 @@ async function loadAutoCompleteData() {
         
         // 견적서에서 부품명과 가격 데이터 수집
         try {
-            let estimatesQuery = db.collection('estimates');
-            if (isAdmin && currentUser?.email) {
-                estimatesQuery = estimatesQuery.where('createdBy', '==', currentUser.email);
-            }
-            
-            console.log('🔍 견적서 쿼리 실행 중...');
-            const estimatesSnapshot = await estimatesQuery.get();
-            console.log(`📊 견적서 문서 수: ${estimatesSnapshot.size}`);
-            
-            estimatesSnapshot.forEach(doc => {
-                const data = doc.data();
-                console.log('📋 견적서 데이터:', data);
-                
-                // 차량번호, 고객명, 기종 수집
-                if (data.carNumber) {
-                    carNumbers.add(data.carNumber);
-                    console.log(`🚗 차량번호 추가: ${data.carNumber}`);
-                }
-                if (data.customerName) {
-                    customerNames.add(data.customerName);
-                    console.log(`👤 고객명 추가: ${data.customerName}`);
-                }
-                if (data.bikeModel) {
-                    bikeModels.add(data.bikeModel);
-                    console.log(`🏍️ 기종 추가: ${data.bikeModel}`);
+            const estimatesSnapshot = await safeFirebaseQuery('loadAutoCompleteEstimates', async () => {
+                let estimatesQuery = db.collection('estimates');
+                if (isAdmin && currentUser?.email) {
+                    estimatesQuery = estimatesQuery.where('createdBy', '==', currentUser.email);
                 }
                 
-                // 부품명과 가격 수집
-                if (data.items && Array.isArray(data.items)) {
-                    data.items.forEach(item => {
-                        console.log('🔧 견적 항목:', item);
-                        if (item.part) {
-                            parts.add(item.part);
-                            if (item.price && !prices[item.part]) {
-                                prices[item.part] = item.price;
-                                console.log(`💰 견적서에서 가격 추가: ${item.part} = ${item.price}원`);
-                            }
-                        }
-                    });
-                }
+                console.log('🔍 견적서 쿼리 실행 중...');
+                return await estimatesQuery.get();
             });
+            
+            if (!estimatesSnapshot) {
+                console.log('⚠️ Estimates query returned null, skipping...');
+            } else {
+                console.log(`📊 견적서 문서 수: ${estimatesSnapshot.size}`);
+                
+                estimatesSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    console.log('📋 견적서 데이터:', data);
+                    
+                    // 차량번호, 고객명, 기종 수집
+                    if (data.carNumber) {
+                        carNumbers.add(data.carNumber);
+                        console.log(`🚗 차량번호 추가: ${data.carNumber}`);
+                    }
+                    if (data.customerName) {
+                        customerNames.add(data.customerName);
+                        console.log(`👤 고객명 추가: ${data.customerName}`);
+                    }
+                    if (data.bikeModel) {
+                        bikeModels.add(data.bikeModel);
+                        console.log(`🏍️ 기종 추가: ${data.bikeModel}`);
+                    }
+                    
+                    // 부품명과 가격 수집
+                    if (data.items && Array.isArray(data.items)) {
+                        data.items.forEach(item => {
+                            console.log('🔧 견적 항목:', item);
+                            if (item.part) {
+                                parts.add(item.part);
+                                if (item.price && !prices[item.part]) {
+                                    prices[item.part] = item.price;
+                                    console.log(`💰 견적서에서 가격 추가: ${item.part} = ${item.price}원`);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
         } catch (firebaseError) {
             console.warn('⚠️ 견적서 쿼리 실패:', firebaseError);
         }
         
         // 정비 기록에서도 부품명 수집
         try {
-            let maintenanceQuery = db.collection('maintenance');
-            if (isAdmin && currentUser?.email) {
-                maintenanceQuery = maintenanceQuery.where('adminEmail', '==', currentUser.email);
-            }
-            
-            console.log('🔍 정비 기록 쿼리 실행 중...');
-            const maintenanceSnapshot = await maintenanceQuery.get();
-            console.log(`📊 정비 기록 문서 수: ${maintenanceSnapshot.size}`);
-            
-            maintenanceSnapshot.forEach(doc => {
-                const data = doc.data();
-                if (data.parts && Array.isArray(data.parts)) {
-                    data.parts.forEach(part => {
-                        if (part.name) {
-                            parts.add(part.name);
-                            if (part.price && !prices[part.name]) {
-                                prices[part.name] = part.price;
-                            }
-                        }
-                    });
+            const maintenanceSnapshot = await safeFirebaseQuery('loadAutoCompleteMaintenance', async () => {
+                let maintenanceQuery = db.collection('maintenance');
+                if (isAdmin && currentUser?.email) {
+                    maintenanceQuery = maintenanceQuery.where('adminEmail', '==', currentUser.email);
                 }
+                
+                console.log('🔍 정비 기록 쿼리 실행 중...');
+                return await maintenanceQuery.get();
             });
+            
+            if (!maintenanceSnapshot) {
+                console.log('⚠️ Maintenance query returned null, skipping...');
+            } else {
+                console.log(`📊 정비 기록 문서 수: ${maintenanceSnapshot.size}`);
+                
+                maintenanceSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.parts && Array.isArray(data.parts)) {
+                        data.parts.forEach(part => {
+                            if (part.name) {
+                                parts.add(part.name);
+                                if (part.price && !prices[part.name]) {
+                                    prices[part.name] = part.price;
+                                }
+                            }
+                        });
+                    }
+                });
+            }
         } catch (firebaseError) {
             console.warn('⚠️ 정비 기록 쿼리 실패:', firebaseError);
         }
