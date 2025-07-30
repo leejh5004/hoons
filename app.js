@@ -174,6 +174,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize other components after user login
     window.addEventListener('user-authenticated', () => {
+        initializeMobileOptimization();
         initializeNavigation();
         initializeModals();
         initializeEventListeners();
@@ -881,6 +882,37 @@ function toggleTheme() {
     const newTheme = currentTheme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     showNotification(`${newTheme === 'dark' ? '다크' : '라이트'} 모드로 변경되었습니다.`, 'info');
+}
+
+// =============================================
+// Mobile Optimization
+// =============================================
+
+// 모바일 터치 이벤트 최적화
+function initializeMobileOptimization() {
+    // 터치 이벤트 지원 확인
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    console.log('📱 Touch device detected:', isTouchDevice);
+    
+    // 모바일에서 스크롤 성능 개선
+    if (isTouchDevice) {
+        document.body.style.webkitOverflowScrolling = 'touch';
+        
+        // 터치 이벤트 최적화
+        document.addEventListener('touchstart', function() {}, { passive: true });
+        document.addEventListener('touchmove', function() {}, { passive: true });
+        document.addEventListener('touchend', function() {}, { passive: true });
+    }
+    
+    // 모바일 뷰포트 높이 조정 (iOS Safari 대응)
+    function setViewportHeight() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', setViewportHeight);
 }
 
 // =============================================
@@ -3610,14 +3642,24 @@ function initializePhotoUpload() {
         });
     }
     
-    // 파일 선택 이벤트
+    // 파일 선택 이벤트 (모바일 최적화)
     if (photoInput) {
         photoInput.addEventListener('change', handleMultiplePhotoUpload);
+        
+        // 모바일에서 파일 선택 시 카메라 접근 허용
+        photoInput.setAttribute('capture', 'environment');
+        photoInput.setAttribute('accept', 'image/*');
     }
     
-    // 드래그 앤 드롭 이벤트
+    // 드래그 앤 드롭 이벤트 (모바일 터치 지원)
     if (dragDropArea) {
         dragDropArea.addEventListener('click', () => {
+            photoInput.click();
+        });
+        
+        // 모바일 터치 이벤트 추가
+        dragDropArea.addEventListener('touchstart', (e) => {
+            e.preventDefault();
             photoInput.click();
         });
         
