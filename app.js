@@ -3768,9 +3768,10 @@ function initializePhotoUpload() {
     if (photoInput) {
         photoInput.addEventListener('change', handleMultiplePhotoUpload);
         
-        // 모바일에서 파일 선택 시 카메라 접근 허용
-        photoInput.setAttribute('capture', 'environment');
+        // 모바일에서 카메라/갤러리 선택 가능하도록 설정
         photoInput.setAttribute('accept', 'image/*');
+        // capture 속성 제거하여 사용자가 카메라/갤러리 선택 가능하게 함
+        // photoInput.setAttribute('capture', 'environment');
     }
     
     // 드래그 앤 드롭 이벤트 (모바일 터치 지원)
@@ -3837,6 +3838,14 @@ async function handleMultiplePhotoUpload(event) {
     if (files.length === 0) {
         showNotification('이미지 파일을 선택해주세요.', 'warning');
         return;
+    }
+    
+    // 모바일에서 카메라로 촬영한 경우 안내
+    if (files.length === 1 && window.innerWidth <= 768) {
+        const file = files[0];
+        if (file.name.includes('image') || file.name.includes('IMG')) {
+            showNotification('📸 카메라로 촬영된 사진이 선택되었습니다.', 'info');
+        }
     }
     
     // 현재 업로드된 사진 개수 확인
