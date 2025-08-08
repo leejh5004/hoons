@@ -7429,8 +7429,14 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                             <span style="margin: 0 8px; opacity: 0.7;">|</span>
                             <span style="font-size: 11px; opacity: 0.9;">이륜차 정비 서비스</span>
                         </div>
-                        <div style="font-size: 11px; opacity: 0.8;">
+                        <div style="font-size: 11px; opacity: 0.8; margin-bottom: 4px;">
                             견적서 생성일: ${new Date().toLocaleString('ko-KR')}
+                        </div>
+                        <div style="font-size: 10px; opacity: 0.7;">
+                            사업자번호: 368-81-03713
+                        </div>
+                        <div style="font-size: 10px; opacity: 0.7;">
+                            계좌번호: MG새마을금고 9002-2074-4521-6
                         </div>
                     </div>
                     
