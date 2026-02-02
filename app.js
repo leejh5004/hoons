@@ -783,29 +783,29 @@ async function handleAuthStateChange(user) {
                         };
                         
                         isAdmin = true;
-                    } else {
+                } else {
                         // 3) 일반 사용자 계정 자동 생성
-                        const userData = {
-                            name: user.displayName || user.email.split('@')[0], // 이메일 앞부분을 이름으로 사용
-                            email: user.email,
-                            carNumber: '', // 나중에 설정 가능
-                            role: 'user',
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                        };
-                        
-                        await db.collection('users').doc(user.uid).set(userData);
-                        
-                        currentUser = {
-                            uid: user.uid,
-                            email: user.email,
-                            name: userData.name,
-                            carNumber: '',
+                    const userData = {
+                        name: user.displayName || user.email.split('@')[0], // 이메일 앞부분을 이름으로 사용
+                        email: user.email,
+                        carNumber: '', // 나중에 설정 가능
+                        role: 'user',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    
+                    await db.collection('users').doc(user.uid).set(userData);
+                    
+                    currentUser = {
+                        uid: user.uid,
+                        email: user.email,
+                        name: userData.name,
+                        carNumber: '',
                             role: 'user',
                             companyName: null,
                             companyLogoUrl: null
-                        };
-                        
-                        isAdmin = false;
+                    };
+                    
+                    isAdmin = false;
                     }
                 }
                 
@@ -2124,12 +2124,42 @@ async function handleCompanyBrandingSave(e) {
             updates.companyName = companyName;
         }
         
-        // 로고 파일 업로드
+        // 로고 파일 업로드 (ImgBB 사용 - CORS 문제 해결)
         if (file) {
-            const storageRef = storage.ref().child(`companyLogos/${currentUser.uid}_${Date.now()}`);
-            const snapshot = await storageRef.put(file);
-            const downloadURL = await snapshot.ref.getDownloadURL();
-            updates.companyLogoUrl = downloadURL;
+            // 파일을 base64로 변환
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            
+            // base64에서 data:image/... 부분 제거
+            const base64Image = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+            
+            // ImgBB API로 업로드
+            const formData = new FormData();
+            formData.append('key', IMGBB_API_KEY);
+            formData.append('image', base64Image);
+            formData.append('name', `company_logo_${currentUser.uid}_${Date.now()}`);
+            
+            const response = await fetch('https://api.imgbb.com/1/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error(`ImgBB 업로드 실패: HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                updates.companyLogoUrl = result.data.url;
+                console.log('✅ 로고가 ImgBB에 업로드되었습니다:', result.data.url);
+            } else {
+                throw new Error(result.error?.message || 'ImgBB 업로드 실패');
+            }
         }
         
         await db.collection('users').doc(currentUser.uid).update(updates);
@@ -7582,11 +7612,11 @@ function createEstimateHTML(
                         ${companyLogoUrl ? `
                             <img src="${companyLogoUrl}" alt="로고" style="width:100%; height:100%; object-fit:cover;">
                         ` : `
-                            <svg width="30" height="30" viewBox="0 0 100 100" style="fill: white;">
-                                <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.1)" stroke="white" stroke-width="2"/>
+                        <svg width="30" height="30" viewBox="0 0 100 100" style="fill: white;">
+                            <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.1)" stroke="white" stroke-width="2"/>
                                 <text x="50" y="38" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial">EST</text>
-                                <text x="50" y="58" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial">GARAGE</text>
-                            </svg>
+                            <text x="50" y="58" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial">GARAGE</text>
+                        </svg>
                         `}
                     </div>
                     <div>
