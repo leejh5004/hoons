@@ -673,7 +673,9 @@ async function handleAuthStateChange(user) {
                     email: user.email,
                     name: userData.name || (effectiveIsAdmin ? '관리자' : '사용자'),
                     carNumber: userData.carNumber || (effectiveIsAdmin ? 'admin1' : ''),
-                    role: effectiveIsAdmin ? 'admin' : 'user'
+                    role: effectiveIsAdmin ? 'admin' : 'user',
+                    companyName: userData.companyName || null,
+                    companyLogoUrl: userData.companyLogoUrl || null
                 };
                 
                 // 관리자 권한 플래그
@@ -692,6 +694,9 @@ async function handleAuthStateChange(user) {
                 // Switch to dashboard
                 showScreen('dashboardScreen');
                 updateUI();
+                
+                // 관리자라면 업체 브랜드를 UI에 적용
+                applyCompanyBranding();
                 
                 // 자동으로 대시보드 데이터 로드 (새로고침 시에도)
                 setTimeout(() => {
@@ -726,7 +731,9 @@ async function handleAuthStateChange(user) {
                         email: user.email,
                         name: '관리자',
                         carNumber: 'admin1',
-                        role: 'admin'
+                        role: 'admin',
+                        companyName: null,
+                        companyLogoUrl: null
                     };
                     
                     isAdmin = true;
@@ -770,7 +777,9 @@ async function handleAuthStateChange(user) {
                             email: user.email,
                             name: adminData.name,
                             carNumber: 'admin1',
-                            role: 'admin'
+                            role: 'admin',
+                            companyName: adminData.companyName || null,
+                            companyLogoUrl: adminData.companyLogoUrl || null
                         };
                         
                         isAdmin = true;
@@ -791,7 +800,9 @@ async function handleAuthStateChange(user) {
                             email: user.email,
                             name: userData.name,
                             carNumber: '',
-                            role: 'user'
+                            role: 'user',
+                            companyName: null,
+                            companyLogoUrl: null
                         };
                         
                         isAdmin = false;
@@ -802,6 +813,9 @@ async function handleAuthStateChange(user) {
                 showScreen('dashboardScreen');
                 updateUI();
                 loadDashboardData();
+                
+                // 새로 생성된 사용자/관리자에 대해 브랜드 적용 시도
+                applyCompanyBranding();
                 
 
                 
@@ -1076,6 +1090,11 @@ function showProfileOptions() {
         });
     } else {
         // 관리자 전용 메뉴
+        options.unshift({
+            text: '업체 정보 / 로고 설정',
+            action: () => showCompanyBrandingModal(),
+            icon: 'fas fa-store'
+        });
         options.unshift({ 
             text: '오래된 사진 정리', 
             action: () => manualPhotoCleanup(), 
@@ -1999,6 +2018,173 @@ function cleanupFirebaseListeners() {
         }
     });
 }
+
+// 🏬 업체 정보 / 로고 설정 모달 (관리자 전용)
+function showCompanyBrandingModal() {
+    // 🔒 로그인 및 권한 체크
+    if (!currentUser || !isAdmin) {
+        showNotification('업체 정보 설정은 관리자만 가능합니다.', 'error');
+        return;
+    }
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('companyBrandingModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const currentCompanyName = currentUser.companyName || '';
+    const modalHTML = `
+        <div id="companyBrandingModal" class="modal-overlay active">
+            <div class="modal-container" style="max-width: 420px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <i class="fas fa-store"></i>
+                        업체 정보 / 로고 설정
+                    </h2>
+                    <button class="modal-close" onclick="closeCompanyBrandingModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <form id="companyBrandingForm" class="simple-form">
+                        <div class="input-group">
+                            <i class="fas fa-signature input-icon"></i>
+                            <input type="text" id="companyNameInput" placeholder="업체명 (예: 훈이바이크)" value="${currentCompanyName}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label style="display:block; margin-bottom:6px; font-size:13px; color:#4b5563;">
+                                <i class="fas fa-image"></i> 로고 이미지 (정사각형 권장)
+                            </label>
+                            <input type="file" id="companyLogoInput" accept="image/*">
+                            <small style="display:block; margin-top:6px; font-size:11px; color:#6b7280;">
+                                선택하면 Firebase에 업로드되며, 메인 상단 / 로그인 화면 / 견적서 헤더에 사용됩니다.
+                            </small>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeCompanyBrandingModal()">
+                        <i class="fas fa-times"></i>
+                        취소
+                    </button>
+                    <button class="btn btn-primary" onclick="handleCompanyBrandingSave(event)">
+                        <i class="fas fa-save"></i>
+                        저장
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function closeCompanyBrandingModal() {
+    const modal = document.getElementById('companyBrandingModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 업체 정보 저장 + 로고 업로드
+async function handleCompanyBrandingSave(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    if (!currentUser || !isAdmin) {
+        showNotification('업체 정보 설정은 관리자만 가능합니다.', 'error');
+        return;
+    }
+    
+    const nameInput = document.getElementById('companyNameInput');
+    const fileInput = document.getElementById('companyLogoInput');
+    
+    const companyName = nameInput ? nameInput.value.trim() : '';
+    const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+    
+    if (!companyName && !file) {
+        showNotification('업체명 또는 로고 중 하나 이상은 입력/선택해주세요.', 'warning');
+        return;
+    }
+    
+    try {
+        showNotification('업체 정보를 저장하는 중...', 'info');
+        
+        const updates = {
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        if (companyName) {
+            updates.companyName = companyName;
+        }
+        
+        // 로고 파일 업로드
+        if (file) {
+            const storageRef = storage.ref().child(`companyLogos/${currentUser.uid}_${Date.now()}`);
+            const snapshot = await storageRef.put(file);
+            const downloadURL = await snapshot.ref.getDownloadURL();
+            updates.companyLogoUrl = downloadURL;
+        }
+        
+        await db.collection('users').doc(currentUser.uid).update(updates);
+        
+        // 현재 세션 정보 업데이트
+        currentUser.companyName = updates.companyName || currentUser.companyName;
+        if (updates.companyLogoUrl) {
+            currentUser.companyLogoUrl = updates.companyLogoUrl;
+        }
+        
+        // UI에 즉시 반영
+        applyCompanyBranding();
+        
+        showNotification('업체 정보가 저장되었습니다.', 'success');
+        closeCompanyBrandingModal();
+    } catch (error) {
+        console.error('❌ Error saving company branding:', error);
+        showNotification('업체 정보 저장 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+// 현재 사용자 기준으로 헤더 / 로그인 화면에 업체 브랜드 적용
+function applyCompanyBranding() {
+    if (!currentUser || !isAdmin) {
+        return;
+    }
+    
+    const companyName = currentUser.companyName || 'TWOHOONS';
+    const logoUrl = currentUser.companyLogoUrl || null;
+    
+    // 상단 헤더
+    const headerLogo = document.querySelector('.header-logo');
+    const headerTitle = document.querySelector('.header-title');
+    if (headerTitle) {
+        headerTitle.textContent = companyName;
+    }
+    if (headerLogo && logoUrl) {
+        headerLogo.src = logoUrl;
+    }
+    
+    // 로그인 화면
+    const authLogo = document.querySelector('.auth-logo');
+    const authTitle = document.querySelector('.auth-title');
+    if (authTitle) {
+        authTitle.textContent = companyName;
+    }
+    if (authLogo && logoUrl) {
+        authLogo.src = logoUrl;
+    }
+}
+
+// 전역에서 접근 가능하도록 등록
+window.showCompanyBrandingModal = showCompanyBrandingModal;
+window.closeCompanyBrandingModal = closeCompanyBrandingModal;
+window.handleCompanyBrandingSave = handleCompanyBrandingSave;
 
 // 페이지 언로드 시 리스너 정리
 window.addEventListener('beforeunload', () => {
@@ -7247,8 +7433,25 @@ async function generateEstimatePDF() {
         // 견적서 번호 생성
         const estimateNumber = Date.now().toString().slice(-6);
         
-        // 🎨 HTML 견적서 템플릿 생성
-        const estimateHTML = createEstimateHTML(customerName, carNumber, title, items, supplyAmount, notes, bikeModel, bikeYear, mileage, currentManagerName, estimateNumber);
+        // 🎨 HTML 견적서 템플릿 생성 (업체명/로고 포함)
+        const companyName = (currentUser && currentUser.companyName) ? currentUser.companyName : 'TWOHOONS';
+        const companyLogoUrl = currentUser && currentUser.companyLogoUrl ? currentUser.companyLogoUrl : null;
+        
+        const estimateHTML = createEstimateHTML(
+            customerName,
+            carNumber,
+            title,
+            items,
+            supplyAmount,
+            notes,
+            bikeModel,
+            bikeYear,
+            mileage,
+            currentManagerName,
+            estimateNumber,
+            companyName,
+            companyLogoUrl
+        );
         
         // 📁 견적서 데이터 Firebase에 저장
         console.log('💾 견적서 저장 시도:', estimateNumber);
@@ -7322,7 +7525,21 @@ function getCurrentManagerSignature() {
 
 
 // 🎨 HTML 견적서 템플릿 생성
-function createEstimateHTML(customerName, carNumber, title, items, totalAmount, notes, bikeModel = '', bikeYear = '', mileage = '', managerName = '정비사', estimateNumber = '') {
+function createEstimateHTML(
+    customerName,
+    carNumber,
+    title,
+    items,
+    totalAmount,
+    notes,
+    bikeModel = '',
+    bikeYear = '',
+    mileage = '',
+    managerName = '정비사',
+    estimateNumber = '',
+    companyName = 'TWOHOONS',
+    companyLogoUrl = null
+) {
     const currentDate = new Date().toLocaleDateString('ko-KR');
     
     return `
@@ -7362,15 +7579,19 @@ function createEstimateHTML(customerName, carNumber, title, items, totalAmount, 
                         overflow: hidden;
                         border: 2px solid rgba(255,255,255,0.3);
                     ">
-                        <svg width="30" height="30" viewBox="0 0 100 100" style="fill: white;">
-                            <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.1)" stroke="white" stroke-width="2"/>
-                            <text x="50" y="38" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">TW</text>
-                            <text x="50" y="58" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial">GARAGE</text>
-                        </svg>
+                        ${companyLogoUrl ? `
+                            <img src="${companyLogoUrl}" alt="로고" style="width:100%; height:100%; object-fit:cover;">
+                        ` : `
+                            <svg width="30" height="30" viewBox="0 0 100 100" style="fill: white;">
+                                <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.1)" stroke="white" stroke-width="2"/>
+                                <text x="50" y="38" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial">EST</text>
+                                <text x="50" y="58" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial">GARAGE</text>
+                            </svg>
+                        `}
                     </div>
                     <div>
-                        <h1 style="margin: 0; font-size: 28px; font-weight: bold;">투훈스 게러지</h1>
-                        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">서비스업 · 이륜차정비</p>
+                        <h1 style="margin: 0; font-size: 24px; font-weight: bold;">${companyName}</h1>
+                        <p style="margin: 5px 0 0 0; font-size: 13px; opacity: 0.9;">서비스업 · 이륜차정비</p>
                     </div>
                 </div>
                 <div style="text-align: right;">
@@ -8729,7 +8950,9 @@ async function generateEstimatePDFBlob(estimateData) {
             estimateData.bikeYear || '',
             estimateData.mileage || '',
             estimateData.managerName || '정비사',
-            estimateData.estimateNumber
+            estimateData.estimateNumber,
+            estimateData.companyName || 'TWOHOONS',
+            estimateData.companyLogoUrl || null
         );
         
         // 기존 generatePDFFromHTML 로직을 재사용하여 Blob 반환 (공급가액 기준)
