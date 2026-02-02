@@ -1293,9 +1293,25 @@ async function handleCreateAdmin(e) {
     }
     
     try {
-        // 이미 ADMIN_EMAILS에 있으면 안내만
-        if (ADMIN_EMAILS.includes(email)) {
-            showNotification('이미 관리자 목록에 있는 이메일입니다.', 'info');
+        // Firestore에서 이미 같은 이메일로 예약된 관리자 있는지 확인
+        const pendingSnap = await db.collection('pendingAdmins')
+            .where('email', '==', email)
+            .limit(1)
+            .get();
+        if (!pendingSnap.empty) {
+            showNotification('이미 등록 대기 중인 관리자 이메일입니다.', 'info');
+            closeAddAdminModal();
+            return;
+        }
+        
+        // Firestore users 컬렉션에 이미 관리자 계정이 있는지 확인
+        const userSnap = await db.collection('users')
+            .where('email', '==', email)
+            .where('role', '==', 'admin')
+            .limit(1)
+            .get();
+        if (!userSnap.empty) {
+            showNotification('이미 관리자 계정으로 등록된 이메일입니다.', 'info');
             closeAddAdminModal();
             return;
         }
