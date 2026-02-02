@@ -2137,7 +2137,7 @@ async function handleCompanyBrandingSave(e) {
             // base64에서 data:image/... 부분 제거
             const base64Image = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
             
-            // ImgBB API로 업로드
+            // ImgBB API로 업로드 (로고는 영구 보관 - expiration 없음)
             const formData = new FormData();
             formData.append('key', IMGBB_API_KEY);
             formData.append('image', base64Image);
@@ -2481,8 +2481,14 @@ window.fixPDFLibraryIssue = async function() {
 };
 
 window.showPDFLibraryHelp = function() {
+    // 기존 모달 제거
+    const existingModal = document.querySelector('.modal-overlay');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
     const helpModal = document.createElement('div');
-    helpModal.className = 'modal-overlay';
+    helpModal.className = 'modal-overlay active';
     helpModal.innerHTML = `
         <div class="modal-container" style="max-width: 500px;">
             <div class="modal-header">
@@ -5550,11 +5556,13 @@ async function uploadMaintenancePhotos(maintenanceId) {
         try {
             const { key, base64Data, timestamp } = photoData;
             
-            // ImgBB API 호출
+            // ImgBB API 호출 (30일 후 자동 삭제 설정)
+            const expirationSeconds = PHOTO_RETENTION_DAYS * 24 * 60 * 60; // 30일을 초로 변환
             const formData = new FormData();
             formData.append('key', IMGBB_API_KEY);
             formData.append('image', base64Data);
             formData.append('name', `maintenance_${maintenanceId}_${key}_${timestamp}`);
+            formData.append('expiration', expirationSeconds.toString());
             
             console.log(`📸 Uploading ${key} photo... (attempt ${retryCount + 1})`);
             const response = await fetch('https://api.imgbb.com/1/upload', {
@@ -11257,25 +11265,44 @@ async function showTaxReport() {
         
         console.log('✅ 모달 요소 찾음');
         
-        // 로딩 시작
-        showNotification('부가세 신고 화면을 준비 중입니다...', 'info');
-        
+        // 모달 먼저 열기 (에러가 나도 모달은 열리도록)
         modal.classList.add('active');
         console.log('✅ 모달 활성화됨');
         
-        // 초기 탭 설정
-        showVatTab('report');
-        console.log('✅ 탭 설정 완료');
+        // 로딩 시작
+        showNotification('부가세 신고 화면을 준비 중입니다...', 'info');
         
-        // 부가세 신고 기간 설정
-        setupVatReportPeriod();
-        console.log('✅ 기간 설정 완료');
-        
-        // 초기 부가세 리포트 생성
-        await generateVatReport();
-        console.log('✅ 리포트 생성 완료');
-        
-        showNotification('부가세 신고서가 준비되었습니다.', 'success');
+        // 나머지 작업은 try-catch로 감싸서 에러가 나도 모달은 열려있도록
+        try {
+            // 초기 탭 설정
+            if (typeof showVatTab === 'function') {
+                showVatTab('report');
+                console.log('✅ 탭 설정 완료');
+            } else {
+                console.warn('⚠️ showVatTab 함수를 찾을 수 없습니다.');
+            }
+            
+            // 부가세 신고 기간 설정
+            if (typeof setupVatReportPeriod === 'function') {
+                setupVatReportPeriod();
+                console.log('✅ 기간 설정 완료');
+            } else {
+                console.warn('⚠️ setupVatReportPeriod 함수를 찾을 수 없습니다.');
+            }
+            
+            // 초기 부가세 리포트 생성 (비동기이므로 에러가 나도 모달은 열려있음)
+            if (typeof generateVatReport === 'function') {
+                generateVatReport().catch(err => {
+                    console.error('❌ 리포트 생성 중 오류:', err);
+                    showNotification('부가세 신고서 생성 중 오류가 발생했습니다. 다시 시도해주세요.', 'error');
+                });
+            } else {
+                console.warn('⚠️ generateVatReport 함수를 찾을 수 없습니다.');
+            }
+        } catch (setupError) {
+            console.error('❌ 모달 설정 중 오류:', setupError);
+            // 모달은 이미 열려있으므로 에러만 로그
+        }
         
     } catch (error) {
         console.error('❌ 세무 리포트 모달 열기 실패:', error);
@@ -11720,6 +11747,11 @@ function loadVatSchedule() {
         checklistContainer.innerHTML = createVatChecklist();
     }
 }
+
+// 전역 함수로 등록
+window.runVatSimulation = runVatSimulation;
+window.setupVatSimulation = setupVatSimulation;
+window.loadVatSchedule = loadVatSchedule;
 
 // 부가세 신고 일정 아이템 생성
 function createVatScheduleItems(year) {
@@ -13307,11 +13339,14 @@ async function showTaxReportOptions() {
     console.log('🔍 현재 상태 확인:');
     console.log('  - currentUser:', currentUser);
     console.log('  - isAdmin:', isAdmin);
-    console.log('  - ADMIN_EMAILS:', ADMIN_EMAILS);
+    console.log('  - MASTER_ADMIN_EMAIL:', MASTER_ADMIN_EMAIL);
     
     if (currentUser && currentUser.email) {
         console.log('  - 현재 사용자 이메일:', currentUser.email);
-        console.log('  - 관리자 이메일 포함 여부:', ADMIN_EMAILS.includes(currentUser.email));
+        const isMasterAdmin = currentUser.email === MASTER_ADMIN_EMAIL;
+        const isAdminRole = currentUser.role === 'admin';
+        console.log('  - 마스터 관리자 여부:', isMasterAdmin);
+        console.log('  - 관리자 role 여부:', isAdminRole);
     }
     
     // 관리자 권한 확인 및 자동 수정
@@ -13319,8 +13354,8 @@ async function showTaxReportOptions() {
     if (!hasAdminAccess) {
         console.log('❌ 관리자 권한 없음');
         console.log('🔧 가능한 해결책:');
-        console.log('  1. 관리자 이메일로 로그인하세요:', ADMIN_EMAILS);
-        console.log('  2. 또는 브라우저 콘솔에서 setupAdminUser() 실행');
+        console.log('  1. 관리자 계정으로 로그인하세요');
+        console.log('  2. 또는 브라우저 콘솔에서 verifyAndFixAdminStatus() 실행');
         showNotification('관리자만 접근할 수 있습니다.', 'error');
         return;
     }
@@ -15023,26 +15058,34 @@ function checkAdminStatus() {
     console.log('🔍 관리자 상태 확인:');
     console.log('  - currentUser:', currentUser);
     console.log('  - isAdmin:', isAdmin);
-    console.log('  - ADMIN_EMAILS:', ADMIN_EMAILS);
+    console.log('  - MASTER_ADMIN_EMAIL:', MASTER_ADMIN_EMAIL);
     
     if (currentUser && currentUser.email) {
         console.log('  - 현재 사용자 이메일:', currentUser.email);
-        console.log('  - 관리자 이메일 포함 여부:', ADMIN_EMAILS.includes(currentUser.email));
+        const isMasterAdmin = currentUser.email === MASTER_ADMIN_EMAIL;
+        const isAdminRole = currentUser.role === 'admin';
+        console.log('  - 마스터 관리자 여부:', isMasterAdmin);
+        console.log('  - 관리자 role 여부:', isAdminRole);
         
-        if (!isAdmin && ADMIN_EMAILS.includes(currentUser.email)) {
-            console.log('⚠️ 관리자 이메일이지만 isAdmin이 false입니다. setupAdminUser() 실행을 권장합니다.');
+        if (!isAdmin && (isMasterAdmin || isAdminRole)) {
+            console.log('⚠️ 관리자 권한이지만 isAdmin이 false입니다.');
         }
     } else {
         console.log('❌ 로그인되지 않았습니다.');
     }
     
+    const isMasterAdmin = currentUser && currentUser.email === MASTER_ADMIN_EMAIL;
+    const isAdminRole = currentUser && currentUser.role === 'admin';
+    const hasAdminAccess = isAdmin && currentUser && (isMasterAdmin || isAdminRole);
+    
     return {
         currentUser,
         isAdmin,
-        adminEmails: ADMIN_EMAILS,
+        masterAdminEmail: MASTER_ADMIN_EMAIL,
         isLoggedIn: !!currentUser,
-        isAdminEmail: currentUser ? ADMIN_EMAILS.includes(currentUser.email) : false,
-        canAccessTax: isAdmin && currentUser && ADMIN_EMAILS.includes(currentUser.email)
+        isMasterAdmin: isMasterAdmin,
+        isAdminRole: isAdminRole,
+        canAccessTax: hasAdminAccess
     };
 }
 
@@ -15053,8 +15096,8 @@ function verifyAndFixAdminStatus() {
     const status = checkAdminStatus();
     console.log('📊 상태 확인 결과:', status);
     
-    // 관리자 이메일로 로그인했지만 권한이 없는 경우 수정
-    if (status.isLoggedIn && status.isAdminEmail && !status.isAdmin) {
+    // 관리자 권한이 있지만 isAdmin이 false인 경우 수정
+    if (status.isLoggedIn && (status.isMasterAdmin || status.isAdminRole) && !status.isAdmin) {
         console.log('🔧 관리자 권한 자동 수정 중...');
         isAdmin = true;
         console.log('✅ 관리자 권한이 설정되었습니다.');
@@ -15212,8 +15255,34 @@ function checkPDFLibraryStatus() {
     };
     
     console.log('📊 PDF 라이브러리 상태:', status);
+    
+    // 사용자에게 결과 표시
+    const jsPDFStatus = status.jsPDF ? '✅ 정상' : '❌ 로드 안 됨';
+    const html2canvasStatus = status.html2canvas ? '✅ 정상' : '❌ 로드 안 됨';
+    const jsPDFScript = status.scriptTags.jsPDF ? '✅ 있음' : '❌ 없음';
+    const html2canvasScript = status.scriptTags.html2canvas ? '✅ 있음' : '❌ 없음';
+    
+    const message = `
+📊 PDF 라이브러리 상태 확인 결과:
+
+📄 jsPDF 라이브러리: ${jsPDFStatus}
+📄 jsPDF 스크립트 태그: ${jsPDFScript}
+
+🖼️ html2canvas 라이브러리: ${html2canvasStatus}
+🖼️ html2canvas 스크립트 태그: ${html2canvasScript}
+
+${status.jsPDF && status.html2canvas ? 
+    '✅ 모든 라이브러리가 정상적으로 로드되었습니다!' : 
+    '⚠️ 일부 라이브러리가 로드되지 않았습니다. "자동 해결" 버튼을 눌러주세요.'}
+    `.trim();
+    
+    showNotification(message, status.jsPDF && status.html2canvas ? 'success' : 'warning');
+    
     return status;
 }
+
+// 전역 함수로 등록
+window.checkPDFLibraryStatus = checkPDFLibraryStatus;
 
 // QR코드 라이브러리 로딩 체크 및 대기 함수
 async function waitForQRCodeLibrary(maxWaitTime = 10000) {
