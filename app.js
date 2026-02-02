@@ -101,8 +101,12 @@ function clearCachedData(key = null) {
     }
 }
 
-// 관리자 이메일 목록 (전역 상수) - 이정훈, 황태훈만
-const ADMIN_EMAILS = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com'];
+// 관리자 이메일 목록 (전역 상수) - 마스터 관리자 + 일반 관리자들
+// 첫 번째 이메일은 "마스터 관리자"로, 다른 관리자 생성/삭제 권한을 가집니다.
+const ADMIN_EMAILS = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com', 'hojun121516@naver.com'];
+
+// 마스터 관리자 이메일 (관리자 추가/관리 권한 보유자)
+const MASTER_ADMIN_EMAIL = 'admin@admin.com';
 
 // 자동완성 데이터 전역 변수
 window.autoCompleteData = {
@@ -1022,9 +1026,19 @@ function focusSearchInput() {
 }
 
 function showProfileOptions() {
-    const options = [
-        { text: '로그아웃', action: handleLogout, icon: 'fas fa-sign-out-alt' }
-    ];
+    const options = [];
+    
+    // 마스터 관리자 전용 메뉴 (다른 관리자 생성)
+    if (currentUser && currentUser.email === MASTER_ADMIN_EMAIL) {
+        options.push({
+            text: '새 관리자 추가',
+            action: () => showAddAdminModal(),
+            icon: 'fas fa-user-plus'
+        });
+    }
+    
+    // 관리자 / 일반 사용자 공통 또는 전용 메뉴
+    options.push({ text: '로그아웃', action: handleLogout, icon: 'fas fa-sign-out-alt' });
     
     if (!isAdmin) {
         options.unshift({ 
@@ -1156,6 +1170,130 @@ function showCarNumberModal() {
         }
     }, 100);
 }
+
+// 새 관리자 추가 모달
+function showAddAdminModal() {
+    // 🔒 로그인 및 권한 체크
+    if (!currentUser || currentUser.email !== MASTER_ADMIN_EMAIL) {
+        showNotification('새 관리자 추가는 마스터 관리자만 가능합니다.', 'error');
+        return;
+    }
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('addAdminModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modalHTML = `
+        <div id="addAdminModal" class="modal-overlay active">
+            <div class="modal-container" style="max-width: 420px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <i class="fas fa-user-shield"></i>
+                        새 관리자 추가
+                    </h2>
+                    <button class="modal-close" onclick="closeAddAdminModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <form id="addAdminForm" class="simple-form">
+                        <div class="input-group">
+                            <i class="fas fa-envelope input-icon"></i>
+                            <input type="email" id="newAdminEmail" placeholder="관리자 이메일" required>
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-user input-icon"></i>
+                            <input type="text" id="newAdminName" placeholder="관리자 이름/상호 (선택)">
+                        </div>
+                        <p class="helper-text">
+                            ✅ 이 이메일로 처음 로그인하면 자동으로 <strong>새 관리자 계정</strong>이 생성되고,<br>
+                            다른 관리자 데이터와 완전히 분리된 <strong>별도 업체 공간</strong>에서 시작합니다.
+                        </p>
+                    </form>
+                </div>
+                
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeAddAdminModal()">
+                        <i class="fas fa-times"></i>
+                        취소
+                    </button>
+                    <button class="btn btn-primary" id="createAdminBtn" onclick="handleCreateAdmin(event)">
+                        <i class="fas fa-user-plus"></i>
+                        관리자 추가
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function closeAddAdminModal() {
+    const modal = document.getElementById('addAdminModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 새 관리자 메타데이터 생성 (Firebase Auth 계정은 첫 로그인 시 사용자가 직접 생성)
+async function handleCreateAdmin(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    if (!currentUser || currentUser.email !== MASTER_ADMIN_EMAIL) {
+        showNotification('새 관리자 추가는 마스터 관리자만 가능합니다.', 'error');
+        return;
+    }
+    
+    const emailInput = document.getElementById('newAdminEmail');
+    const nameInput = document.getElementById('newAdminName');
+    
+    if (!emailInput) return;
+    
+    const email = emailInput.value.trim();
+    const name = nameInput ? nameInput.value.trim() : '';
+    
+    if (!email) {
+        showNotification('관리자 이메일을 입력해주세요.', 'error');
+        return;
+    }
+    
+    try {
+        // 이미 ADMIN_EMAILS에 있으면 안내만
+        if (ADMIN_EMAILS.includes(email)) {
+            showNotification('이미 관리자 목록에 있는 이메일입니다.', 'info');
+            closeAddAdminModal();
+            return;
+        }
+        
+        // Firestore users 컬렉션에 "예약된 관리자" 문서 생성
+        // 실제 uid는 첫 로그인 시 createUserWithEmailAndPassword 후 handleAuthStateChange에서 매칭
+        await db.collection('pendingAdmins').add({
+            email,
+            name: name || email.split('@')[0],
+            role: 'admin',
+            createdBy: currentUser.email,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        showNotification('새 관리자 이메일이 등록되었습니다. 해당 이메일로 가입 후 로그인하면 관리자 계정으로 동작합니다.', 'success');
+        closeAddAdminModal();
+    } catch (error) {
+        console.error('❌ Error creating admin metadata:', error);
+        showNotification('새 관리자 등록 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+// 전역에서 접근 가능하도록 등록
+window.showAddAdminModal = showAddAdminModal;
+window.closeAddAdminModal = closeAddAdminModal;
+window.handleCreateAdmin = handleCreateAdmin;
 
 // 오토바이 번호 수정 모달 닫기
 function closeCarNumberModal() {
