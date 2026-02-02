@@ -101,11 +101,8 @@ function clearCachedData(key = null) {
     }
 }
 
-// 관리자 이메일 목록 (전역 상수) - 마스터 관리자 + 일반 관리자들
-// 첫 번째 이메일은 "마스터 관리자"로, 다른 관리자 생성/삭제 권한을 가집니다.
-const ADMIN_EMAILS = ['admin@admin.com', 'admin1@admin.com', 'admin2@admin.com', 'hojun121516@naver.com'];
-
 // 마스터 관리자 이메일 (관리자 추가/관리 권한 보유자)
+// ✅ 이 계정만 코드에 고정, 나머지 관리자들은 모두 Firestore(role/pendingAdmins)로 관리
 const MASTER_ADMIN_EMAIL = 'admin@admin.com';
 
 // 자동완성 데이터 전역 변수
@@ -618,7 +615,7 @@ async function handleAuthStateChange(user) {
                 handleOfflineMode();
                 
                 // 오프라인 모드에서 기본 사용자 정보 설정
-                const isAdminEmail = ADMIN_EMAILS.includes(user.email);
+                const isAdminEmail = user.email === MASTER_ADMIN_EMAIL;
                 currentUser = {
                     uid: user.uid,
                     email: user.email,
@@ -648,7 +645,7 @@ async function handleAuthStateChange(user) {
                 userDoc = await db.collection('users').doc(user.uid).get();
             } catch (error) {
                 // 오프라인 모드로 즉시 전환
-                const isAdminEmail = ADMIN_EMAILS.includes(user.email);
+                const isAdminEmail = user.email === MASTER_ADMIN_EMAIL;
                 currentUser = {
                     uid: user.uid,
                     email: user.email,
@@ -666,38 +663,28 @@ async function handleAuthStateChange(user) {
             if (userDoc && userDoc.exists) {
                 const userData = userDoc.data();
                 
-                // 관리자 이메일 체크
-                const isAdminEmail = ADMIN_EMAILS.includes(user.email);
+                // Firestore role 기반으로 관리자 여부 결정 (이메일은 마스터만 특별 취급)
+                const isAdminRole = userData.role === 'admin';
+                const isAdminEmail = user.email === MASTER_ADMIN_EMAIL;
+                const effectiveIsAdmin = isAdminRole || isAdminEmail;
                 
                 currentUser = {
                     uid: user.uid,
                     email: user.email,
-                    name: userData.name || (isAdminEmail ? '관리자' : '사용자'),
-                    carNumber: userData.carNumber || (isAdminEmail ? 'admin1' : ''),
-                    role: isAdminEmail ? 'admin' : 'user' // 🔒 이메일 기반으로만 role 결정
+                    name: userData.name || (effectiveIsAdmin ? '관리자' : '사용자'),
+                    carNumber: userData.carNumber || (effectiveIsAdmin ? 'admin1' : ''),
+                    role: effectiveIsAdmin ? 'admin' : 'user'
                 };
                 
-                // 관리자 권한 부여 (이메일 기반으로만)
-                isAdmin = isAdminEmail;
+                // 관리자 권한 플래그
+                isAdmin = effectiveIsAdmin;
                 
-                // 🔒 사용자 role 보안 검증 및 수정
-                const correctRole = isAdminEmail ? 'admin' : 'user';
-                if (userData.role !== correctRole) {
-                    console.log(`🔧 Correcting user role from '${userData.role}' to '${correctRole}'`);
-                    await db.collection('users').doc(user.uid).update({
-                        role: correctRole,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    currentUser.role = correctRole;
-                }
-                
-                // 관리자 계정이지만 이름이 없는 경우 자동으로 업데이트
+                // 마스터 관리자 문서인데 이름이 없는 경우 기본값 채우기
                 if (isAdminEmail && !userData.name) {
                     console.log('🔧 Updating admin user data...');
                     await db.collection('users').doc(user.uid).update({
                         name: '관리자',
                         carNumber: userData.carNumber || 'admin1',
-                        role: 'admin',
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 }
@@ -722,11 +709,8 @@ async function handleAuthStateChange(user) {
             } else {
                 console.log('📄 User document not found, creating new user...');
                 
-                // 관리자 이메일 체크
-                const isAdminEmail = ADMIN_EMAILS.includes(user.email);
-                
-                if (isAdminEmail) {
-                    // 관리자 계정 생성
+                // 1) 마스터 관리자 이메일이면 바로 관리자 문서 생성
+                if (user.email === MASTER_ADMIN_EMAIL) {
                     const adminData = {
                         name: '관리자',
                         email: user.email,
@@ -746,28 +730,72 @@ async function handleAuthStateChange(user) {
                     };
                     
                     isAdmin = true;
-                    
                 } else {
-                    // 일반 사용자 계정 자동 생성
-                    const userData = {
-                        name: user.displayName || user.email.split('@')[0], // 이메일 앞부분을 이름으로 사용
-                        email: user.email,
-                        carNumber: '', // 나중에 설정 가능
-                        role: 'user',
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    };
+                    // 2) pendingAdmins에 예약된 관리자 이메일인지 확인
+                    let pendingAdminDoc = null;
+                    try {
+                        const pendingSnap = await db.collection('pendingAdmins')
+                            .where('email', '==', user.email)
+                            .limit(1)
+                            .get();
+                        if (!pendingSnap.empty) {
+                            pendingAdminDoc = pendingSnap.docs[0];
+                        }
+                    } catch (pendingError) {
+                        console.warn('⚠️ Error checking pendingAdmins:', pendingError);
+                    }
                     
-                    await db.collection('users').doc(user.uid).set(userData);
-                    
-                    currentUser = {
-                        uid: user.uid,
-                        email: user.email,
-                        name: userData.name,
-                        carNumber: '',
-                        role: 'user'
-                    };
-                    
-                    isAdmin = false;
+                    if (pendingAdminDoc) {
+                        // 예약된 관리자 → 관리자 계정으로 생성
+                        const pendingData = pendingAdminDoc.data();
+                        const adminData = {
+                            name: pendingData.name || (user.displayName || user.email.split('@')[0]),
+                            email: user.email,
+                            carNumber: 'admin1',
+                            role: 'admin',
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        
+                        await db.collection('users').doc(user.uid).set(adminData);
+                        
+                        // pendingAdmins 문서 정리
+                        try {
+                            await db.collection('pendingAdmins').doc(pendingAdminDoc.id).delete();
+                        } catch (cleanupError) {
+                            console.warn('⚠️ Failed to delete pendingAdmin doc:', cleanupError);
+                        }
+                        
+                        currentUser = {
+                            uid: user.uid,
+                            email: user.email,
+                            name: adminData.name,
+                            carNumber: 'admin1',
+                            role: 'admin'
+                        };
+                        
+                        isAdmin = true;
+                    } else {
+                        // 3) 일반 사용자 계정 자동 생성
+                        const userData = {
+                            name: user.displayName || user.email.split('@')[0], // 이메일 앞부분을 이름으로 사용
+                            email: user.email,
+                            carNumber: '', // 나중에 설정 가능
+                            role: 'user',
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        
+                        await db.collection('users').doc(user.uid).set(userData);
+                        
+                        currentUser = {
+                            uid: user.uid,
+                            email: user.email,
+                            name: userData.name,
+                            carNumber: '',
+                            role: 'user'
+                        };
+                        
+                        isAdmin = false;
+                    }
                 }
                 
                 // 공통 처리: 로그인 완료 후 대시보드 이동
