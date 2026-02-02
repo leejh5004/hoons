@@ -621,7 +621,11 @@ async function handleAuthStateChange(user) {
                     email: user.email,
                     name: isAdminEmail ? '관리자' : '사용자',
                     carNumber: isAdminEmail ? 'admin1' : '',
-                    role: isAdminEmail ? 'admin' : 'user'
+                    role: isAdminEmail ? 'admin' : 'user',
+                    companyName: null,
+                    companyLogoUrl: null,
+                    businessNumber: null,
+                    bankAccount: null
                 };
                 isAdmin = isAdminEmail;
                 
@@ -651,7 +655,11 @@ async function handleAuthStateChange(user) {
                     email: user.email,
                     name: isAdminEmail ? '관리자' : '사용자',
                     carNumber: isAdminEmail ? 'admin1' : '',
-                    role: isAdminEmail ? 'admin' : 'user'
+                    role: isAdminEmail ? 'admin' : 'user',
+                    companyName: null,
+                    companyLogoUrl: null,
+                    businessNumber: null,
+                    bankAccount: null
                 };
                 isAdmin = isAdminEmail;
                 
@@ -675,7 +683,9 @@ async function handleAuthStateChange(user) {
                     carNumber: userData.carNumber || (effectiveIsAdmin ? 'admin1' : ''),
                     role: effectiveIsAdmin ? 'admin' : 'user',
                     companyName: userData.companyName || null,
-                    companyLogoUrl: userData.companyLogoUrl || null
+                    companyLogoUrl: userData.companyLogoUrl || null,
+                    businessNumber: userData.businessNumber || null,
+                    bankAccount: userData.bankAccount || null
                 };
                 
                 // 관리자 권한 플래그
@@ -733,7 +743,9 @@ async function handleAuthStateChange(user) {
                         carNumber: 'admin1',
                         role: 'admin',
                         companyName: null,
-                        companyLogoUrl: null
+                        companyLogoUrl: null,
+                        businessNumber: null,
+                        bankAccount: null
                     };
                     
                     isAdmin = true;
@@ -779,7 +791,9 @@ async function handleAuthStateChange(user) {
                             carNumber: 'admin1',
                             role: 'admin',
                             companyName: adminData.companyName || null,
-                            companyLogoUrl: adminData.companyLogoUrl || null
+                            companyLogoUrl: adminData.companyLogoUrl || null,
+                            businessNumber: adminData.businessNumber || null,
+                            bankAccount: adminData.bankAccount || null
                         };
                         
                         isAdmin = true;
@@ -802,7 +816,9 @@ async function handleAuthStateChange(user) {
                         carNumber: '',
                             role: 'user',
                             companyName: null,
-                            companyLogoUrl: null
+                            companyLogoUrl: null,
+                            businessNumber: null,
+                            bankAccount: null
                     };
                     
                     isAdmin = false;
@@ -2034,6 +2050,8 @@ function showCompanyBrandingModal() {
     }
     
     const currentCompanyName = currentUser.companyName || '';
+    const currentBusinessNumber = currentUser.businessNumber || '';
+    const currentBankAccount = currentUser.bankAccount || '';
     const modalHTML = `
         <div id="companyBrandingModal" class="modal-overlay active">
             <div class="modal-container" style="max-width: 420px;">
@@ -2052,6 +2070,14 @@ function showCompanyBrandingModal() {
                         <div class="input-group">
                             <i class="fas fa-signature input-icon"></i>
                             <input type="text" id="companyNameInput" placeholder="업체명 (예: 훈이바이크)" value="${currentCompanyName}">
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-id-card input-icon"></i>
+                            <input type="text" id="businessNumberInput" placeholder="사업자번호 (예: 368-81-03713)" value="${currentBusinessNumber}">
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-university input-icon"></i>
+                            <input type="text" id="bankAccountInput" placeholder="계좌번호 (예: MG새마을금고 9002-2074-4521-6)" value="${currentBankAccount}">
                         </div>
                         
                         <div class="form-group">
@@ -2103,13 +2129,17 @@ async function handleCompanyBrandingSave(e) {
     }
     
     const nameInput = document.getElementById('companyNameInput');
+    const businessNumberInput = document.getElementById('businessNumberInput');
+    const bankAccountInput = document.getElementById('bankAccountInput');
     const fileInput = document.getElementById('companyLogoInput');
     
     const companyName = nameInput ? nameInput.value.trim() : '';
+    const businessNumber = businessNumberInput ? businessNumberInput.value.trim() : '';
+    const bankAccount = bankAccountInput ? bankAccountInput.value.trim() : '';
     const file = fileInput && fileInput.files ? fileInput.files[0] : null;
     
-    if (!companyName && !file) {
-        showNotification('업체명 또는 로고 중 하나 이상은 입력/선택해주세요.', 'warning');
+    if (!companyName && !file && !businessNumber && !bankAccount) {
+        showNotification('업체명, 사업자번호, 계좌번호 또는 로고 중 하나 이상을 입력/선택해주세요.', 'warning');
         return;
     }
     
@@ -2123,6 +2153,8 @@ async function handleCompanyBrandingSave(e) {
         if (companyName) {
             updates.companyName = companyName;
         }
+        updates.businessNumber = businessNumber || null;
+        updates.bankAccount = bankAccount || null;
         
         // 로고 파일 업로드 (ImgBB 사용 - CORS 문제 해결)
         if (file) {
@@ -2166,6 +2198,8 @@ async function handleCompanyBrandingSave(e) {
         
         // 현재 세션 정보 업데이트
         currentUser.companyName = updates.companyName || currentUser.companyName;
+        currentUser.businessNumber = updates.businessNumber != null ? updates.businessNumber : currentUser.businessNumber;
+        currentUser.bankAccount = updates.bankAccount != null ? updates.bankAccount : currentUser.bankAccount;
         if (updates.companyLogoUrl) {
             currentUser.companyLogoUrl = updates.companyLogoUrl;
         }
@@ -7471,9 +7505,11 @@ async function generateEstimatePDF() {
         // 견적서 번호 생성
         const estimateNumber = Date.now().toString().slice(-6);
         
-        // 🎨 HTML 견적서 템플릿 생성 (업체명/로고 포함)
+        // 🎨 HTML 견적서 템플릿 생성 (업체명/로고/사업자·계좌 포함)
         const companyName = (currentUser && currentUser.companyName) ? currentUser.companyName : 'TWOHOONS';
         const companyLogoUrl = currentUser && currentUser.companyLogoUrl ? currentUser.companyLogoUrl : null;
+        const businessNumber = (currentUser && currentUser.businessNumber) ? currentUser.businessNumber : '';
+        const bankAccount = (currentUser && currentUser.bankAccount) ? currentUser.bankAccount : '';
         
         const estimateHTML = createEstimateHTML(
             customerName,
@@ -7488,7 +7524,9 @@ async function generateEstimatePDF() {
             currentManagerName,
             estimateNumber,
             companyName,
-            companyLogoUrl
+            companyLogoUrl,
+            businessNumber,
+            bankAccount
         );
         
         // 📁 견적서 데이터 Firebase에 저장
@@ -7508,6 +7546,10 @@ async function generateEstimatePDF() {
             bikeYear,
             mileage,
             managerName: currentManagerName,
+            companyName,
+            companyLogoUrl,
+            businessNumber: businessNumber || null,
+            bankAccount: bankAccount || null,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             createdBy: currentUser?.email || 'unknown'
         });
@@ -7576,7 +7618,9 @@ function createEstimateHTML(
     managerName = '정비사',
     estimateNumber = '',
     companyName = 'TWOHOONS',
-    companyLogoUrl = null
+    companyLogoUrl = null,
+    businessNumber = '',
+    bankAccount = ''
 ) {
     const currentDate = new Date().toLocaleDateString('ko-KR');
     
@@ -7874,10 +7918,10 @@ function createEstimateHTML(
                             견적서 생성일: ${new Date().toLocaleString('ko-KR')}
                         </div>
                         <div style="font-size: 10px; opacity: 0.7;">
-                            사업자번호: 368-81-03713
+                            사업자번호: ${businessNumber || '-'}
                         </div>
                         <div style="font-size: 10px; opacity: 0.7;">
-                            계좌번호: MG새마을금고 9002-2074-4521-6
+                            계좌번호: ${bankAccount || '-'}
                         </div>
                     </div>
                     
@@ -8485,7 +8529,7 @@ async function updateEstimate(estimateNumber) {
         // 현재 로그인한 관리자 이름 가져오기
         let currentManagerName = getCurrentManagerSignature();
         
-        // 업데이트할 데이터
+        // 업데이트할 데이터 (현재 관리자 계좌/사업자번호 반영)
         const updateData = {
             customerName,
             carNumber,
@@ -8499,6 +8543,8 @@ async function updateEstimate(estimateNumber) {
             bikeYear,
             mileage,
             managerName: currentManagerName,
+            businessNumber: (currentUser && currentUser.businessNumber) ? currentUser.businessNumber : null,
+            bankAccount: (currentUser && currentUser.bankAccount) ? currentUser.bankAccount : null,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedBy: currentUser?.email || 'unknown'
         };
@@ -8545,7 +8591,7 @@ async function regenerateEstimatePDF(estimateNumber) {
         
         showNotification('PDF를 재생성하는 중...', 'info');
         
-        // HTML 생성
+        // HTML 생성 (저장된 견적서의 업체/계좌 정보 사용)
         const htmlContent = createEstimateHTML(
             estimateData.customerName,
             estimateData.carNumber,
@@ -8557,7 +8603,11 @@ async function regenerateEstimatePDF(estimateNumber) {
             estimateData.bikeYear || '',
             estimateData.mileage || '',
             estimateData.managerName || '정비사',
-            estimateData.estimateNumber
+            estimateData.estimateNumber,
+            estimateData.companyName || 'TWOHOONS',
+            estimateData.companyLogoUrl || null,
+            estimateData.businessNumber || '',
+            estimateData.bankAccount || ''
         );
         
         // PDF 생성
@@ -8990,7 +9040,9 @@ async function generateEstimatePDFBlob(estimateData) {
             estimateData.managerName || '정비사',
             estimateData.estimateNumber,
             estimateData.companyName || 'TWOHOONS',
-            estimateData.companyLogoUrl || null
+            estimateData.companyLogoUrl || null,
+            estimateData.businessNumber || '',
+            estimateData.bankAccount || ''
         );
         
         // 기존 generatePDFFromHTML 로직을 재사용하여 Blob 반환 (공급가액 기준)
